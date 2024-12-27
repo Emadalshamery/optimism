@@ -520,6 +520,10 @@ type SystemConfig struct {
 	EIP1559Params Bytes8 `json:"eip1559Params"`
 	// OperatorFeeParams identifies the operator fee parameters.
 	OperatorFeeParams Bytes32 `json:"operatorFeeParams"`
+	// DepositNonce identifies the nonce of the last TransactionDeposited event processed by this chain.
+	DepositNonce uint64 `json:"depositNonce"`
+	// ConfigUpdateNonce identifies the nonce of the last ConfigUpdate event processed by this chain.
+	ConfigUpdateNonce uint64 `json:"configUpdateNonce"`
 	// More fields can be added for future SystemConfig versions.
 
 	// MarshalPreHolocene indicates whether or not this struct should be
@@ -581,6 +585,19 @@ func (sysCfg *SystemConfig) EcotoneScalars() (EcotoneScalars, error) {
 		return EcotoneScalars{}, err
 	}
 	return DecodeScalar(sysCfg.Scalar)
+}
+
+func (sysCfg *SystemConfig) IncrementGenesisNonces(isthmusTime *uint64, customGasToken bool) {
+	// if Isthmus is active at genesis, we must ensure the nonces are set correctly
+	if isthmusTime != nil && *isthmusTime == 0 {
+		// SystemConfig emits 3 ConfigUpdate events which increments the nonce by 3
+		sysCfg.ConfigUpdateNonce += 3
+		// If a custom gas token is in use, a TransactionDeposited event is emitted from
+		// the OptimismPortal, which increments the deposit nonce by 1
+		if customGasToken {
+			sysCfg.DepositNonce += 1
+		}
+	}
 }
 
 // DecodeScalar decodes the blobBaseFeeScalar and baseFeeScalar from a 32-byte scalar value.

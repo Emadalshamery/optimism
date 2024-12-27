@@ -314,8 +314,10 @@ contract DeputyGuardianModule_NoPortalCollisions_Test is DeputyGuardianModule_Te
     /// @dev tests that no function selectors in the L1 contracts collide with the OptimismPortal2 functions called by
     ///      the DeputyGuardianModule.
     function test_noPortalCollisions_succeeds() external {
-        string[] memory excludes = new string[](3);
+        string[] memory excludes = new string[](5);
         uint256 excludeCounter;
+        excludes[excludeCounter++] = "src/L1/OptimismPortalIsthmus.sol";
+        excludes[excludeCounter++] = "interfaces/L1/IOptimismPortalIsthmus.sol";
         excludes[excludeCounter++] = "src/dispute/lib/*";
         excludes[excludeCounter++] = "src/dispute/AnchorStateRegistry.sol";
         excludes[excludeCounter++] = "interfaces/dispute/IAnchorStateRegistry.sol";

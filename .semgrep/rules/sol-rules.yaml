@@ -240,6 +240,10 @@ rules:
             _disableInitializers();
             ...
           }
+    paths:
+      exclude:
+        - packages/contracts-bedrock/src/L1/SystemConfigIsthmus.sol
+        - packages/contracts-bedrock/src/L1/OptimismPortalIsthmus.sol
 
   - id: sol-safety-proper-initializer
     languages: [solidity]

@@ -62,6 +62,12 @@ contract L1Block is ISemver {
     /// @notice The scalar value applied to the operator fee.
     uint32 public operatorFeeScalar;
 
+    /// @notice Nonce incremented for each TransactionDeposited event
+    uint64 public depositNonce;
+
+    /// @notice Nonce incremented for each ConfigUpdate event
+    uint64 public configUpdateNonce;
+
     /// @custom:semver 1.6.0
     function version() public pure virtual returns (string memory) {
         return "1.6.0";

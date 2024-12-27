@@ -128,11 +128,13 @@ contract OptimismPortal2 is Initializable, ResourceMetering, ReinitializableBase
 
     /// @notice Emitted when a transaction is deposited from L1 to L2. The parameters of this event
     ///         are read by the rollup node and used to derive deposit transactions on L2.
-    /// @param from       Address that triggered the deposit transaction.
-    /// @param to         Address that the deposit transaction is directed to.
-    /// @param version    Version of this deposit transaction event.
-    /// @param opaqueData ABI encoded deposit data to be parsed off-chain.
-    event TransactionDeposited(address indexed from, address indexed to, uint256 indexed version, bytes opaqueData);
+    /// @param from            Address that triggered the deposit transaction.
+    /// @param to              Address that the deposit transaction is directed to.
+    /// @param nonceAndVersion Nonce (first 128-bits) and version (second 128-bits).
+    /// @param opaqueData      ABI encoded deposit data to be parsed off-chain.
+    event TransactionDeposited(
+        address indexed from, address indexed to, uint256 indexed nonceAndVersion, bytes opaqueData
+    );
 
     /// @notice Emitted when a withdrawal transaction is proven.
     /// @param withdrawalHash Hash of the withdrawal transaction.
@@ -556,12 +558,12 @@ contract OptimismPortal2 is Initializable, ResourceMetering, ReinitializableBase
         // bugs, then we know that this withdrawal was actually triggered on L2 and can therefore
         // be relayed on L1.
         if (
-            SecureMerkleTrie.verifyInclusionProof({
+            !SecureMerkleTrie.verifyInclusionProof({
                 _key: abi.encode(storageKey),
                 _value: hex"01",
                 _proof: _withdrawalProof,
                 _root: _outputRootProof.messagePasserStorageRoot
-            }) == false
+            })
         ) {
             revert OptimismPortal_InvalidMerkleProof();
         }
@@ -740,7 +742,7 @@ contract OptimismPortal2 is Initializable, ResourceMetering, ReinitializableBase
         // Transform the from-address to its alias if the caller is a contract.
         address from = msg.sender;
         if (!EOA.isSenderEOA()) {
-            from = AddressAliasHelper.applyL1ToL2Alias(msg.sender);
+            from = AddressAliasHelper.applyL1ToL2Alias(from);
         }
 
         // Compute the opaque data that will be emitted as part of the TransactionDeposited event.

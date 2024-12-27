@@ -20,6 +20,7 @@ import { DeploySuperchainInput, DeploySuperchain, DeploySuperchainOutput } from 
 import {
     DeployImplementationsInput,
     DeployImplementations,
+    DeployImplementationsIsthmus,
     DeployImplementationsOutput
 } from "scripts/deploy/DeployImplementations.s.sol";
 
@@ -199,7 +200,7 @@ contract Deploy is Deployer {
             deploySuperchain();
         }
 
-        deployImplementations({ _isInterop: cfg.useInterop() });
+        deployImplementations();
 
         // Deploy Current OPChain Contracts
         deployOpChain();
@@ -268,10 +269,7 @@ contract Deploy is Deployer {
     }
 
     /// @notice Deploy all of the implementations
-    /// @param _isInterop Whether to use interop
-    function deployImplementations(bool _isInterop) public {
-        require(_isInterop == cfg.useInterop(), "Deploy: Interop setting mismatch.");
-
+    function deployImplementations() public {
         console.log("Deploying implementations");
 
         DeployImplementations di = new DeployImplementations();
@@ -296,6 +294,9 @@ contract Deploy is Deployer {
         // I think this was a bug
         dii.set(dii.upgradeController.selector, superchainProxyAdmin.owner());
 
+        if (cfg.l2GenesisIsthmusTimeOffset() == 0) {
+            di = DeployImplementations(new DeployImplementationsIsthmus());
+        }
         di.run(dii, dio);
 
         // Save the implementation addresses which are needed outside of this function or script.

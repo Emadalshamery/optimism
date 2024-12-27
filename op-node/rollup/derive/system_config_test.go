@@ -58,7 +58,7 @@ func TestProcessSystemConfigUpdateLogEvent(t *testing.T) {
 			log: &types.Log{
 				Topics: []common.Hash{
 					ConfigUpdateEventABIHash,
-					ConfigUpdateEventVersion0,
+					PackNonceAndVersion(0, ConfigUpdateEventVersion0),
 					SystemConfigUpdateUnsafeBlockSigner,
 				},
 			},
@@ -78,7 +78,7 @@ func TestProcessSystemConfigUpdateLogEvent(t *testing.T) {
 			log: &types.Log{
 				Topics: []common.Hash{
 					ConfigUpdateEventABIHash,
-					ConfigUpdateEventVersion0,
+					PackNonceAndVersion(0, ConfigUpdateEventVersion0),
 					SystemConfigUpdateBatcher,
 				},
 			},
@@ -102,7 +102,7 @@ func TestProcessSystemConfigUpdateLogEvent(t *testing.T) {
 			log: &types.Log{
 				Topics: []common.Hash{
 					ConfigUpdateEventABIHash,
-					ConfigUpdateEventVersion0,
+					PackNonceAndVersion(0, ConfigUpdateEventVersion0),
 					SystemConfigUpdateFeeScalars,
 				},
 			},
@@ -128,7 +128,7 @@ func TestProcessSystemConfigUpdateLogEvent(t *testing.T) {
 			log: &types.Log{
 				Topics: []common.Hash{
 					ConfigUpdateEventABIHash,
-					ConfigUpdateEventVersion0,
+					PackNonceAndVersion(0, ConfigUpdateEventVersion0),
 					SystemConfigUpdateGasLimit,
 				},
 			},
@@ -152,7 +152,7 @@ func TestProcessSystemConfigUpdateLogEvent(t *testing.T) {
 			log: &types.Log{
 				Topics: []common.Hash{
 					ConfigUpdateEventABIHash,
-					ConfigUpdateEventVersion0,
+					PackNonceAndVersion(0, ConfigUpdateEventVersion0),
 					SystemConfigUpdateFeeScalars,
 				},
 			},
@@ -192,7 +192,7 @@ func TestProcessSystemConfigUpdateLogEvent(t *testing.T) {
 			log: &types.Log{
 				Topics: []common.Hash{
 					ConfigUpdateEventABIHash,
-					ConfigUpdateEventVersion0,
+					PackNonceAndVersion(0, ConfigUpdateEventVersion0),
 					SystemConfigUpdateEIP1559Params,
 				},
 			},

@@ -62,6 +62,9 @@ type L1BlockInfo struct {
 
 	OperatorFeeScalar   uint32 // added by Isthmus upgrade
 	OperatorFeeConstant uint64 // added by Isthmus upgrade
+
+	DepositNonce      uint64 // added by the Jovian upgrade
+	ConfigUpdateNonce uint64 // added by the Jovian upgrade
 }
 
 // Bedrock Binary Format

@@ -1,33 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import { ISystemConfig } from "interfaces/L1/ISystemConfig.sol";
 import { IResourceMetering } from "interfaces/L1/IResourceMetering.sol";
 
-interface ISystemConfig {
-    enum UpdateType {
-        BATCHER,
-        FEE_SCALARS,
-        GAS_LIMIT,
-        UNSAFE_BLOCK_SIGNER,
-        EIP_1559_PARAMS,
-        OPERATOR_FEE_PARAMS
-    }
-
-    struct Addresses {
-        address l1CrossDomainMessenger;
-        address l1ERC721Bridge;
-        address l1StandardBridge;
-        address optimismPortal;
-        address optimismMintableERC20Factory;
-    }
-
-    error ReinitializableBase_ZeroInitVersion();
-
-    event ConfigUpdate(uint256 indexed nonceAndVersion, UpdateType indexed updateType, bytes data);
+/// @notice This interface corresponds to the Custom Gas Token version of the SystemConfig contract.
+interface ISystemConfigIsthmus {
+    event ConfigUpdate(uint256 indexed nonceAndVersion, ISystemConfig.UpdateType indexed updateType, bytes data);
     event Initialized(uint8 version);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     function BATCH_INBOX_SLOT() external view returns (bytes32);
+    function DISPUTE_GAME_FACTORY_SLOT() external view returns (bytes32);
     function L1_CROSS_DOMAIN_MESSENGER_SLOT() external view returns (bytes32);
     function L1_ERC_721_BRIDGE_SLOT() external view returns (bytes32);
     function L1_STANDARD_BRIDGE_SLOT() external view returns (bytes32);
@@ -35,7 +19,9 @@ interface ISystemConfig {
     function OPTIMISM_PORTAL_SLOT() external view returns (bytes32);
     function START_BLOCK_SLOT() external view returns (bytes32);
     function UNSAFE_BLOCK_SIGNER_SLOT() external view returns (bytes32);
+    function CONFIG_UPDATE_NONCE_SLOT() external view returns (bytes32);
     function VERSION() external view returns (uint256);
+    function VERSION_1() external view returns (uint256);
     function basefeeScalar() external view returns (uint32);
     function batchInbox() external view returns (address addr_);
     function batcherHash() external view returns (bytes32);
@@ -44,7 +30,11 @@ interface ISystemConfig {
     function gasLimit() external view returns (uint64);
     function eip1559Denominator() external view returns (uint32);
     function eip1559Elasticity() external view returns (uint32);
-    function getAddresses() external view returns (Addresses memory);
+    function configUpdateNonce() external view returns (uint64 nonce_);
+    function gasPayingToken() external view returns (address addr_, uint8 decimals_);
+    function gasPayingTokenAddress() external view returns (address addr_);
+    function gasPayingTokenName() external view returns (string memory name_);
+    function gasPayingTokenSymbol() external view returns (string memory symbol_);
     function initialize(
         address _owner,
         uint32 _basefeeScalar,
@@ -54,19 +44,15 @@ interface ISystemConfig {
         address _unsafeBlockSigner,
         IResourceMetering.ResourceConfig memory _config,
         address _batchInbox,
-        Addresses memory _addresses,
-        uint256 _l2ChainId
+        ISystemConfig.Addresses memory _addresses
     )
         external;
-    function initVersion() external view returns (uint8);
+    function isCustomGasToken() external view returns (bool);
     function l1CrossDomainMessenger() external view returns (address addr_);
     function l1ERC721Bridge() external view returns (address addr_);
     function l1StandardBridge() external view returns (address addr_);
-    function l2ChainId() external view returns (uint256);
     function maximumGasLimit() external pure returns (uint64);
     function minimumGasLimit() external view returns (uint64);
-    function operatorFeeConstant() external view returns (uint64);
-    function operatorFeeScalar() external view returns (uint32);
     function optimismMintableERC20Factory() external view returns (address addr_);
     function optimismPortal() external view returns (address addr_);
     function overhead() external view returns (uint256);
@@ -78,13 +64,11 @@ interface ISystemConfig {
     function setGasConfig(uint256 _overhead, uint256 _scalar) external;
     function setGasConfigEcotone(uint32 _basefeeScalar, uint32 _blobbasefeeScalar) external;
     function setGasLimit(uint64 _gasLimit) external;
-    function setOperatorFeeScalars(uint32 _operatorFeeScalar, uint64 _operatorFeeConstant) external;
     function setUnsafeBlockSigner(address _unsafeBlockSigner) external;
     function setEIP1559Params(uint32 _denominator, uint32 _elasticity) external;
     function startBlock() external view returns (uint256 startBlock_);
     function transferOwnership(address newOwner) external; // nosemgrep
     function unsafeBlockSigner() external view returns (address addr_);
-    function upgrade(uint256 _l2ChainId) external;
     function version() external pure returns (string memory);
 
     function __constructor__() external;

@@ -15,7 +15,9 @@ import { IDisputeGame } from "interfaces/dispute/IDisputeGame.sol";
 contract Events {
     /// @dev OpenZeppelin Ownable.sol transferOwnership event
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    event TransactionDeposited(address indexed from, address indexed to, uint256 indexed version, bytes opaqueData);
+    event TransactionDeposited(
+        address indexed from, address indexed to, uint256 indexed nonceAndVersion, bytes opaqueData
+    );
 
     event WithdrawalFinalized(bytes32 indexed withdrawalHash, bool success);
     event WithdrawalProven(bytes32 indexed withdrawalHash, address indexed from, address indexed to);
