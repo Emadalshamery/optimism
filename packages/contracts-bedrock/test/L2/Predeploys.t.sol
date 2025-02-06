@@ -21,11 +21,6 @@ contract PredeploysBaseTest is CommonTest {
         return _addr == Predeploys.L1_MESSAGE_SENDER;
     }
 
-    /// @dev Returns true if the predeploy is initializable.
-    function _isInitializable(address _addr) internal pure returns (bool) {
-        return _addr == Predeploys.L2_STANDARD_BRIDGE;
-    }
-
     /// @dev Returns true if the predeploy uses immutables.
     function _usesImmutables(address _addr) internal pure returns (bool) {
         return _addr == Predeploys.OPTIMISM_MINTABLE_ERC721_FACTORY || _addr == Predeploys.SEQUENCER_FEE_WALLET
@@ -48,7 +43,7 @@ contract PredeploysBaseTest is CommonTest {
         );
     }
 
-    function _test_predeploys(bool _useInterop) internal {
+    function _test_predeploys(bool _useInterop) internal view {
         uint256 count = 2048;
         uint160 prefix = uint160(0x420) << 148;
 
@@ -103,10 +98,6 @@ contract PredeploysBaseTest is CommonTest {
                 // can't check bytecode if it's modified with immutables in genesis.
                 assertEq(implAddr.code, supposedCode, "proxy implementation contract should match contract source");
             }
-
-            if (_isInitializable(addr)) {
-                assertEq(l2Genesis.loadInitializedSlot(cname), uint8(1));
-            }
         }
     }
 }
@@ -128,7 +119,7 @@ contract PredeploysInteropTest is PredeploysBaseTest {
 
     /// @dev Tests that the predeploy addresses are set correctly. They have code
     ///      and the proxied accounts have the correct admin. Using interop.
-    function test_predeploys_succeeds() external {
+    function test_predeploys_succeeds() external view {
         _test_predeploys(true);
     }
 }

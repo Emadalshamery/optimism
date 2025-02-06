@@ -2,6 +2,8 @@
 pragma solidity 0.8.15;
 
 import { StandardBridge } from "src/universal/StandardBridge.sol";
+import { IStandardBridge } from "interfaces/universal/IStandardBridge.sol";
+import { ICrossDomainMessenger } from "interfaces/universal/ICrossDomainMessenger.sol";
 import { CommonTest } from "test/setup/CommonTest.sol";
 import { OptimismMintableERC20, ILegacyMintableERC20 } from "src/universal/OptimismMintableERC20.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -23,6 +25,14 @@ contract StandardBridgeTester is StandardBridge {
 
     function gasPayingToken() internal pure override returns (address, uint8) {
         return (Constants.ETHER, 18);
+    }
+
+    function otherBridge() public pure override returns (IStandardBridge) {
+        return IStandardBridge(payable(address(0)));
+    }
+
+    function messenger() public pure override returns (ICrossDomainMessenger) {
+        return ICrossDomainMessenger(address(0));
     }
 
     receive() external payable override { }
