@@ -392,9 +392,10 @@ contract L2Genesis is Deployer {
         }
 
         IGovernanceToken token = IGovernanceToken(
-            DeployUtils.create1(
-                "GovernanceToken", DeployUtils.encodeConstructor(abi.encodeCall(IGovernanceToken.__constructor__, ()))
-            )
+            DeployUtils.create1({
+                _name: "GovernanceToken",
+                _args: DeployUtils.encodeConstructor(abi.encodeCall(IGovernanceToken.__constructor__, ()))
+            })
         );
         console.log("Setting %s implementation at: %s", "GovernanceToken", Predeploys.GOVERNANCE_TOKEN);
         vm.etch(Predeploys.GOVERNANCE_TOKEN, address(token).code);
