@@ -57,7 +57,7 @@ contract Initializer_Test is CommonTest {
         // SuperchainConfigImpl
         contracts.push(
             InitializeableContract({
-                name: "SuperchainConfig",
+                name: "SuperchainConfigImpl",
                 target: EIP1967Helper.getImplementation(address(superchainConfig)),
                 initCalldata: abi.encodeCall(superchainConfig.initialize, (address(0), address(0), false))
             })
@@ -277,8 +277,8 @@ contract Initializer_Test is CommonTest {
         // L1OptimismMintableERC20FactoryImpl
         contracts.push(
             InitializeableContract({
-                name: "L1OptimismMintableERC20Factory",
-                target: artifacts.mustGetAddress("OptimismMintableERC20Factory"),
+                name: "L1OptimismMintableERC20FactoryImpl",
+                target: EIP1967Helper.getImplementation(address(l1OptimismMintableERC20Factory)),
                 initCalldata: abi.encodeCall(l1OptimismMintableERC20Factory.initialize, (address(l1StandardBridge)))
             })
         );
