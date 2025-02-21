@@ -91,5 +91,6 @@
   "daChallengeProxy": "0x0000000000000000000000000000000000000000",
   "daChallengeWindow": 0,
   "daResolveWindow": 0,
-  "daResolverRefundPercentage": 0
+  "daResolverRefundPercentage": 0,
+  "systemConfigFeeVaultAdmin": "0xbcd4042de499d14e55001ccbb24a551f3b954096"
 }
