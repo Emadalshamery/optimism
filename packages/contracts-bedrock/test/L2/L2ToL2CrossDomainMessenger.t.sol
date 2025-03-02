@@ -281,7 +281,10 @@ contract L2ToL2CrossDomainMessengerTest is Test {
         // Look for correct emitted event
         vm.expectEmit(Predeploys.L2_TO_L2_CROSS_DOMAIN_MESSENGER);
         emit L2ToL2CrossDomainMessenger.RelayedMessage(
-            _source, _nonce, keccak256(abi.encode(block.chainid, _source, _nonce, _sender, _target, _message))
+            _source,
+            _nonce,
+            keccak256(abi.encode(block.chainid, _source, _nonce, _sender, _target, _message)),
+            abi.encode(true)
         );
 
         // relay the message
@@ -365,7 +368,7 @@ contract L2ToL2CrossDomainMessengerTest is Test {
 
         // Look for correct emitted event
         vm.expectEmit(Predeploys.L2_TO_L2_CROSS_DOMAIN_MESSENGER);
-        emit L2ToL2CrossDomainMessenger.RelayedMessage(_source, _nonce, msgHash);
+        emit L2ToL2CrossDomainMessenger.RelayedMessage(_source, _nonce, msgHash, "");
 
         // Ensure the target contract is called with the correct parameters
         vm.expectCall({ callee: target, msgValue: _value, data: message });
@@ -716,7 +719,10 @@ contract L2ToL2CrossDomainMessengerTest is Test {
         // Look for correct emitted event for first call.
         vm.expectEmit(Predeploys.L2_TO_L2_CROSS_DOMAIN_MESSENGER);
         emit L2ToL2CrossDomainMessenger.RelayedMessage(
-            _source, _nonce, keccak256(abi.encode(block.chainid, _source, _nonce, _sender, _target, _message))
+            _source,
+            _nonce,
+            keccak256(abi.encode(block.chainid, _source, _nonce, _sender, _target, _message)),
+            abi.encode(true)
         );
 
         Identifier memory id =

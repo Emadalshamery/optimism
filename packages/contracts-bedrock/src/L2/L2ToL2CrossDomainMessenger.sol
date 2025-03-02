@@ -97,7 +97,9 @@ contract L2ToL2CrossDomainMessenger is ISemver, TransientReentrancyAware {
     /// @param source       Chain ID of the source chain.
     /// @param messageNonce Nonce associated with the messsage sent
     /// @param messageHash  Hash of the message that was relayed.
-    event RelayedMessage(uint256 indexed source, uint256 indexed messageNonce, bytes32 indexed messageHash);
+    event RelayedMessage(
+        uint256 indexed source, uint256 indexed messageNonce, bytes32 indexed messageHash, bytes returnData
+    );
 
     /// @notice Retrieves the sender of the current cross domain message. If not entered, reverts.
     /// @return sender_ Address of the sender of the current cross domain message.
@@ -210,7 +212,7 @@ contract L2ToL2CrossDomainMessenger is ISemver, TransientReentrancyAware {
         }
 
         successfulMessages[messageHash] = true;
-        emit RelayedMessage(source, nonce, messageHash);
+        emit RelayedMessage(source, nonce, messageHash, returnData_);
 
         _storeMessageMetadata(0, address(0));
     }
