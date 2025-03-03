@@ -68,46 +68,27 @@ func TestFees(t *testing.T) {
 	})
 	t.Run("fjord", func(t *testing.T) {
 		op_e2e.InitParallel(t)
-		cfg := e2esys.DefaultSystemConfig(t)
+		cfg := e2esys.FjordSystemConfig(t, new(hexutil.Uint64))
 		cfg.DeployConfig.L1GenesisBlockBaseFeePerGas = (*hexutil.Big)(big.NewInt(7))
 
-		cfg.DeployConfig.L2GenesisRegolithTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisCanyonTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisDeltaTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisEcotoneTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisFjordTimeOffset = new(hexutil.Uint64)
 		testFees(t, cfg)
 	})
 
 	t.Run("isthmus without operator fee", func(t *testing.T) {
 		op_e2e.InitParallel(t)
-		cfg := e2esys.DefaultSystemConfig(t)
+		cfg := e2esys.IsthmusSystemConfig(t, new(hexutil.Uint64))
 		cfg.DeployConfig.L1GenesisBlockBaseFeePerGas = (*hexutil.Big)(big.NewInt(7))
 
-		cfg.DeployConfig.L2GenesisRegolithTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisCanyonTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisDeltaTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisEcotoneTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisFjordTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisHoloceneTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisIsthmusTimeOffset = new(hexutil.Uint64)
 		testFees(t, cfg)
 	})
 
 	t.Run("isthmus with operator fee", func(t *testing.T) {
 		op_e2e.InitParallel(t)
-		cfg := e2esys.DefaultSystemConfig(t)
+		cfg := e2esys.IsthmusSystemConfig(t, new(hexutil.Uint64))
 		cfg.DeployConfig.L1GenesisBlockBaseFeePerGas = (*hexutil.Big)(big.NewInt(7))
+		cfg.DeployConfig.GasPriceOracleOperatorFeeScalar = 1439103868
+		cfg.DeployConfig.GasPriceOracleOperatorFeeConstant = 12564178266093314607
 
-		cfg.DeployConfig.L2GenesisRegolithTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisCanyonTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisDeltaTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisEcotoneTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisFjordTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisHoloceneTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.L2GenesisIsthmusTimeOffset = new(hexutil.Uint64)
-		cfg.DeployConfig.GasPriceOracleOperatorFeeScalar = 5000
-		cfg.DeployConfig.GasPriceOracleOperatorFeeConstant = 200
 		testFees(t, cfg)
 	})
 }
@@ -119,6 +100,13 @@ func testFees(t *testing.T, cfg e2esys.SystemConfig) {
 	l2Seq := sys.NodeClient("sequencer")
 	l2Verif := sys.NodeClient("verifier")
 	l1 := sys.NodeClient("l1")
+
+	balanceAt := func(a common.Address) *big.Int {
+		t.Helper()
+		bal, err := l2Seq.BalanceAt(context.Background(), a, nil)
+		require.NoError(t, err)
+		return bal
+	}
 
 	// Wait for first block after genesis. The genesis block has zero L1Block values and will throw off the GPO checks
 	_, err = geth.WaitForBlock(big.NewInt(1), l2Verif)
@@ -167,29 +155,24 @@ func testFees(t *testing.T, cfg e2esys.SystemConfig) {
 
 	require.Equal(t, decimals.Uint64(), uint64(6), "wrong gpo decimals")
 
-	// BaseFee Recipient
-	baseFeeRecipientStartBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.BaseFeeVaultAddr, big.NewInt(rpc.EarliestBlockNumber.Int64()))
-	require.Nil(t, err)
+	baseFeeRecipientStartBalance := balanceAt(predeploys.BaseFeeVaultAddr)
+	l1FeeRecipientStartBalance := balanceAt(predeploys.L1FeeVaultAddr)
+	sequencerFeeVaultStartBalance := balanceAt(predeploys.SequencerFeeVaultAddr)
+	operatorFeeVaultStartBalance := balanceAt(predeploys.OperatorFeeVaultAddr)
 
-	// L1Fee Recipient
-	l1FeeRecipientStartBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.L1FeeVaultAddr, big.NewInt(rpc.EarliestBlockNumber.Int64()))
-	require.Nil(t, err)
-
-	sequencerFeeVaultStartBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.SequencerFeeVaultAddr, big.NewInt(rpc.EarliestBlockNumber.Int64()))
-	require.Nil(t, err)
-
-	operatorFeeVaultStartBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.OperatorFeeVaultAddr, big.NewInt(rpc.EarliestBlockNumber.Int64()))
-	require.Nil(t, err)
+	require.Equal(t, baseFeeRecipientStartBalance.Sign(), 0, "base fee vault should be empty")
+	require.Equal(t, l1FeeRecipientStartBalance.Sign(), 0, "l1 fee vault should be empty")
+	require.Equal(t, sequencerFeeVaultStartBalance.Sign(), 0, "sequencer fee vault should be empty")
+	require.Equal(t, operatorFeeVaultStartBalance.Sign(), 0, "operator fee vault should be empty")
 
 	genesisBlock, err := l2Seq.BlockByNumber(context.Background(), big.NewInt(rpc.EarliestBlockNumber.Int64()))
 	require.NoError(t, err)
 
-	coinbaseStartBalance, err := l2Seq.BalanceAt(context.Background(), genesisBlock.Coinbase(), big.NewInt(rpc.EarliestBlockNumber.Int64()))
-	require.NoError(t, err)
+	coinbaseStartBalance := balanceAt(genesisBlock.Coinbase())
 
 	// Simple transfer from signer to random account
-	startBalance, err := l2Seq.BalanceAt(context.Background(), fromAddr, big.NewInt(rpc.EarliestBlockNumber.Int64()))
-	require.Nil(t, err)
+	startBalance := balanceAt(fromAddr)
+
 	require.Greater(t, startBalance.Uint64(), big.NewInt(params.Ether).Uint64())
 
 	transferAmount := big.NewInt(params.Ether)
@@ -208,26 +191,16 @@ func testFees(t *testing.T, cfg e2esys.SystemConfig) {
 	header, err := l2Seq.HeaderByNumber(context.Background(), receipt.BlockNumber)
 	require.Nil(t, err)
 
-	coinbaseEndBalance, err := l2Seq.BalanceAt(context.Background(), header.Coinbase, header.Number)
-	require.Nil(t, err)
-
-	endBalance, err := l2Seq.BalanceAt(context.Background(), fromAddr, header.Number)
-	require.Nil(t, err)
-
-	baseFeeRecipientEndBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.BaseFeeVaultAddr, header.Number)
-	require.Nil(t, err)
+	coinbaseEndBalance := balanceAt(header.Coinbase)
+	endBalance := balanceAt(fromAddr)
+	baseFeeRecipientEndBalance := balanceAt(predeploys.BaseFeeVaultAddr)
 
 	l1Header, err := l1.HeaderByNumber(context.Background(), nil)
 	require.Nil(t, err)
 
-	l1FeeRecipientEndBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.L1FeeVaultAddr, header.Number)
-	require.Nil(t, err)
-
-	sequencerFeeVaultEndBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.SequencerFeeVaultAddr, header.Number)
-	require.Nil(t, err)
-
-	operatorFeeVaultEndBalance, err := l2Seq.BalanceAt(context.Background(), predeploys.OperatorFeeVaultAddr, header.Number)
-	require.Nil(t, err)
+	l1FeeRecipientEndBalance := balanceAt(predeploys.L1FeeVaultAddr)
+	sequencerFeeVaultEndBalance := balanceAt(predeploys.SequencerFeeVaultAddr)
+	operatorFeeVaultEndBalance := balanceAt(predeploys.OperatorFeeVaultAddr)
 
 	// Diff fee recipient + coinbase balances
 	baseFeeRecipientDiff := new(big.Int).Sub(baseFeeRecipientEndBalance, baseFeeRecipientStartBalance)

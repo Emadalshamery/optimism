@@ -1,7 +1,6 @@
 package proofs
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -15,15 +14,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const OperatorFeeScalar = uint32(20000)
-const OperatorFeeConstant = uint64(500)
-
 func Test_Operator_Fee_Constistency(gt *testing.T) {
+
+	const testOperatorFeeScalar = uint32(20000)
+	const testOperatorFeeConstant = uint64(500)
 
 	runIsthmusDerivationTest := func(gt *testing.T, testCfg *helpers.TestCfg[any]) {
 		t := actionsHelpers.NewDefaultTesting(gt)
 
 		env := helpers.NewL2FaultProofEnv(t, testCfg, helpers.NewTestParams(), helpers.NewBatcherCfg())
+
+		balanceAt := func(a common.Address) *big.Int {
+			t.Helper()
+			bal, err := env.Engine.EthClient().BalanceAt(t.Ctx(), a, nil)
+			require.NoError(t, err)
+			return bal
+		}
 
 		t.Logf("L2 Genesis Time: %d, IsthmusTime: %d ", env.Sequencer.RollupCfg.Genesis.L2Time, *env.Sequencer.RollupCfg.IsthmusTime)
 
@@ -34,7 +40,7 @@ func Test_Operator_Fee_Constistency(gt *testing.T) {
 		require.NoError(t, err)
 
 		// Update the operator fee parameters
-		_, err = sysCfgContract.SetOperatorFeeScalars(sysCfgOwner, OperatorFeeScalar, OperatorFeeConstant)
+		_, err = sysCfgContract.SetOperatorFeeScalars(sysCfgOwner, testOperatorFeeScalar, testOperatorFeeConstant)
 		require.NoError(t, err)
 
 		env.Miner.ActL1StartBlock(12)(t)
@@ -48,9 +54,10 @@ func Test_Operator_Fee_Constistency(gt *testing.T) {
 		env.Miner.ActL1StartBlock(12)(t)
 		env.Miner.ActL1EndBlock(t)
 
-		aliceInitialBalance, err := env.Engine.EthClient().
-			BalanceAt(context.Background(), env.Alice.Address(), nil)
-		require.NoError(t, err)
+		aliceInitialBalance := balanceAt(env.Alice.Address())
+		operatorFeeVaultInitialBalance := balanceAt(predeploys.OperatorFeeVaultAddr)
+
+		require.Equal(t, operatorFeeVaultInitialBalance.Sign(), 0)
 
 		env.Sequencer.ActL2StartBlock(t)
 		// Send an L2 tx
@@ -63,24 +70,14 @@ func Test_Operator_Fee_Constistency(gt *testing.T) {
 		receipt := env.Alice.L2.LastTxReceipt(t)
 
 		// Check that the operator fee was applied
-		require.Equal(t, OperatorFeeScalar, uint32(*receipt.OperatorFeeScalar))
-		require.Equal(t, OperatorFeeConstant, *receipt.OperatorFeeConstant)
+		require.Equal(t, testOperatorFeeScalar, uint32(*receipt.OperatorFeeScalar))
+		require.Equal(t, testOperatorFeeConstant, *receipt.OperatorFeeConstant)
 
-		l1FeeVaultBalance, err := env.Engine.EthClient().BalanceAt(context.Background(), predeploys.L1FeeVaultAddr, nil)
-		require.NoError(t, err)
-
-		baseFeeVaultBalance, err := env.Engine.EthClient().
-			BalanceAt(context.Background(), predeploys.BaseFeeVaultAddr, nil)
-		require.NoError(t, err)
-
-		sequencerFeeVaultBalance, err := env.Engine.EthClient().BalanceAt(context.Background(), predeploys.SequencerFeeVaultAddr, nil)
-		require.NoError(t, err)
-
-		operatorFeeVaultBalance, err := env.Engine.EthClient().BalanceAt(context.Background(), predeploys.OperatorFeeVaultAddr, nil)
-		require.NoError(t, err)
-
-		aliceFinalBalance, err := env.Engine.EthClient().BalanceAt(context.Background(), env.Alice.Address(), nil)
-		require.NoError(t, err)
+		l1FeeVaultBalance := balanceAt(predeploys.L1FeeVaultAddr)
+		baseFeeVaultBalance := balanceAt(predeploys.BaseFeeVaultAddr)
+		sequencerFeeVaultBalance := balanceAt(predeploys.SequencerFeeVaultAddr)
+		operatorFeeVaultFinalBalance := balanceAt(predeploys.OperatorFeeVaultAddr)
+		aliceFinalBalance := balanceAt(env.Alice.Address())
 
 		require.True(t, aliceFinalBalance.Cmp(aliceInitialBalance) < 0, "Alice's balance should decrease")
 
@@ -88,14 +85,15 @@ func Test_Operator_Fee_Constistency(gt *testing.T) {
 		require.Equal(t,
 			new(big.Int).Add(
 				new(big.Int).Div(
-					new(
-						big.Int,
-					).Mul(new(big.Int).SetUint64(receipt.GasUsed), new(big.Int).SetUint64(uint64(OperatorFeeScalar))),
+					new(big.Int).Mul(
+						new(big.Int).SetUint64(receipt.GasUsed),
+						new(big.Int).SetUint64(uint64(testOperatorFeeScalar)),
+					),
 					new(big.Int).SetUint64(1e6),
 				),
-				new(big.Int).SetUint64(OperatorFeeConstant),
+				new(big.Int).SetUint64(testOperatorFeeConstant),
 			),
-			operatorFeeVaultBalance,
+			operatorFeeVaultFinalBalance,
 		)
 
 		// Check that no Ether has been minted or burned
@@ -104,21 +102,11 @@ func Test_Operator_Fee_Constistency(gt *testing.T) {
 			aliceFinalBalance,
 			new(big.Int).Add(
 				new(big.Int).Add(l1FeeVaultBalance, sequencerFeeVaultBalance),
-				new(big.Int).Add(operatorFeeVaultBalance, baseFeeVaultBalance),
+				new(big.Int).Add(operatorFeeVaultFinalBalance, baseFeeVaultBalance),
 			),
 		)
 
 		require.Equal(t, aliceInitialBalance, finalTotalBalance)
-
-		// Check that the difference in alice's balance is equal to the total fee
-		aliceBalanceDiff := new(big.Int).Sub(aliceInitialBalance, aliceFinalBalance)
-		require.Equal(t,
-			aliceBalanceDiff,
-			new(big.Int).Add(
-				new(big.Int).Add(l1FeeVaultBalance, operatorFeeVaultBalance),
-				new(big.Int).Add(sequencerFeeVaultBalance, baseFeeVaultBalance),
-			),
-		)
 
 		l2SafeHead := env.Sequencer.L2Safe()
 

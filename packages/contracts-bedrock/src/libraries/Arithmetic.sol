@@ -35,8 +35,7 @@ library Arithmetic {
     /// @dev Taken from Solady
     /// https://github.com/Vectorized/solady/blob/63416d60c78aba70a12ca1b3c11125d1061caa12/src/utils/FixedPointMathLib.sol#L673
     function saturatingAdd(uint256 _x, uint256 _y) internal pure returns (uint256 z_) {
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             z_ := or(sub(0, lt(add(_x, _y), _x)), add(_x, _y))
         }
     }
@@ -49,8 +48,7 @@ library Arithmetic {
     /// @dev Taken from Solady
     /// https://github.com/Vectorized/solady/blob/63416d60c78aba70a12ca1b3c11125d1061caa12/src/utils/FixedPointMathLib.sol#L681
     function saturatingMul(uint256 _x, uint256 _y) internal pure returns (uint256 z_) {
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             z_ := or(sub(or(iszero(_x), eq(div(mul(_x, _y), _x), _y)), 1), mul(_x, _y))
         }
     }
