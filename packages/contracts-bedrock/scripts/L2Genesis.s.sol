@@ -492,9 +492,10 @@ contract L2Genesis is Deployer {
     /// @notice This predeploy is following the safety invariant #2.
     function setOperatorFeeVault() public {
         IOperatorFeeVault vault = IOperatorFeeVault(
-            DeployUtils.create1(
-                "OperatorFeeVault", DeployUtils.encodeConstructor(abi.encodeCall(IOperatorFeeVault.__constructor__, ()))
-            )
+            DeployUtils.create1({
+                _name: "OperatorFeeVault",
+                _args: DeployUtils.encodeConstructor(abi.encodeCall(IOperatorFeeVault.__constructor__, ()))
+            })
         );
 
         address impl = Predeploys.predeployToCodeNamespace(Predeploys.OPERATOR_FEE_VAULT);
