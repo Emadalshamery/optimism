@@ -204,10 +204,10 @@ library Encoding {
     )
         internal
         pure
-        returns (bytes memory encoded)
+        returns (bytes memory)
     {
         bytes4 functionSignature = bytes4(keccak256("setL1BlockValuesIsthmus()"));
-        encoded = abi.encodePacked(
+        return abi.encodePacked(
             functionSignature,
             _baseFeeScalar,
             _blobBaseFeeScalar,
