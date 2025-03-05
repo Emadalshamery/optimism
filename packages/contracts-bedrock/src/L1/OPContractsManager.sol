@@ -549,6 +549,7 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
             ISuperchainConfig superchainConfig =
                 IOptimismPortal2(payable(opChainAddrs.optimismPortal)).superchainConfig();
 
+            // Separate context to avoid stack too deep.
             IAnchorStateRegistry newAnchorStateRegistryProxy;
             {
                 // Deploy a new AnchorStateRegistry contract.
@@ -561,6 +562,7 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
                     })
                 );
 
+                // Separate context to avoid stack too deep.
                 {
                     // Get the existing anchor root from the old AnchorStateRegistry contract.
                     // Get the AnchorStateRegistry from the PermissionedDisputeGame.
@@ -601,6 +603,43 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
                 );
             }
 
+            // We also need to redeploy the dispute games because the AnchorStateRegistry is new.
+            // Separate context to avoid stack too deep.
+            {
+                // Deploy and set a new permissioned game to update its prestate.
+                deployAndSetNewGameImpl({
+                    _l2ChainId: l2ChainId,
+                    _disputeGame: IDisputeGame(address(permissionedDisputeGame)),
+                    _newAnchorStateRegistryProxy: newAnchorStateRegistryProxy,
+                    _gameType: GameTypes.PERMISSIONED_CANNON,
+                    _opChainConfig: _opChainConfigs[i],
+                    _opChainAddrs: opChainAddrs
+                });
+            }
+
+            // Separate context to avoid stack too deep.
+            {
+                // Now retrieve the permissionless game.
+                IFaultDisputeGame permissionlessDisputeGame = IFaultDisputeGame(
+                    address(
+                        getGameImplementation(IDisputeGameFactory(opChainAddrs.disputeGameFactory), GameTypes.CANNON)
+                    )
+                );
+
+                // If it exists, replace its implementation.
+                if (address(permissionlessDisputeGame) != address(0)) {
+                    // Deploy and set a new permissionless game to update its prestate
+                    deployAndSetNewGameImpl({
+                        _l2ChainId: l2ChainId,
+                        _disputeGame: IDisputeGame(address(permissionlessDisputeGame)),
+                        _newAnchorStateRegistryProxy: newAnchorStateRegistryProxy,
+                        _gameType: GameTypes.CANNON,
+                        _opChainConfig: _opChainConfigs[i],
+                        _opChainAddrs: opChainAddrs
+                    });
+                }
+            }
+
             // Emit the upgraded event with the address of the caller. Since this will be a delegatecall,
             // the caller will be the value of the ADDRESS opcode.
             emit Upgraded(l2ChainId, _opChainConfigs[i].systemConfigProxy, address(this));
@@ -629,28 +668,30 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
     /// @notice Deploys and sets a new dispute game implementation
     /// @param _l2ChainId The L2 chain ID
     /// @param _disputeGame The current dispute game implementation
+    /// @param _newAnchorStateRegistryProxy The new anchor state registry proxy
     /// @param _gameType The type of game to deploy
     /// @param _opChainConfig The OP chain configuration
-    /// @param _blueprints The blueprint addresses
-    /// @param _implementations The implementation addresses
     /// @param _opChainAddrs The OP chain addresses
     function deployAndSetNewGameImpl(
         uint256 _l2ChainId,
         IDisputeGame _disputeGame,
+        IAnchorStateRegistry _newAnchorStateRegistryProxy,
         GameType _gameType,
         OPContractsManager.OpChainConfig memory _opChainConfig,
-        OPContractsManager.Blueprints memory _blueprints,
-        OPContractsManager.Implementations memory _implementations,
         ISystemConfig.Addresses memory _opChainAddrs
     )
         internal
     {
+        OPContractsManager.Blueprints memory bps = getBlueprints();
+        OPContractsManager.Implementations memory impls = getImplementations();
+
         // Get the constructor params for the game
         IFaultDisputeGame.GameConstructorParams memory params =
             getGameConstructorParams(IFaultDisputeGame(address(_disputeGame)));
 
         // Modify the params with the new vm values.
-        params.vm = IBigStepper(_implementations.mipsImpl);
+        params.anchorStateRegistry = IAnchorStateRegistry(address(_newAnchorStateRegistryProxy));
+        params.vm = IBigStepper(impls.mipsImpl);
         if (Claim.unwrap(_opChainConfig.absolutePrestate) == bytes32(0)) {
             revert OPContractsManager.PrestateNotSet();
         }
@@ -662,8 +703,8 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
             address challenger = getChallenger(IPermissionedDisputeGame(address(_disputeGame)));
             newGame = IDisputeGame(
                 Blueprint.deployFrom(
-                    _blueprints.permissionedDisputeGame1,
-                    _blueprints.permissionedDisputeGame2,
+                    bps.permissionedDisputeGame1,
+                    bps.permissionedDisputeGame2,
                     computeSalt(_l2ChainId, reusableSaltMixer(_opChainConfig), "PermissionedDisputeGame"),
                     encodePermissionedFDGConstructor(params, proposer, challenger)
                 )
@@ -671,8 +712,8 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
         } else {
             newGame = IDisputeGame(
                 Blueprint.deployFrom(
-                    _blueprints.permissionlessDisputeGame1,
-                    _blueprints.permissionlessDisputeGame2,
+                    bps.permissionlessDisputeGame1,
+                    bps.permissionlessDisputeGame2,
                     computeSalt(_l2ChainId, reusableSaltMixer(_opChainConfig), "PermissionlessDisputeGame"),
                     encodePermissionlessFDGConstructor(params)
                 )
