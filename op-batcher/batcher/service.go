@@ -50,6 +50,9 @@ type BatcherConfig struct {
 	ThrottleBlockSize, ThrottleAlwaysBlockSize uint64
 
 	PreferLocalSafeL2 bool
+
+	// TestMode enables testing APIs for controlling the batcher
+	TestMode bool
 }
 
 // BatcherService represents a full batch-submitter instance and its resources,
@@ -114,6 +117,7 @@ func (bs *BatcherService) initFromCLIConfig(ctx context.Context, version string,
 	bs.ThrottleAlwaysBlockSize = cfg.ThrottleAlwaysBlockSize
 
 	bs.PreferLocalSafeL2 = cfg.PreferLocalSafeL2
+	bs.TestMode = cfg.TestMode
 
 	optsFromRPC, err := bs.initRPCClients(ctx, cfg)
 	if err != nil {
@@ -388,6 +392,13 @@ func (bs *BatcherService) initRPCServer(cfg *CLIConfig) error {
 		server.AddAPI(bs.TxManager.API())
 		bs.Log.Info("Admin RPC enabled")
 	}
+
+	if cfg.TestMode {
+		testAPI := rpc.NewTestAPI(bs.driver, bs.Metrics, bs.Log)
+		server.AddAPI(rpc.GetTestAPI(testAPI))
+		bs.Log.Info("Test API enabled")
+	}
+
 	bs.Log.Info("Starting JSON-RPC server")
 	if err := server.Start(); err != nil {
 		return fmt.Errorf("unable to start RPC server: %w", err)
