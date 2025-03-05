@@ -446,6 +446,7 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
 
         // Check that the SystemConfig is upgraded to the expected version
         assertEq(ISemver(address(systemConfig)).version(), "2.5.0");
+        assertEq(impls.systemConfigImpl, EIP1967Helper.getImplementation(address(systemConfig)));
 
         if (address(oldFDG) != address(0)) {
             // Check that the PermissionlessDisputeGame is upgraded to the expected version
