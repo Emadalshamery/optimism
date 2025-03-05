@@ -124,12 +124,16 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		upgradeTxs = append(upgradeTxs, fjord...)
 	}
 
+	// Starting with Isthmus, we add upgrade gas to the upgrade block so we don't need to
+	// rely on the upgrade transactions to fit within the system tx gas limit.
+	var upgradeGas uint64
 	if ba.rollupCfg.IsIsthmusActivationBlock(nextL2Time) {
-		isthmus, err := IsthmusNetworkUpgradeTransactions()
+		isthmus, isthmusGas, err := IsthmusNetworkUpgradeTransactions()
 		if err != nil {
 			return nil, NewCriticalError(fmt.Errorf("failed to build isthmus network upgrade txs: %w", err))
 		}
 		upgradeTxs = append(upgradeTxs, isthmus...)
+		upgradeGas += isthmusGas
 	}
 
 	l1InfoTx, err := L1InfoDepositBytes(ba.rollupCfg, sysConfig, seqNumber, l1Info, nextL2Time)
@@ -165,13 +169,15 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		}
 	}
 
+	gasLimit := sysConfig.GasLimit + upgradeGas
+
 	r := &eth.PayloadAttributes{
 		Timestamp:             hexutil.Uint64(nextL2Time),
 		PrevRandao:            eth.Bytes32(l1Info.MixDigest()),
 		SuggestedFeeRecipient: predeploys.SequencerFeeVaultAddr,
 		Transactions:          txs,
 		NoTxPool:              true,
-		GasLimit:              (*eth.Uint64Quantity)(&sysConfig.GasLimit),
+		GasLimit:              (*eth.Uint64Quantity)(&gasLimit),
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: parentBeaconRoot,
 	}

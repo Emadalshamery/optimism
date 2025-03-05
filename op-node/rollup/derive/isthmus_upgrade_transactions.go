@@ -1,6 +1,7 @@
 package derive
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum-optimism/optimism/op-service/predeploys"
@@ -42,151 +43,118 @@ var (
 	blockHashDeploymentBytecode = common.FromHex("0x60538060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500")
 )
 
-func IsthmusNetworkUpgradeTransactions() ([]hexutil.Bytes, error) {
-	upgradeTxns := make([]hexutil.Bytes, 0, 8)
-
-	// Deploy L1 Block transaction
-	deployL1BlockTransaction, err := types.NewTx(&types.DepositTx{
-		SourceHash:          deployIsthmusL1BlockSource.SourceHash(),
-		From:                L1BlockIsthmusDeployerAddress,
-		To:                  nil,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 425_000,
-		IsSystemTransaction: false,
-		Data:                l1BlockIsthmusDeploymentBytecode,
-	}).MarshalBinary()
-
+func IsthmusNetworkUpgradeTransactions() ([]hexutil.Bytes, uint64, error) {
+	upgradeTxns := []*types.DepositTx{
+		// Deploy L1 Block transaction
+		{
+			SourceHash:          deployIsthmusL1BlockSource.SourceHash(),
+			From:                L1BlockIsthmusDeployerAddress,
+			To:                  nil,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 425_000,
+			IsSystemTransaction: false,
+			Data:                l1BlockIsthmusDeploymentBytecode,
+		},
+		// Deploy Gas Price Oracle transaction
+		{
+			SourceHash:          deployIsthmusGasPriceOracleSource.SourceHash(),
+			From:                GasPriceOracleIsthmusDeployerAddress,
+			To:                  nil,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 1_625_000,
+			IsSystemTransaction: false,
+			Data:                gasPriceOracleIsthmusDeploymentBytecode,
+		},
+		// Deploy Operator Fee vault transaction
+		{
+			SourceHash:          deployOperatorFeeVaultSource.SourceHash(),
+			From:                OperatorFeeVaultDeployerAddress,
+			To:                  nil,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 500_000,
+			IsSystemTransaction: false,
+			Data:                operatorFeeVaultDeploymentBytecode,
+		},
+		// Deploy L1 Block Proxy upgrade transaction
+		{
+			SourceHash:          updateIsthmusL1BlockProxySource.SourceHash(),
+			From:                common.Address{},
+			To:                  &predeploys.L1BlockAddr,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 50_000,
+			IsSystemTransaction: false,
+			Data:                upgradeToCalldata(isthmusL1BlockAddress),
+		},
+		// Deploy Gas Price Oracle Proxy upgrade transaction
+		{
+			SourceHash:          updateIsthmusGasPriceOracleSource.SourceHash(),
+			From:                common.Address{},
+			To:                  &predeploys.GasPriceOracleAddr,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 50_000,
+			IsSystemTransaction: false,
+			Data:                upgradeToCalldata(isthmusGasPriceOracleAddress),
+		},
+		// Deploy Operator Fee Vault Proxy upgrade transaction
+		{
+			SourceHash:          updateOperatorFeeVaultSource.SourceHash(),
+			From:                common.Address{},
+			To:                  &predeploys.OperatorFeeVaultAddr,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 50_000,
+			IsSystemTransaction: false,
+			Data:                upgradeToCalldata(OperatorFeeVaultAddress),
+		},
+		// Enable Isthmus transaction
+		{
+			SourceHash:          enableIsthmusSource.SourceHash(),
+			From:                L1InfoDepositerAddress,
+			To:                  &predeploys.GasPriceOracleAddr,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 90_000,
+			IsSystemTransaction: false,
+			Data:                enableIsthmusInput,
+		},
+		// Deploy Historical Block Hashes contract
+		{
+			SourceHash:          blockHashDeployerSource.SourceHash(),
+			From:                predeploys.EIP2935ContractDeployer,
+			To:                  nil,
+			Mint:                big.NewInt(0),
+			Value:               big.NewInt(0),
+			Gas:                 250_000,
+			IsSystemTransaction: false,
+			Data:                blockHashDeploymentBytecode,
+		},
+	}
+	encodedTxs, err := marshalBinaryDepositTxs(upgradeTxns...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	upgradeTxns = append(upgradeTxns, deployL1BlockTransaction)
-
-	// Deploy Gas Price Oracle transaction
-	deployGasPriceOracle, err := types.NewTx(&types.DepositTx{
-		SourceHash:          deployIsthmusGasPriceOracleSource.SourceHash(),
-		From:                GasPriceOracleIsthmusDeployerAddress,
-		To:                  nil,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 1_625_000,
-		IsSystemTransaction: false,
-		Data:                gasPriceOracleIsthmusDeploymentBytecode,
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
+	var totalGas uint64
+	for _, tx := range upgradeTxns {
+		totalGas += tx.Gas
 	}
 
-	upgradeTxns = append(upgradeTxns, deployGasPriceOracle)
+	return encodedTxs, totalGas, nil
+}
 
-	// Deploy Operator Fee vault transaction
-	deployOperatorFeeVault, err := types.NewTx(&types.DepositTx{
-		SourceHash:          deployOperatorFeeVaultSource.SourceHash(),
-		From:                OperatorFeeVaultDeployerAddress,
-		To:                  nil,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 500_000,
-		IsSystemTransaction: false,
-		Data:                operatorFeeVaultDeploymentBytecode,
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
+func marshalBinaryDepositTxs(txs ...*types.DepositTx) ([]hexutil.Bytes, error) {
+	encodedTxs := make([]hexutil.Bytes, 0, len(txs))
+	for i, tx := range txs {
+		encodedTx, err := types.NewTx(tx).MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("marshaling deposit transaction %d: %w", i, err)
+		}
+		encodedTxs = append(encodedTxs, encodedTx)
 	}
-
-	upgradeTxns = append(upgradeTxns, deployOperatorFeeVault)
-
-	// Deploy L1 Block Proxy upgrade transaction
-	updateL1BlockProxy, err := types.NewTx(&types.DepositTx{
-		SourceHash:          updateIsthmusL1BlockProxySource.SourceHash(),
-		From:                common.Address{},
-		To:                  &predeploys.L1BlockAddr,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 50_000,
-		IsSystemTransaction: false,
-		Data:                upgradeToCalldata(isthmusL1BlockAddress),
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
-	}
-
-	upgradeTxns = append(upgradeTxns, updateL1BlockProxy)
-
-	// Deploy Gas Price Oracle Proxy upgrade transaction
-	updateGasPriceOracleProxy, err := types.NewTx(&types.DepositTx{
-		SourceHash:          updateIsthmusGasPriceOracleSource.SourceHash(),
-		From:                common.Address{},
-		To:                  &predeploys.GasPriceOracleAddr,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 50_000,
-		IsSystemTransaction: false,
-		Data:                upgradeToCalldata(isthmusGasPriceOracleAddress),
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
-	}
-
-	upgradeTxns = append(upgradeTxns, updateGasPriceOracleProxy)
-
-	// Deploy Operator Fee Vault Proxy upgrade transaction
-	updateOperatorFeeVaultProxy, err := types.NewTx(&types.DepositTx{
-		SourceHash:          updateOperatorFeeVaultSource.SourceHash(),
-		From:                common.Address{},
-		To:                  &predeploys.OperatorFeeVaultAddr,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 50_000,
-		IsSystemTransaction: false,
-		Data:                upgradeToCalldata(OperatorFeeVaultAddress),
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
-	}
-
-	upgradeTxns = append(upgradeTxns, updateOperatorFeeVaultProxy)
-
-	// Enable Isthmus transaction
-	enableIsthmus, err := types.NewTx(&types.DepositTx{
-		SourceHash:          enableIsthmusSource.SourceHash(),
-		From:                L1InfoDepositerAddress,
-		To:                  &predeploys.GasPriceOracleAddr,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 90_000,
-		IsSystemTransaction: false,
-		Data:                enableIsthmusInput,
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
-	}
-
-	upgradeTxns = append(upgradeTxns, enableIsthmus)
-
-	deployHistoricalBlockHashesContract, err := types.NewTx(&types.DepositTx{
-		SourceHash:          blockHashDeployerSource.SourceHash(),
-		From:                predeploys.EIP2935ContractDeployer,
-		To:                  nil,
-		Mint:                big.NewInt(0),
-		Value:               big.NewInt(0),
-		Gas:                 250_000,
-		IsSystemTransaction: false,
-		Data:                blockHashDeploymentBytecode,
-	}).MarshalBinary()
-
-	if err != nil {
-		return nil, err
-	}
-
-	upgradeTxns = append(upgradeTxns, deployHistoricalBlockHashesContract)
-
-	return upgradeTxns, nil
+	return encodedTxs, nil
 }
