@@ -21,22 +21,31 @@ func TestProviderRegistrationWithParameters(t *testing.T) {
 		c := newTestContainer()
 		metadata := map[string]interface{}{"version": "1.0", "name": "test"}
 		c.RegisterProvider(func(a *int, b *string) *float64 { return new(float64) }, metadata, "singleton")
-		providers := c.Providers[reflect.TypeOf((*float64)(nil))]
+		providers := c.GetProviders(reflect.TypeOf((*float64)(nil)))
 		if len(providers) != 1 {
 			t.Fatalf("Expected 1 di.Provider, got %d", len(providers))
 		}
 		if len(providers[0].ParamTypes) != 2 {
 			t.Errorf("Expected 2 parameters, got %d", len(providers[0].ParamTypes))
 		}
-		if providers[0].Metadata["version"] != "1.0" || providers[0].Metadata["name"] != "test" {
-			t.Errorf("Expected metadata version=1.0 and name=test, got %v", providers[0].Metadata)
+		if providers[0].ParamTypes[0] != reflect.TypeOf((*int)(nil)) {
+			t.Errorf("Expected first parameter to be *int, got %v", providers[0].ParamTypes[0])
+		}
+		if providers[0].ParamTypes[1] != reflect.TypeOf((*string)(nil)) {
+			t.Errorf("Expected second parameter to be *string, got %v", providers[0].ParamTypes[1])
+		}
+		if providers[0].Metadata["version"] != "1.0" {
+			t.Errorf("Expected version to be 1.0, got %v", providers[0].Metadata["version"])
+		}
+		if providers[0].Metadata["name"] != "test" {
+			t.Errorf("Expected name to be test, got %v", providers[0].Metadata["name"])
 		}
 	})
 
 	t.Run("RegisterProviderWithoutParameters", func(t *testing.T) {
 		c := newTestContainer()
 		c.RegisterProvider(func() *int { return new(int) }, nil, "singleton")
-		providers := c.Providers[reflect.TypeOf((*int)(nil))]
+		providers := c.GetProviders(reflect.TypeOf((*int)(nil)))
 		if len(providers) != 1 {
 			t.Fatalf("Expected 1 di.Provider, got %d", len(providers))
 		}
@@ -115,7 +124,7 @@ func TestErrorHandlingWithParameters(t *testing.T) {
 		c.RegisterProvider(func(a *int) *float64 { return new(float64) }, nil, "singleton")
 		c.Build()
 		_, err := di.Provide[*float64](c, nil)
-		if err == nil || !strings.Contains(err.Error(), "no di.Providers for type") {
+		if err == nil || !strings.Contains(err.Error(), "no provider registered for type") {
 			t.Errorf("Expected error for missing dependency, got %v", err)
 		}
 	})
@@ -139,7 +148,7 @@ func TestErrorHandlingWithParameters(t *testing.T) {
 		c.RegisterProvider(func() *int { v := 42; return &v }, map[string]interface{}{"version": "0.9"}, "singleton")
 		c.Build()
 		_, err := di.Provide[*int](c, []di.Filter{&VersionGreaterThanFilter{key: "version", version: "1.0"}})
-		if err == nil || !strings.Contains(err.Error(), "no di.Provider found matching constraints") {
+		if err == nil || !strings.Contains(err.Error(), "no provider found matching constraints") {
 			t.Errorf("Expected error for no matching di.Provider, got %v", err)
 		}
 	})
@@ -708,4 +717,79 @@ func (f *NameEqualsFilter) Matches(value interface{}) bool {
 		return v == f.name
 	}
 	return false
+}
+
+// Types for main package tests
+type (
+	MainInt    int
+	MainString string
+	MainBool   bool
+
+	MainService struct {
+		Value int
+	}
+)
+
+func TestProvide(t *testing.T) {
+	t.Run("BasicProvide", func(t *testing.T) {
+		container := di.NewContainer()
+
+		// Register a provider
+		container.RegisterProvider(func() *MainInt {
+			val := MainInt(42)
+			return &val
+		}, nil, "singleton")
+
+		// Use Provide to resolve it
+		val, err := di.Provide[*MainInt](container, nil)
+		if err != nil {
+			t.Fatalf("Failed to resolve: %v", err)
+		}
+
+		if *val != 42 {
+			t.Errorf("Expected value 42, got %d", *val)
+		}
+	})
+
+	t.Run("ProvideWithFilters", func(t *testing.T) {
+		container := di.NewContainer()
+
+		// Register providers with different metadata
+		container.RegisterProvider(func() *MainInt {
+			val := MainInt(1)
+			return &val
+		}, map[string]interface{}{
+			"env": "dev",
+		}, "singleton")
+
+		container.RegisterProvider(func() *MainInt {
+			val := MainInt(2)
+			return &val
+		}, map[string]interface{}{
+			"env": "prod",
+		}, "singleton")
+
+		// Create a filter for prod environment
+		_, _, prodFilters, _ := container.ParseTag("env=nameEquals(prod)")
+
+		// Resolve with filter
+		val, err := di.Provide[*MainInt](container, prodFilters)
+		if err != nil {
+			t.Fatalf("Failed to resolve with filter: %v", err)
+		}
+
+		if *val != 2 {
+			t.Errorf("Expected filtered value 2, got %d", *val)
+		}
+	})
+
+	t.Run("ProvideError", func(t *testing.T) {
+		container := di.NewContainer()
+
+		// Try to resolve a type that hasn't been registered
+		_, err := di.Provide[*MainString](container, nil)
+		if err == nil {
+			t.Errorf("Expected error when resolving unregistered type")
+		}
+	})
 }
