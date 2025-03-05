@@ -528,9 +528,19 @@ func (s *channelManager) PendingDABytes() int64 {
 	return int64(f)
 }
 
-func (m *channelManager) LastStoredBlock() eth.BlockID {
-	if m.blocks.Len() == 0 {
+// LastStoredBlock returns the last stored block in the channel manager
+func (s *channelManager) LastStoredBlock() eth.BlockID {
+	if s.blocks.Len() == 0 {
 		return eth.BlockID{}
 	}
-	return eth.ToBlockID(m.blocks[m.blocks.Len()-1])
+
+	lastBlock, ok := s.blocks.PeekN(s.blocks.Len() - 1)
+	if !ok {
+		return eth.BlockID{}
+	}
+
+	return eth.BlockID{
+		Hash:   lastBlock.Hash(),
+		Number: lastBlock.NumberU64(),
+	}
 }
