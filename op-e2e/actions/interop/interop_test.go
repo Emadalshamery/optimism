@@ -526,9 +526,9 @@ func TestInterop_IntraBlockReferenceReplacement(gt *testing.T) {
 	statusA, statusB = actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
 	t.Logf("statusA :%#v", statusA)
 	t.Logf("statusB :%#v", statusB)
-	require.True(t, statusA.CrossUnsafeL2.Number > 1, "chainA cross-unsafe head is stalled")
+	require.Greater(t, statusA.CrossUnsafeL2.Number, uint64(1), "chainA cross-unsafe head is stalled")
 	// cross-unsafe on A advances again, but B continues to stall
-	require.True(t, statusB.CrossUnsafeL2.Number > 1, "chainB cross-unsafe head is stalled")
+	require.Greater(t, statusB.CrossUnsafeL2.Number, uint64(1), "chainB cross-unsafe head is stalled")
 
 	// assert that the invalid message txs were reorged out
 	chainBExecTx.CheckNotIncluded()
