@@ -44,6 +44,7 @@ import {
     IOPContractsManagerUpgrader,
     IOPContractsManagerContractsContainer
 } from "interfaces/L1/IOPContractsManager.sol";
+import { IOPContractsManagerLegacyUpgrade } from "interfaces/L1/IOPContractsManagerLegacyUpgrade.sol";
 import { ISemver } from "interfaces/universal/ISemver.sol";
 
 // Contracts
@@ -58,21 +59,6 @@ import { Blueprint } from "src/libraries/Blueprint.sol";
 import { IBigStepper } from "interfaces/dispute/IBigStepper.sol";
 import { GameType, Duration, Hash, Claim } from "src/dispute/lib/LibUDT.sol";
 import { OutputRoot, GameTypes } from "src/dispute/lib/Types.sol";
-
-/// @title IOPContractsManagerLegacyUpgrade
-/// @notice Interface for the legacy OPContractsManager upgrade function.
-///         This interface is used to test Upgrade 13 and 14 paths and can be safely removed
-///         after those upgrades are completed. Only difference in the new struct is the added
-///         disputeGameUsesSuperRoots boolean.
-interface IOPContractsManagerLegacyUpgrade {
-    struct OpChainConfig {
-        ISystemConfig systemConfigProxy;
-        IProxyAdmin proxyAdmin;
-        Claim absolutePrestate;
-    }
-
-    function upgrade(OpChainConfig[] memory _opChainConfigs) external;
-}
 
 // Exposes internal functions for testing.
 contract OPContractsManager_Harness is OPContractsManager {
@@ -437,8 +423,8 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
     }
 
     function runUpgrade14UpgradeAndChecks(address _delegateCaller) public {
-        // TODO: Change this address!
-        IOPContractsManager deployedOPCM = IOPContractsManager(address(0x026b2F158255Beac46c1E7c6b8BbF29A4b6A7B76));
+        // TODO(#14665): Replace this address with once the final OPCM is deployed for Upgrade 14.
+        IOPContractsManager deployedOPCM = IOPContractsManager(address(0x3A1f523a4bc09cd344A2745a108Bb0398288094F));
         IOPContractsManager.Implementations memory impls = deployedOPCM.implementations();
 
         // sanity check
@@ -621,6 +607,7 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
     function runUpgradeTestAndChecks(address _delegateCaller) public {
         runV200UpgradeAndChecks(_delegateCaller);
         runUpgrade14UpgradeAndChecks(_delegateCaller);
+        runUpgrade15UpgradeAndChecks(_delegateCaller);
     }
 }
 

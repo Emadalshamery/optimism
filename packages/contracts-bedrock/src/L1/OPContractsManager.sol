@@ -561,12 +561,13 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
             IAnchorStateRegistry newAnchorStateRegistryProxy;
             {
                 // Deploy a new AnchorStateRegistry contract.
+                // We use the SOT suffix to avoid CREATE2 conflicts with the existing ASR.
                 newAnchorStateRegistryProxy = IAnchorStateRegistry(
                     deployProxy({
                         _l2ChainId: l2ChainId,
                         _proxyAdmin: _opChainConfigs[i].proxyAdmin,
                         _saltMixer: reusableSaltMixer(_opChainConfigs[i]),
-                        _contractName: "AnchorStateRegistry"
+                        _contractName: "AnchorStateRegistry-SOT"
                     })
                 );
 
