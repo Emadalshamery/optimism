@@ -11,7 +11,7 @@ The core of this framework is the **`Container`**, which manages dependencies by
 - **Registering providers**: Defining how to create instances of specific types.
 - **Resolving dependencies**: Providing instances as needed, handling their creation and dependency injection.
 
-Let’s get started by setting up the `Container`.
+Let's get started by setting up the `Container`.
 
 ---
 
@@ -33,7 +33,7 @@ func main() {
 }
 ```
 
-This initializes a `Container` with default settings, including built-in filters (covered later). Think of it as a blank slate for managing your application’s dependencies.
+This initializes a `Container` with default settings, including built-in filters (covered later). Think of it as a blank slate for managing your application's dependencies.
 
 ---
 
@@ -73,7 +73,7 @@ func main() {
 
 ### Providers with Dependencies
 
-Providers can depend on other registered types. Here’s a `Database` that depends on `Config`:
+Providers can depend on other registered types. Here's a `Database` that depends on `Config`:
 
 ```go
 type Database struct {
@@ -101,7 +101,7 @@ Use the `Provide` function to request instances from the `Container`.
 
 ### Basic Resolution
 
-Specify the desired type with Go’s generics:
+Specify the desired type with Go's generics:
 
 ```go
 db, err := di.Provide[*Database](container, nil)
@@ -117,7 +117,7 @@ fmt.Println(db.Config.Host) // "localhost"
 
 ### Error Handling
 
-`Provide` returns an error if no provider exists or dependencies can’t be resolved. Always check errors to handle missing dependencies.
+`Provide` returns an error if no provider exists or dependencies can't be resolved. Always check errors to handle missing dependencies.
 
 ---
 
@@ -175,7 +175,7 @@ Two `*Database` providers are registered, differentiated by `env`.
 
 ### Using Filters to Select Providers
 
-**Filters** select providers based on metadata conditions. They’re registered with the `Container` and used in DI tags or manual resolution.
+**Filters** select providers based on metadata conditions. They're registered with the `Container` and used in DI tags or manual resolution.
 
 #### Built-in Filters
 
@@ -425,3 +425,81 @@ func main() {
     fmt.Println(app.DevDB.Config.Host)  // "localhost"
 }
 ```
+
+## 11. Error Handling and Debugging
+
+The DI framework provides detailed error messages to help you diagnose dependency resolution issues.
+
+### Enhanced Error Messages
+
+When dependency resolution fails, the framework provides detailed error messages that explain exactly why the resolution failed:
+
+#### 1. Missing Provider
+
+When no provider is registered for a requested type:
+
+```
+Failed to resolve dependency of type example.Service
+No providers registered for this type
+```
+
+#### 2. Filtered Out Providers
+
+When providers exist but are filtered out by constraints:
+
+```
+Failed to resolve dependency of type example.Service
+Applied filters:
+  1. *di.NameEqualsFilter
+Type-compatible providers that were disqualified by filters:
+  1. Provider for example.Service with metadata map[name:service1 version:1.0]:
+     Disqualified by filters:
+     1.1. *di.NameEqualsFilter (key=name, expected=service2)
+```
+
+This tells you:
+- What filters were applied
+- Which providers were available but disqualified
+- For each disqualified provider, which specific filter caused the disqualification
+
+#### 3. Nested Dependency Failures
+
+For nested dependency failures, the error shows the full dependency chain:
+
+```
+Failed to resolve dependency of type example.Service
+Caused by: failed to resolve parameter 0 of type example.Database for provider of example.Service:
+Failed to resolve dependency of type example.Database
+No providers registered for this type
+```
+
+#### 4. Struct Field Resolution Failures
+
+For struct auto-resolution failures:
+
+```
+Failed to resolve dependency of type example.App
+Caused by: error resolving struct field DB: Failed to resolve dependency of type example.Database
+No providers registered for this type
+```
+
+### Using Debug Mode
+
+For even more detailed information, you can enable debug mode:
+
+```go
+container.EnableDebug(di.DebugOptions{
+    Enabled: true,
+    IncludeValues: true,
+})
+
+// ... resolve dependencies ...
+
+// Get the debug trace
+trace := container.GetDebugTrace()
+fmt.Println(trace.String()) // Prints detailed resolution steps
+```
+
+Debug mode tracks all resolution attempts, provider selections, and cache operations, giving you a complete picture of what happened during dependency resolution.
+
+---

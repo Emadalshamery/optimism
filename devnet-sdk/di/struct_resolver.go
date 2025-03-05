@@ -1,6 +1,7 @@
 package di
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -157,6 +158,35 @@ func (c *Container) autoResolveStruct(t reflect.Type, filters []Filter) (interfa
 	if len(taggedFields) > 0 {
 		providers, err := selectProviders(c, taggedFields)
 		if err != nil {
+			// Create a more detailed error message
+			var fieldsWithMissingProviders []string
+			var missingDependencyErrors []*DependencyResolutionError
+
+			// Check each field to see which ones have missing dependencies
+			for _, field := range taggedFields {
+				fieldType := field.Field.Type
+
+				// Try to find providers for this field's type
+				if _, err := c.provide(fieldType, field.Filters); err != nil {
+					var resErr *DependencyResolutionError
+					if errors.As(err, &resErr) {
+						missingDependencyErrors = append(missingDependencyErrors, resErr)
+					}
+					fieldsWithMissingProviders = append(fieldsWithMissingProviders, field.Field.Name)
+				}
+			}
+
+			// Build a descriptive error
+			if len(missingDependencyErrors) > 0 {
+				// Return the first missing dependency error with context
+				return nil, &DependencyResolutionError{
+					DependencyType: t,
+					AppliedFilters: filters,
+					Cause: fmt.Errorf("error resolving struct field %s: %w",
+						fieldsWithMissingProviders[0], missingDependencyErrors[0]),
+				}
+			}
+
 			return nil, fmt.Errorf("error resolving struct: %w", err)
 		}
 
@@ -170,7 +200,12 @@ func (c *Container) autoResolveStruct(t reflect.Type, filters []Filter) (interfa
 				fieldType := field.Field.Type
 				allProviders, ok := c.providers[fieldType]
 				if !ok || len(allProviders) == 0 {
-					return nil, fmt.Errorf("no suitable provider for field %s", field.Field.Name)
+					// Use enhanced error type for better error reporting
+					return nil, &DependencyResolutionError{
+						DependencyType: fieldType,
+						AppliedFilters: field.Filters,
+						Cause:          fmt.Errorf("no suitable provider for field %s", field.Field.Name),
+					}
 				}
 
 				// Just use the first provider if multiple are available
@@ -178,7 +213,7 @@ func (c *Container) autoResolveStruct(t reflect.Type, filters []Filter) (interfa
 				provider := allProviders[0]
 				val, err := c.invokeProvider(*provider)
 				if err != nil {
-					return nil, fmt.Errorf("error resolving struct: %w", err)
+					return nil, fmt.Errorf("error resolving struct field %s: %w", field.Field.Name, err)
 				}
 
 				// Set the field value
@@ -195,6 +230,15 @@ func (c *Container) autoResolveStruct(t reflect.Type, filters []Filter) (interfa
 
 				resolved, err := c.provide(fieldType, field.Filters)
 				if err != nil {
+					// Wrap the error with field context
+					var resErr *DependencyResolutionError
+					if errors.As(err, &resErr) {
+						return nil, &DependencyResolutionError{
+							DependencyType: t,
+							AppliedFilters: filters,
+							Cause:          fmt.Errorf("error resolving struct field %s: %w", field.Field.Name, err),
+						}
+					}
 					return nil, fmt.Errorf("error resolving struct field %s: %w", field.Field.Name, err)
 				}
 
@@ -243,6 +287,15 @@ func (c *Container) autoResolveStruct(t reflect.Type, filters []Filter) (interfa
 		}
 
 		if err != nil {
+			// Wrap the error with field context
+			var resErr *DependencyResolutionError
+			if errors.As(err, &resErr) {
+				return nil, &DependencyResolutionError{
+					DependencyType: t,
+					AppliedFilters: filters,
+					Cause:          fmt.Errorf("error auto-resolving field %s: %w", field.Name, err),
+				}
+			}
 			return nil, fmt.Errorf("error auto-resolving field %s: %w", field.Name, err)
 		}
 

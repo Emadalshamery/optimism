@@ -1,6 +1,7 @@
 package di
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -93,7 +94,8 @@ func (c *Container) provide(t reflect.Type, filters []Filter) (interface{}, erro
 			return result, nil
 		}
 
-		return nil, fmt.Errorf("no provider registered for type %v", t)
+		// Return enhanced error message when no provider is found
+		return nil, NewDependencyNotFoundError(t, filters)
 	}
 	fmt.Printf("Found %d providers for type %v\n", len(providers), t)
 
@@ -113,10 +115,34 @@ func (c *Container) provide(t reflect.Type, filters []Filter) (interface{}, erro
 	}
 
 	if selectedProvider == nil {
+		// Enhanced error message for filtered-out providers
 		if len(filters) > 0 {
-			return nil, fmt.Errorf("no provider found matching constraints for type %v", t)
+			// For each filtered provider, determine which filters disqualified it
+			disqualifiedProviders := make(map[*Provider][]Filter)
+
+			for _, p := range filteredOut {
+				disqualifyingFilters := make([]Filter, 0)
+
+				for _, f := range filters {
+					matched := false
+					for key, value := range p.Metadata {
+						if f.AppliesTo(key) && f.Matches(value) {
+							matched = true
+							break
+						}
+					}
+					if !matched {
+						disqualifyingFilters = append(disqualifyingFilters, f)
+					}
+				}
+
+				disqualifiedProviders[p] = disqualifyingFilters
+			}
+
+			return nil, NewDependencyFilteredError(t, filters, providers, disqualifiedProviders)
 		}
-		return nil, fmt.Errorf("no provider registered for type %v", t)
+
+		return nil, NewDependencyNotFoundError(t, filters)
 	}
 
 	fmt.Printf("Selected provider for type %v\n", t)
@@ -157,6 +183,17 @@ func (c *Container) invokeProvider(p Provider) (interface{}, error) {
 		fmt.Printf("  Resolving parameter %d of type %v\n", i, paramType)
 		param, err := c.provide(paramType, nil) // No filters for now
 		if err != nil {
+			// Wrap the error with additional context
+			var resErr *DependencyResolutionError
+			if errors.As(err, &resErr) {
+				// Update the cause for nested dependency resolution errors
+				return nil, &DependencyResolutionError{
+					DependencyType: p.provides,
+					Cause: fmt.Errorf("failed to resolve parameter %d of type %v for provider of %v: %w",
+						i, paramType, p.provides, err),
+				}
+			}
+
 			return nil, fmt.Errorf("failed to resolve parameter %d of type %v: %w", i, paramType, err)
 		}
 		fmt.Printf("  Resolved parameter %d: %+v\n", i, param)
