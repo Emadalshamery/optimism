@@ -602,6 +602,9 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
                 }
             }
 
+            // Upgrade the OptimismPortal contract implementation.
+            upgradeTo(_opChainConfigs[i].proxyAdmin, opChainAddrs.optimismPortal, impls.optimismPortalImpl);
+
             // Separate context to avoid stack too deep.
             {
                 // Deploy the ETHLockbox proxy.
