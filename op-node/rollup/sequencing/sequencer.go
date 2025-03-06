@@ -183,8 +183,6 @@ func (d *Sequencer) OnEvent(ev event.Event) bool {
 		d.onSequencerAction(x)
 	case rollup.EngineTemporaryErrorEvent:
 		d.onEngineTemporaryError(x)
-	case rollup.L1TemporaryErrorEvent:
-		d.onL1TemporaryError(x)
 	case rollup.ResetEvent:
 		d.onReset(x)
 	case engine.EngineResetConfirmedEvent:
@@ -408,11 +406,6 @@ func (d *Sequencer) onEngineTemporaryError(x rollup.EngineTemporaryErrorEvent) {
 	}
 }
 
-func (d *Sequencer) onL1TemporaryError(x rollup.L1TemporaryErrorEvent) {
-	d.nextAction = d.timeNow().Add(time.Second)
-	d.nextActionOK = d.active.Load()
-}
-
 func (d *Sequencer) onReset(x rollup.ResetEvent) {
 	d.log.Error("Sequencer encountered reset signal, aborting work", "err", x.Err)
 	d.metrics.RecordSequencerReset()
@@ -498,6 +491,8 @@ func (d *Sequencer) startBuildingBlock() {
 	// Figure out which L1 origin block we're going to be building on top of.
 	l1Origin, err := d.l1OriginSelector.FindL1Origin(ctx, l2Head)
 	if err != nil {
+		d.nextAction = d.timeNow().Add(time.Second)
+		d.nextActionOK = d.active.Load()
 		d.log.Error("Error finding next L1 Origin", "err", err)
 		d.emitter.Emit(rollup.L1TemporaryErrorEvent{Err: err})
 		return
