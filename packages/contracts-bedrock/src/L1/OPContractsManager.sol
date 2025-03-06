@@ -630,15 +630,9 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
                     );
                 }
 
-                // Upgrade the OptimismPortal contract.
-                upgradeToAndCall(
-                    _opChainConfigs[i].proxyAdmin,
-                    opChainAddrs.optimismPortal,
-                    impls.optimismPortalImpl,
-                    abi.encodeCall(
-                        IOptimismPortal.upgrade,
-                        (newAnchorStateRegistryProxy, ethLockbox, _opChainConfigs[i].disputeGameUsesSuperRoots)
-                    )
+                // Call `upgrade` on the OptimismPortal contract.
+                IOptimismPortal(payable(opChainAddrs.optimismPortal)).upgrade(
+                    newAnchorStateRegistryProxy, ethLockbox, _opChainConfigs[i].disputeGameUsesSuperRoots
                 );
             }
 
