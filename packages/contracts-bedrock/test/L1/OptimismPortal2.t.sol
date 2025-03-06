@@ -645,7 +645,13 @@ contract OptimismPortal2_FinalizeWithdrawal_Test is CommonTest {
     /// @dev Tests that `proveWithdrawalTransaction` reverts when the target is the portal contract.
     function test_proveWithdrawalTransaction_onSelfCall_reverts() external {
         _defaultTx.target = address(optimismPortal2);
-        optimismPortal2.proveWithdrawalTransaction({ _withdrawalProof: _withdrawalProof });
+        vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);
+        optimismPortal2.proveWithdrawalTransaction({
+            _tx: _defaultTx,
+            _disputeGameIndex: _proposedGameIndex,
+            _outputRootProof: _outputRootProof,
+            _withdrawalProof: _withdrawalProof
+        });
 
         _defaultTx.target = address(ethLockbox);
         vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);

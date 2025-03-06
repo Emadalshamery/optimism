@@ -1169,6 +1169,10 @@ contract OPContractsManager_UpdatePrestate_Test is Test {
                 _name: "OptimismPortal2",
                 _args: DeployUtils.encodeConstructor(abi.encodeCall(IOptimismPortal2.__constructor__, (1)))
             }),
+            ethLockboxImpl: DeployUtils.create1({
+                _name: "ETHLockbox",
+                _args: DeployUtils.encodeConstructor(abi.encodeCall(IETHLockbox.__constructor__, ()))
+            }),
             systemConfigImpl: DeployUtils.create1({
                 _name: "SystemConfig",
                 _args: DeployUtils.encodeConstructor(abi.encodeCall(ISystemConfig.__constructor__, ()))
