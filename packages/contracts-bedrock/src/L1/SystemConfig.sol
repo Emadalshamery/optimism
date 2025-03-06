@@ -140,9 +140,9 @@ contract SystemConfig is OwnableUpgradeable, ReinitializableBase, ISemver {
     event ConfigUpdate(uint256 indexed version, UpdateType indexed updateType, bytes data);
 
     /// @notice Semantic version.
-    /// @custom:semver 2.5.0
+    /// @custom:semver 2.6.0
     function version() public pure virtual returns (string memory) {
-        return "2.5.0";
+        return "2.6.0";
     }
 
     /// @notice Constructs the SystemConfig contract.

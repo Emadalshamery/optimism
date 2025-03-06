@@ -662,6 +662,11 @@
             "internalType": "Claim",
             "name": "absolutePrestate",
             "type": "bytes32"
+          },
+          {
+            "internalType": "bool",
+            "name": "disputeGameUsesSuperRoots",
+            "type": "bool"
           }
         ],
         "internalType": "struct OPContractsManager.OpChainConfig[]",
@@ -738,33 +743,14 @@
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "InvalidRoleAddressBatcher",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidRoleAddressChallenger",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidRoleAddressPAO",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidRoleAddressProposer",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidRoleAddressSCO",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidRoleAddressUBS",
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "role",
+        "type": "string"
+      }
+    ],
+    "name": "InvalidRoleAddress",
     "type": "error"
   },
   {

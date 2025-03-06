@@ -54,7 +54,6 @@ contract OptimismPortal2_Test is CommonTest {
         assertEq(address(opImpl.anchorStateRegistry()), address(0));
         assertEq(address(opImpl.systemConfig()), address(0));
         assertEq(address(opImpl.superchainConfig()), address(0));
-        assertEq(opImpl.respectedGameType().raw(), deploy.cfg().respectedGameType());
 
         // TODO(opcm upgrades): remove skip once upgrade path is implemented
         returnIfForkTest("OptimismPortal2_Test: l2Sender is nonzero on OP mainnet");
