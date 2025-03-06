@@ -605,24 +605,27 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
             // Separate context to avoid stack too deep.
             {
                 // Deploy the ETHLockbox proxy.
-                IETHLockbox ethLockbox = IETHLockbox(
-                    deployProxy({
-                        _l2ChainId: l2ChainId,
-                        _proxyAdmin: _opChainConfigs[i].proxyAdmin,
-                        _saltMixer: reusableSaltMixer(_opChainConfigs[i]),
-                        _contractName: "ETHLockbox"
-                    })
-                );
+                IETHLockbox ethLockbox;
+                {
+                    ethLockbox = IETHLockbox(
+                        deployProxy({
+                            _l2ChainId: l2ChainId,
+                            _proxyAdmin: _opChainConfigs[i].proxyAdmin,
+                            _saltMixer: reusableSaltMixer(_opChainConfigs[i]),
+                            _contractName: "ETHLockbox"
+                        })
+                    );
 
-                // Initialize the ETHLockbox setting the OptimismPortal as an authorized portal.
-                IOptimismPortal[] memory portals = new IOptimismPortal[](1);
-                portals[0] = IOptimismPortal(payable(opChainAddrs.optimismPortal));
-                upgradeToAndCall(
-                    _opChainConfigs[i].proxyAdmin,
-                    address(ethLockbox),
-                    impls.ethLockboxImpl,
-                    abi.encodeCall(IETHLockbox.initialize, (superchainConfig, portals))
-                );
+                    // Initialize the ETHLockbox setting the OptimismPortal as an authorized portal.
+                    IOptimismPortal[] memory portals = new IOptimismPortal[](1);
+                    portals[0] = IOptimismPortal(payable(opChainAddrs.optimismPortal));
+                    upgradeToAndCall(
+                        _opChainConfigs[i].proxyAdmin,
+                        address(ethLockbox),
+                        impls.ethLockboxImpl,
+                        abi.encodeCall(IETHLockbox.initialize, (superchainConfig, portals))
+                    );
+                }
 
                 // Upgrade the OptimismPortal contract.
                 upgradeToAndCall(
