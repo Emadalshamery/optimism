@@ -309,3 +309,228 @@ interface IOPContractsManager {
 
     function setRC(bool _isRC) external;
 }
+
+interface IOPContractsManagerOld {
+    // -------- Structs --------
+
+    /// @notice Represents the roles that can be set when deploying a standard OP Stack chain.
+    struct Roles {
+        address opChainProxyAdminOwner;
+        address systemConfigOwner;
+        address batcher;
+        address unsafeBlockSigner;
+        address proposer;
+        address challenger;
+    }
+
+    /// @notice The full set of inputs to deploy a new OP Stack chain.
+    struct DeployInput {
+        Roles roles;
+        uint32 basefeeScalar;
+        uint32 blobBasefeeScalar;
+        uint256 l2ChainId;
+        // The correct type is OutputRoot memory but OP Deployer does not yet support structs.
+        bytes startingAnchorRoot;
+        // The salt mixer is used as part of making the resulting salt unique.
+        string saltMixer;
+        uint64 gasLimit;
+        // Configurable dispute game parameters.
+        bool disputeGameUsesSuperRoots;
+        GameType disputeGameType;
+        Claim disputeAbsolutePrestate;
+        uint256 disputeMaxGameDepth;
+        uint256 disputeSplitDepth;
+        Duration disputeClockExtension;
+        Duration disputeMaxClockDuration;
+    }
+
+    /// @notice The full set of outputs from deploying a new OP Stack chain.
+    struct DeployOutput {
+        IProxyAdmin opChainProxyAdmin;
+        IAddressManager addressManager;
+        IL1ERC721Bridge l1ERC721BridgeProxy;
+        ISystemConfig systemConfigProxy;
+        IOptimismMintableERC20Factory optimismMintableERC20FactoryProxy;
+        IL1StandardBridge l1StandardBridgeProxy;
+        IL1CrossDomainMessenger l1CrossDomainMessengerProxy;
+        // Fault proof contracts below.
+        IOptimismPortal2 optimismPortalProxy;
+        IDisputeGameFactory disputeGameFactoryProxy;
+        IAnchorStateRegistry anchorStateRegistryProxy;
+        IFaultDisputeGame faultDisputeGame;
+        IPermissionedDisputeGame permissionedDisputeGame;
+        IDelayedWETH delayedWETHPermissionedGameProxy;
+        IDelayedWETH delayedWETHPermissionlessGameProxy;
+    }
+
+    /// @notice Addresses of ERC-5202 Blueprint contracts. There are used for deploying full size
+    /// contracts, to reduce the code size of this factory contract. If it deployed full contracts
+    /// using the `new Proxy()` syntax, the code size would get large fast, since this contract would
+    /// contain the bytecode of every contract it deploys. Therefore we instead use Blueprints to
+    /// reduce the code size of this contract.
+    struct Blueprints {
+        address addressManager;
+        address proxy;
+        address proxyAdmin;
+        address l1ChugSplashProxy;
+        address resolvedDelegateProxy;
+        address permissionedDisputeGame1;
+        address permissionedDisputeGame2;
+        address permissionlessDisputeGame1;
+        address permissionlessDisputeGame2;
+    }
+
+    /// @notice The latest implementation contracts for the OP Stack.
+    struct Implementations {
+        address superchainConfigImpl;
+        address protocolVersionsImpl;
+        address l1ERC721BridgeImpl;
+        address optimismPortalImpl;
+        address systemConfigImpl;
+        address optimismMintableERC20FactoryImpl;
+        address l1CrossDomainMessengerImpl;
+        address l1StandardBridgeImpl;
+        address disputeGameFactoryImpl;
+        address anchorStateRegistryImpl;
+        address delayedWETHImpl;
+        address mipsImpl;
+    }
+
+    /// @notice The input required to identify a chain for upgrading.
+    struct OpChainConfig {
+        ISystemConfig systemConfigProxy;
+        IProxyAdmin proxyAdmin;
+        Claim absolutePrestate;
+        bool disputeGameUsesSuperRoots;
+    }
+
+    struct AddGameInput {
+        string saltMixer;
+        ISystemConfig systemConfig;
+        IProxyAdmin proxyAdmin;
+        IDelayedWETH delayedWETH;
+        GameType disputeGameType;
+        Claim disputeAbsolutePrestate;
+        uint256 disputeMaxGameDepth;
+        uint256 disputeSplitDepth;
+        Duration disputeClockExtension;
+        Duration disputeMaxClockDuration;
+        uint256 initialBond;
+        IBigStepper vm;
+        bool permissioned;
+    }
+
+    struct AddGameOutput {
+        IDelayedWETH delayedWETH;
+        IFaultDisputeGame faultDisputeGame;
+    }
+
+    // -------- Constants and Variables --------
+
+    function version() external pure returns (string memory);
+
+    /// @notice Address of the SuperchainConfig contract shared by all chains.
+    function superchainConfig() external view returns (ISuperchainConfig);
+
+    /// @notice Address of the ProtocolVersions contract shared by all chains.
+    function protocolVersions() external view returns (IProtocolVersions);
+
+    /// @notice Address of the ProxyAdmin contract shared by all chains.
+    function superchainProxyAdmin() external view returns (IProxyAdmin);
+
+    /// @notice L1 smart contracts release deployed by this version of OPCM. This is used in opcm to signal which
+    /// version of the L1 smart contracts is deployed. It takes the format of `op-contracts/vX.Y.Z`.
+    function l1ContractsRelease() external view returns (string memory);
+
+    // -------- Errors --------
+
+    error OnlyUpgradeController();
+
+    /// @notice Thrown when an address is the zero address.
+    error AddressNotFound(address who);
+
+    /// @notice Throw when a contract address has no code.
+    error AddressHasNoCode(address who);
+
+    /// @notice Thrown when a release version is already set.
+    error AlreadyReleased();
+
+    /// @notice Thrown when an invalid `l2ChainId` is provided to `deploy`.
+    error InvalidChainId();
+
+    /// @notice Thrown when a role's address is not valid.
+    error InvalidRoleAddress(string role);
+
+    /// @notice Thrown when the latest release is not set upon initialization.
+    error LatestReleaseNotSet();
+
+    /// @notice Thrown when the starting anchor root is not provided.
+    error InvalidStartingAnchorRoot();
+
+    /// @notice Thrown when certain methods are called outside of a DELEGATECALL.
+    error OnlyDelegatecall();
+
+    /// @notice Thrown when game configs passed to addGameType are invalid.
+    error InvalidGameConfigs();
+
+    /// @notice Thrown when the SuperchainConfig of the chain does not match the SuperchainConfig of this OPCM.
+    error SuperchainConfigMismatch(ISystemConfig systemConfig);
+
+    error SuperchainProxyAdminMismatch();
+
+    error PrestateNotSet();
+
+    error PrestateRequired();
+
+    // -------- Methods --------
+
+    function __constructor__(
+        IOPContractsManagerGameTypeAdder _opcmGameTypeAdder,
+        IOPContractsManagerDeployer _opcmDeployer,
+        IOPContractsManagerUpgrader _opcmUpgrader,
+        ISuperchainConfig _superchainConfig,
+        IProtocolVersions _protocolVersions,
+        IProxyAdmin _superchainProxyAdmin,
+        string memory _l1ContractsRelease,
+        address _upgradeController
+    )
+        external;
+
+    function deploy(DeployInput calldata _input) external returns (DeployOutput memory);
+
+    /// @notice Upgrades the implementation of all proxies in the specified chains
+    /// @param _opChainConfigs The chains to upgrade
+    function upgrade(OpChainConfig[] memory _opChainConfigs) external;
+
+    /// @notice addGameType deploys a new dispute game and links it to the DisputeGameFactory. The inputted _gameConfigs
+    /// must be added in ascending GameType order.
+    function addGameType(AddGameInput[] memory _gameConfigs) external returns (AddGameOutput[] memory);
+
+    /// @notice Updates the prestate hash for a new game type while keeping all other parameters the same
+    /// @param _prestateUpdateInputs The new prestate hash to use
+    function updatePrestate(OpChainConfig[] memory _prestateUpdateInputs) external;
+
+    /// @notice Maps an L2 chain ID to an L1 batch inbox address as defined by the standard
+    /// configuration's convention. This convention is `versionByte || keccak256(bytes32(chainId))[:19]`,
+    /// where || denotes concatenation`, versionByte is 0x00, and chainId is a uint256.
+    /// https://specs.optimism.io/protocol/configurability.html#consensus-parameters
+    function chainIdToBatchInboxAddress(uint256 _l2ChainId) external pure returns (address);
+
+    /// @notice Returns the blueprint contract addresses.
+    function blueprints() external view returns (Blueprints memory);
+
+    function opcmDeployer() external view returns (IOPContractsManagerDeployer);
+
+    function opcmUpgrader() external view returns (IOPContractsManagerUpgrader);
+
+    function opcmGameTypeAdder() external view returns (IOPContractsManagerGameTypeAdder);
+
+    /// @notice Returns the implementation contract addresses.
+    function implementations() external view returns (Implementations memory);
+
+    function upgradeController() external view returns (address);
+
+    function isRC() external view returns (bool);
+
+    function setRC(bool _isRC) external;
+}

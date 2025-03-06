@@ -40,6 +40,7 @@ import { IFaultDisputeGame } from "interfaces/dispute/IFaultDisputeGame.sol";
 import { ISystemConfig } from "interfaces/L1/ISystemConfig.sol";
 import {
     IOPContractsManager,
+    IOPContractsManagerOld,
     IOPContractsManagerGameTypeAdder,
     IOPContractsManagerDeployer,
     IOPContractsManagerUpgrader,
@@ -318,8 +319,9 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
 
     function runV200UpgradeAndChecks(address _delegateCaller) public {
         // The address below corresponds with the address of the v2.0.0-rc.1 OPCM on mainnet.
-        IOPContractsManager deployedOPCM = IOPContractsManager(address(0x026b2F158255Beac46c1E7c6b8BbF29A4b6A7B76));
-        IOPContractsManager.Implementations memory impls = deployedOPCM.implementations();
+        IOPContractsManagerOld deployedOPCM =
+            IOPContractsManagerOld(address(0x026b2F158255Beac46c1E7c6b8BbF29A4b6A7B76));
+        IOPContractsManagerOld.Implementations memory impls = deployedOPCM.implementations();
 
         // Cache the old L1xDM address so we can look for it in the AddressManager's event
         address oldL1CrossDomainMessenger = addressManager.getAddress("OVM_L1CrossDomainMessenger");
@@ -348,9 +350,6 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
         expectEmitUpgraded(impls.l1ERC721BridgeImpl, address(l1ERC721Bridge));
         expectEmitUpgraded(impls.disputeGameFactoryImpl, address(disputeGameFactory));
         expectEmitUpgraded(impls.optimismPortalImpl, address(optimismPortal2));
-        if (deploy.cfg().useUpgradedFork()) {
-            expectEmitUpgraded(impls.ethLockboxImpl, address(ethLockbox));
-        }
         expectEmitUpgraded(impls.optimismMintableERC20FactoryImpl, address(l1OptimismMintableERC20Factory));
         vm.expectEmit(address(newAnchorStateRegistryProxy));
         emit AdminChanged(address(0), address(proxyAdmin));
@@ -396,9 +395,9 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
         assertEq(impls.l1ERC721BridgeImpl, EIP1967Helper.getImplementation(address(l1ERC721Bridge)));
         assertEq(impls.disputeGameFactoryImpl, EIP1967Helper.getImplementation(address(disputeGameFactory)));
         assertEq(impls.optimismPortalImpl, EIP1967Helper.getImplementation(address(optimismPortal2)));
-        if (deploy.cfg().useUpgradedFork()) {
-            assertEq(impls.ethLockboxImpl, EIP1967Helper.getImplementation(address(ethLockbox)));
-        }
+        // if (deploy.cfg().useUpgradedFork()) {
+        //     assertEq(impls.ethLockboxImpl, EIP1967Helper.getImplementation(address(ethLockbox)));
+        // }
         assertEq(
             impls.optimismMintableERC20FactoryImpl,
             EIP1967Helper.getImplementation(address(l1OptimismMintableERC20Factory))
@@ -432,8 +431,9 @@ contract OPContractsManager_Upgrade_Harness is CommonTest {
 
     function runUpgrade14UpgradeAndChecks(address _delegateCaller) public {
         // TODO(#14665): Replace this address with once the final OPCM is deployed for Upgrade 14.
-        IOPContractsManager deployedOPCM = IOPContractsManager(address(0x3A1f523a4bc09cd344A2745a108Bb0398288094F));
-        IOPContractsManager.Implementations memory impls = deployedOPCM.implementations();
+        IOPContractsManagerOld deployedOPCM =
+            IOPContractsManagerOld(address(0x3A1f523a4bc09cd344A2745a108Bb0398288094F));
+        IOPContractsManagerOld.Implementations memory impls = deployedOPCM.implementations();
 
         // sanity check
         IPermissionedDisputeGame oldPDG =
