@@ -40,7 +40,7 @@ import { IFaultDisputeGame } from "interfaces/dispute/IFaultDisputeGame.sol";
 import { ISystemConfig } from "interfaces/L1/ISystemConfig.sol";
 import {
     IOPContractsManager,
-    IOPContractsManager,
+    IOPCMImplementationsWithoutLockbox,
     IOPContractsManagerGameTypeAdder,
     IOPContractsManagerDeployer,
     IOPContractsManagerUpgrader,
