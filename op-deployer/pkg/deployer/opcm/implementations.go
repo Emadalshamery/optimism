@@ -37,7 +37,7 @@ type DeployImplementationsOutput struct {
 	OpcmUpgrader                     common.Address
 	DelayedWETHImpl                  common.Address
 	OptimismPortalImpl               common.Address
-	ETHLockboxImpl                   common.Address
+	ETHLockboxImpl                   common.Address `evm:"ethLockboxImpl"`
 	PreimageOracleSingleton          common.Address
 	MipsSingleton                    common.Address
 	SystemConfigImpl                 common.Address
