@@ -621,6 +621,9 @@ contract MIPS64 is ISemver {
                 // ignored
             } else if (syscall_no == sys.SYS_LSEEK) {
                 // ignored
+            } else if (syscall_no == sys.SYS_EVENTFD2) {
+                // ignored
+                // TODO(#14692) Switch based on VM version / feature toggle here
             } else {
                 revert("MIPS64: unimplemented syscall");
             }

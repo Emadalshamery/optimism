@@ -460,6 +460,7 @@ var NoopSyscalls64 = map[string]uint32{
 	"SysTimerCreate":  5216,
 	"SysTimerSetTime": 5217,
 	"SysTimerDelete":  5220,
+	"SysEventFd2":     5284,
 }
 
 func TestEVM_NoopSyscall64(t *testing.T) {
