@@ -23,15 +23,17 @@ import { IOptimismPortal2 } from "src/L1/interfaces/IOptimismPortal2.sol";
  * @title AddFDG
  * @notice Script to add FDG (Fee Data Grantor) to the system
  */
+
 contract AddFDG is Script {
     /// @dev The Foundry VM.
-    // All addresses from here: https://github.com/ethereum-optimism/devnets/blob/52d29f90fc506feb4a0ebbd26fdf157bbb14950f/betanets/aegir/aegir-1/chain.yaml#L1
+    // All addresses from here:
+    // https://github.com/ethereum-optimism/devnets/blob/52d29f90fc506feb4a0ebbd26fdf157bbb14950f/betanets/aegir/aegir-1/chain.yaml#L1
     IProxyAdmin proxyAdmin = IProxyAdmin(0x6d283c3Ff5B2140032BF1A9C2fa20e4c73484666);
     ISuperchainConfig superchain = ISuperchainConfig(0xC2Be75506d5724086DEB7245bd260Cc9753911Be);
     StorageSetter storageSetter = StorageSetter(0x54F8076f4027e21A010b4B3900C86211Dd2C2DEB);
     IAnchorStateRegistry anchorStateRegistry = IAnchorStateRegistry(0xB4265083491C4Ff36d2a964A5D2228E9b3CFd89F);
     IDisputeGameFactory disputeGameFactory = IDisputeGameFactory(0x5c06aDb8f7e30A6b30Ef6C91612719E8061b3Ff5);
-    IOptimismPortal2 optimismPortal = IOptimismPortal2(0x1dd21367755166cfe041e5d307a081a8411c8921);
+    IOptimismPortal2 optimismPortal = IOptimismPortal2(payable(0x1dd21367755166CfE041e5d307A081A8411C8921));
 
     /**
      * @notice Main function that will be executed when the script runs
@@ -57,13 +59,14 @@ contract AddFDG is Script {
      * @notice Helper function for the main execution
      */
     function _deployFDG(IFaultDisputeGame _disputeGame) internal returns (IFaultDisputeGame) {
-        // Read the constructor params from the game, then use them to deploy the FDG.
+        // Provided by Zach:
+        // https://oplabs-pbc.slack.com/archives/C0885T0HRCG/p1741022679358429?thread_ts=1740770336.922089&cid=C0885T0HRCG
         Claim absolutePrestate = Claim.wrap(0x03f206f043bb34f9e931a49716754b303e635e931b7f1294ff8ca45c969fc627);
 
         // sanity check
         require(_disputeGame.anchorStateRegistry() == anchorStateRegistry);
 
-        // Deploy the FDG using DeployUtils and vm.getCode
+        // Read the constructor params from the game, and use them to deploy the FDG.
         return IFaultDisputeGame(
             DeployUtils.create1(
                 "FaultDisputeGame",
@@ -131,7 +134,11 @@ contract AddFDG is Script {
         vm.stopBroadcast();
 
         // Check that the anchor state registry has been reinitialized
-        require(anchorStateRegistry.anchors(GameType.wrap(0)) == startingRoots[0].outputRoot);
-        require(anchorStateRegistry.anchors(GameType.wrap(1)) == startingRoots[1].outputRoot);
+        (Hash root0, uint256 l2BlockNumber0) = anchorStateRegistry.anchors(GameType.wrap(0));
+        (Hash root1, uint256 l2BlockNumber1) = anchorStateRegistry.anchors(GameType.wrap(1));
+        require(keccak256(abi.encode(root0)) == keccak256(abi.encode(startingRoots[0].outputRoot.root)));
+        require(l2BlockNumber0 == startingRoots[0].outputRoot.l2BlockNumber);
+        require(keccak256(abi.encode(root1)) == keccak256(abi.encode(startingRoots[1].outputRoot.root)));
+        require(l2BlockNumber1 == startingRoots[1].outputRoot.l2BlockNumber);
     }
 }
