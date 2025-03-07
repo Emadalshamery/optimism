@@ -103,7 +103,7 @@ contract AddFDG is Script {
 
         // Step 3: Create new anchor roots for initialization
         IAnchorStateRegistry.StartingAnchorRoot[] memory startingRoots =
-            new IAnchorStateRegistry.StartingAnchorRoot[](2);
+            new IAnchorStateRegistry.StartingAnchorRoot[](1);
         // from:
         // cast rpc --rpc-url https://aegir-1-opn-geth-a-rpc-0-op-node.primary.infra.dev.oplabs.cloud
         // optimism_syncStatus | jq .finalized_l2.number
@@ -116,16 +116,6 @@ contract AddFDG is Script {
             outputRoot: OutputRoot({
                 l2BlockNumber: 0,
                 root: Hash.wrap(0xe50e5ae025f1d11b8862a170621c095c7d571463d6854f34f4352a445dd17f9f)
-            })
-        });
-        // from:
-        //  cast call 0xb4265083491c4ff36d2a964a5d2228e9b3cfd89f 'anchors(uint32)((bytes32,uint256))' 1
-        //   (0xdead000000000000000000000000000000000000000000000000000000000000, 0)
-        startingRoots[1] = IAnchorStateRegistry.StartingAnchorRoot({
-            gameType: GameType.wrap(1), // Permissioned Cannon
-            outputRoot: OutputRoot({
-                l2BlockNumber: 0,
-                root: Hash.wrap(0xdead000000000000000000000000000000000000000000000000000000000000)
             })
         });
 
