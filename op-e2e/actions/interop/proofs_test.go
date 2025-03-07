@@ -376,7 +376,7 @@ func TestInteropFaultProofs_Cycle(gt *testing.T) {
 	system.AddL2Block(actors.ChainA, dsl.WithL2BlockTransactions(emitter.Deploy(alice)))
 	system.AddL2Block(actors.ChainB, dsl.WithL2BlockTransactions(emitter.Deploy(alice)))
 
-	assertHeads(t, actors.ChainA, 1, 0, 1, 0)
+	assertHeads(t, actors.ChainA, 1, 1, 0, 0)
 	assertHeads(t, actors.ChainB, 1, 0, 1, 0)
 
 	actEmitA := emitter.EmitMessage(alice, "hello")
@@ -886,13 +886,13 @@ func WithInteropEnabled(t helpers.StatefulTesting, actors *dsl.InteropActors, de
 	}
 }
 
-func assertTime(t helpers.Testing, chain *dsl.Chain, unsafe, crossUnsafe, localSafe, safe uint64) {
+func assertTime(t helpers.Testing, chain *dsl.Chain, localUnsafe, crossUnsafe, localSafe, safe uint64) {
 	start := chain.L2Genesis.Timestamp
 	status := chain.Sequencer.SyncStatus()
-	require.Equal(t, start+unsafe, status.UnsafeL2.Time, "Unsafe")
+	require.Equal(t, start+localUnsafe, status.UnsafeL2.Time, "Local Unsafe")
 	require.Equal(t, start+crossUnsafe, status.CrossUnsafeL2.Time, "Cross Unsafe")
-	require.Equal(t, start+localSafe, status.LocalSafeL2.Time, "Local safe")
-	require.Equal(t, start+safe, status.SafeL2.Time, "Safe")
+	require.Equal(t, start+localSafe, status.LocalSafeL2.Time, "Local Safe")
+	require.Equal(t, start+safe, status.SafeL2.Time, "Cross Safe")
 }
 
 type transitionTest struct {

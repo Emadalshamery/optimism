@@ -209,10 +209,10 @@ func includeTxOnChain(t helpers.Testing, actors *dsl.InteropActors, chain *dsl.C
 	actors.ChainB.Sequencer.ActL2PipelineFull(t)
 }
 
-func assertHeads(t helpers.Testing, chain *dsl.Chain, unsafe, localSafe, crossUnsafe, safe uint64) {
+func assertHeads(t helpers.Testing, chain *dsl.Chain, localUnsafe, crossUnsafe, localSafe, crossSafe uint64) {
 	status := chain.Sequencer.SyncStatus()
-	require.Equal(t, unsafe, status.UnsafeL2.ID().Number, "Unsafe")
+	require.Equal(t, localUnsafe, status.UnsafeL2.ID().Number, "Local Unsafe")
 	require.Equal(t, crossUnsafe, status.CrossUnsafeL2.ID().Number, "Cross Unsafe")
-	require.Equal(t, localSafe, status.LocalSafeL2.ID().Number, "Local safe")
-	require.Equal(t, safe, status.SafeL2.ID().Number, "Safe")
+	require.Equal(t, localSafe, status.LocalSafeL2.ID().Number, "Local Safe")
+	require.Equal(t, crossSafe, status.SafeL2.ID().Number, "Cross Safe")
 }
