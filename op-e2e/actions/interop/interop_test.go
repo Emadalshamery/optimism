@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum-optimism/optimism/op-e2e/actions/helpers"
@@ -438,4 +439,39 @@ func TestInteropCrossSafeDependencyDelay(gt *testing.T) {
 	source, err := actors.Supervisor.CrossDerivedFrom(t.Ctx(), actors.ChainA.ChainID, execTxIncludedIn.ID())
 	require.NoError(t, err)
 	require.Equal(t, chainBSubmittedIn.NumberU64(), source.Number)
+}
+
+func TestInterop_VariedBlockTimes(gt *testing.T) {
+	t := helpers.NewDefaultTesting(gt)
+	system := dsl.NewInteropDSL(t, dsl.SetBlockTimeForChainA(1), dsl.SetBlockTimeForChainB(2))
+	actors := system.Actors
+
+	system.AddL2Block(actors.ChainA)
+	system.AddL2Block(actors.ChainB)
+	assertHeads(t, actors.ChainA, 1, 1, 0, 0)
+	assertHeads(t, actors.ChainB, 1, 1, 0, 0)
+	assertTime(t, actors.ChainA, 1, 1, 0, 0)
+	assertTime(t, actors.ChainB, 2, 2, 0, 0)
+
+	// This should fail because the timestamp is after the ChainA Safe head
+	time := actors.ChainA.Sequencer.SyncStatus().CrossUnsafeL2.Time
+	_, err := actors.Supervisor.SuperRootAtTimestamp(t.Ctx(), hexutil.Uint64(time))
+	require.Error(t, err, "no entry found: future data")
+
+	// If we submit the data, the timestamp will be current and we can get the root
+	system.SubmitBatchData(func(opts *dsl.SubmitBatchDataOpts) {
+		opts.SetChains(actors.ChainA)
+	})
+	system.SubmitBatchData(func(opts *dsl.SubmitBatchDataOpts) {
+		opts.SetChains(actors.ChainB)
+	})
+	assertHeads(t, actors.ChainA, 1, 1, 1, 1)
+	assertHeads(t, actors.ChainB, 1, 1, 1, 1)
+	assertTime(t, actors.ChainA, 1, 1, 1, 1)
+	assertTime(t, actors.ChainB, 2, 2, 2, 2)
+
+	time = actors.ChainA.Sequencer.SyncStatus().CrossUnsafeL2.Time
+	root, err := actors.Supervisor.SuperRootAtTimestamp(t.Ctx(), hexutil.Uint64(time))
+	require.NoError(t, err)
+	require.Equal(t, root.Timestamp, time)
 }
