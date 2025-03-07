@@ -67,10 +67,6 @@ func TestCrossLayerUser_Standard(t *testing.T) {
 	testCrossLayerUser(t, config.AllocTypeStandard)
 }
 
-func TestCrossLayerUser_L2OO(t *testing.T) {
-	testCrossLayerUser(t, config.AllocTypeL2OO)
-}
-
 // TestCrossLayerUser tests that common actions of the CrossLayerUser actor work in various hardfork configurations:
 // - transact on L1
 // - transact on L2

@@ -382,7 +382,7 @@ func (s *CrossLayerUser) ActDeposit(t Testing) {
 
 func (s *CrossLayerUser) ActCheckDepositStatus(l1Success, l2Success bool) Action {
 	return func(t Testing) {
-		s.CheckDepositTx(t, s.lastL1DepositTxHash, 0, l1Success, l2Success)
+		s.CheckDepositTx(t, s.lastL1DepositTxHash, 1, l1Success, l2Success)
 	}
 }
 

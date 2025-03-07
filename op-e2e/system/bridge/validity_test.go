@@ -266,10 +266,6 @@ func TestMixedDepositValidity(t *testing.T) {
 	}
 }
 
-func TestMixedWithdrawalValidity_L2OO(t *testing.T) {
-	testMixedWithdrawalValidity(t, config.AllocTypeL2OO)
-}
-
 func TestMixedWithdrawalValidity_Standard(t *testing.T) {
 	testMixedWithdrawalValidity(t, config.AllocTypeStandard)
 }
