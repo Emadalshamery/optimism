@@ -90,12 +90,19 @@ contract L1Block is ISemver {
     /// @notice The latest L1 blob base fee.
     uint256 public blobBaseFee;
 
+    /// TODO: FIX THIS AFTER SYNC
     /// @notice Whether the L1Block is an Isthmus upgraded chain.
     bool public isIsthmus;
 
-    /// @custom:semver 1.5.1-beta.7
+    /// @notice The constant value applied to the operator fee.
+    uint64 public operatorFeeConstant;
+
+    /// @notice The scalar value applied to the operator fee.
+    uint32 public operatorFeeScalar;
+
+    /// @custom:semver 1.6.0
     function version() public pure virtual returns (string memory) {
-        return "1.5.1-beta.7";
+        return "1.6.0";
     }
 
     /// @notice Returns the gas paying token, its decimals, name and symbol.
@@ -250,6 +257,7 @@ contract L1Block is ISemver {
         }
     }
 
+    /// TODO: FIX THIS AFTER SYNC, NAMINGS
     /// @notice Sets the L1 block values for an Isthmus upgraded chain.
     ///         This function is intended to be called only once, and only on existing chains which are undergoing
     ///         the Isthmus upgrade. Chains deployed with the Isthmus upgrade activated will have the values set here
@@ -311,5 +319,44 @@ contract L1Block is ISemver {
         Types.WithdrawalNetwork network =
             success && data.length >= 32 ? abi.decode(data, (Types.WithdrawalNetwork)) : Types.WithdrawalNetwork.L2;
         return Encoding.encodeFeeVaultConfig(recipient, amount, Types.WithdrawalNetwork(uint8(network)));
+    }
+    /// @notice Updates the L1 block values for an Isthmus upgraded chain.
+    /// Params are packed and passed in as raw msg.data instead of ABI to reduce calldata size.
+    /// Params are expected to be in the following order:
+    ///   1. _baseFeeScalar        L1 base fee scalar
+    ///   2. _blobBaseFeeScalar    L1 blob base fee scalar
+    ///   3. _sequenceNumber       Number of L2 blocks since epoch start.
+    ///   4. _timestamp            L1 timestamp.
+    ///   5. _number               L1 blocknumber.
+    ///   6. _basefee              L1 base fee.
+    ///   7. _blobBaseFee          L1 blob base fee.
+    ///   8. _hash                 L1 blockhash.
+    ///   9. _batcherHash          Versioned hash to authenticate batcher by.
+    ///   10. _operatorFeeScalar   Operator fee scalar.
+    ///   11. _operatorFeeConstant Operator fee constant.
+    function setL1BlockValuesIsthmus() public {
+        _setL1BlockValuesIsthmus();
+    }
+
+    /// @notice Updates the L1 block values for an Isthmus upgraded chain.
+    /// Params are packed and passed in as raw msg.data instead of ABI to reduce calldata size.
+    /// Params are expected to be in the following order:
+    ///   1. _baseFeeScalar        L1 base fee scalar
+    ///   2. _blobBaseFeeScalar    L1 blob base fee scalar
+    ///   3. _sequenceNumber       Number of L2 blocks since epoch start.
+    ///   4. _timestamp            L1 timestamp.
+    ///   5. _number               L1 blocknumber.
+    ///   6. _basefee              L1 base fee.
+    ///   7. _blobBaseFee          L1 blob base fee.
+    ///   8. _hash                 L1 blockhash.
+    ///   9. _batcherHash          Versioned hash to authenticate batcher by.
+    ///   10. _operatorFeeScalar   Operator fee scalar.
+    ///   11. _operatorFeeConstant Operator fee constant.
+    function _setL1BlockValuesIsthmus() internal {
+        _setL1BlockValuesEcotone();
+        assembly {
+            // operatorFeeScalar (uint32), operatorFeeConstant (uint64)
+            sstore(operatorFeeConstant.slot, shr(160, calldataload(164)))
+        }
     }
 }
