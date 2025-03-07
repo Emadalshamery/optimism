@@ -328,7 +328,7 @@ func initAllocType(root string, allocType AllocType) {
 			l2Alloc[mode] = st.Chains[0].Allocs.Data
 			mtx.Unlock()
 
-			if mode == genesis.LatestHF {
+			if mode == genesis.L2AllocsLatest {
 				dc, err := inspect.DeployConfig(st, intent.Chains[0].ID)
 				if err != nil {
 					panic(fmt.Errorf("failed to inspect deploy config: %w", err))

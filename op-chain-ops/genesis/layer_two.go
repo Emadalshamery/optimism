@@ -29,7 +29,7 @@ const (
 	L2AllocsHolocene L2AllocsMode = "holocene"
 	L2AllocsIsthmus  L2AllocsMode = "isthmus"
 	// This needs to be updated whenever the latest code-complete hardfork is changed.
-	LatestHF L2AllocsMode = L2AllocsHolocene
+	L2AllocsLatest L2AllocsMode = L2AllocsHolocene
 )
 
 var (
