@@ -27,13 +27,17 @@ contract PromiseCallack {
     /// @notice The selector of the callback
     bytes4 public selector;
 
+    /// @notice Any additional data to pass to the callback
+    bytes public context;
+
     /// @notice Whether the callback has been completed
     bool public completed;
 
-    constructor(bytes32 _messageHash, address _target, bytes4 _selector) {
+    constructor(bytes32 _messageHash, address _target, bytes4 _selector, bytes memory _context) {
         messageHash = _messageHash;
         selector = _selector;
         target = _target;
+        context = _context;
     }
 
     /// @dev continue chain of execution with the RelayedMessage event receipt
@@ -52,18 +56,27 @@ contract PromiseCallack {
         // Assert this callback is for the original message
         if (relayedMessageHash != messageHash) revert CrossDomainMessageHashMismatch();
 
-        // Invoke the callback with the return data
-        (completed,) = target.call(abi.encode(selector, returnData));
+        // Invoke the callback with the return data and optionally the context if present
+        bytes memory data =
+            context.length > 0 ? abi.encode(selector, returnData, context) : abi.encode(selector, returnData);
+        (completed,) = target.call(data);
     }
 }
 
 library Promise {
-    event OptimismCallback(address callback);
+    event OptimismCallback(PromiseCallack callback);
 
+    /// @notice Create a new callback dependent only on the return data of the message
     function then(bytes32 _messageHash, bytes4 _selector) internal returns (PromiseCallack) {
-        PromiseCallack callback = new PromiseCallack(_messageHash, msg.sender, _selector);
+        PromiseCallack callback = new PromiseCallack(_messageHash, msg.sender, _selector, "");
+        emit OptimismCallback(callback);
+        return callback;
+    }
 
-        emit OptimismCallback(address(callback));
+    /// @notice Create a new callback dependent on the return data of the message and some additional context
+    function then(bytes32 _messageHash, bytes4 _selector, bytes memory _context) internal returns (PromiseCallack) {
+        PromiseCallack callback = new PromiseCallack(_messageHash, msg.sender, _selector, _context);
+        emit OptimismCallback(callback);
         return callback;
     }
 }
