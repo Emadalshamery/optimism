@@ -301,6 +301,9 @@ func (db *DB) Contains(query types.ContainsQuery) (types.BlockSeal, error) {
 
 	evtHash, iter, err := db.findLogInfo(blockNum, logIdx)
 	if err != nil {
+		if errors.Is(err, types.ErrFuture) && db.lastEntryContext.hasCompleteBlock() {
+			err = types.ErrConflict
+		}
 		return types.BlockSeal{}, err // may be ErrConflict if the block does not have as many logs
 	}
 	db.log.Trace("Found initiatingEvent", "blockNum", blockNum, "logIdx", logIdx, "hash", evtHash)
