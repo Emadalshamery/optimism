@@ -680,8 +680,11 @@ contract OPContractsManager_Upgrade_Test is OPContractsManager_Upgrade_Harness {
 
     function test_upgrade_absolutePrestateNotSet_succeeds() public {
         // Get the pdg and fdg before the upgrade
-        Claim pdgPrestateBefore = IPermissionedDisputeGame(address(disputeGameFactory.gameImpls(GameTypes.PERMISSIONED_CANNON))).absolutePrestate();
-        Claim fdgPrestateBefore = IFaultDisputeGame(address(disputeGameFactory.gameImpls(GameTypes.CANNON))).absolutePrestate();
+        Claim pdgPrestateBefore = IPermissionedDisputeGame(
+            address(disputeGameFactory.gameImpls(GameTypes.PERMISSIONED_CANNON))
+        ).absolutePrestate();
+        Claim fdgPrestateBefore =
+            IFaultDisputeGame(address(disputeGameFactory.gameImpls(GameTypes.CANNON))).absolutePrestate();
 
         runV200UpgradeAndChecks(upgrader);
         runUpgrade14UpgradeAndChecks(upgrader);
@@ -692,8 +695,11 @@ contract OPContractsManager_Upgrade_Test is OPContractsManager_Upgrade_Harness {
         runUpgrade15UpgradeAndChecks(upgrader);
 
         // Get the absolute prestate after the upgrade
-        Claim pdgPrestateAfter = IPermissionedDisputeGame(address(disputeGameFactory.gameImpls(GameTypes.PERMISSIONED_CANNON))).absolutePrestate();
-        Claim fdgPrestateAfter = IFaultDisputeGame(address(disputeGameFactory.gameImpls(GameTypes.CANNON))).absolutePrestate();
+        Claim pdgPrestateAfter = IPermissionedDisputeGame(
+            address(disputeGameFactory.gameImpls(GameTypes.PERMISSIONED_CANNON))
+        ).absolutePrestate();
+        Claim fdgPrestateAfter =
+            IFaultDisputeGame(address(disputeGameFactory.gameImpls(GameTypes.CANNON))).absolutePrestate();
 
         // Assert that the absolute prestate is 0
         assertEq(Claim.unwrap(pdgPrestateAfter), Claim.unwrap(pdgPrestateBefore));
