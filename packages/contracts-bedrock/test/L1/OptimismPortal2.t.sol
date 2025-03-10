@@ -206,8 +206,6 @@ contract OptimismPortal2_Test is CommonTest {
     /// @dev Tests that `depositTransaction` reverts when the destination address is non-zero
     ///      for a contract creation deposit.
     function test_depositTransaction_contractCreation_reverts() external {
-        // TODO(opcm upgrades): remove skip once upgrade path is implemented
-        skipIfForkTest("OptimismPortal2_Test: error is different on OP Mainnet");
         // contract creation must have a target of address(0)
         vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);
         optimismPortal2.depositTransaction(address(1), 1, 0, true, hex"");
@@ -216,8 +214,6 @@ contract OptimismPortal2_Test is CommonTest {
     /// @dev Tests that `depositTransaction` reverts when the data is too large.
     ///      This places an upper bound on unsafe blocks sent over p2p.
     function test_depositTransaction_largeData_reverts() external {
-        // TODO(opcm upgrades): remove skip once upgrade path is implemented
-        skipIfForkTest("OptimismPortal2_Test: error is different on OP Mainnet");
         uint256 size = 120_001;
         uint64 gasLimit = optimismPortal2.minimumGasLimit(uint64(size));
         vm.expectRevert(IOptimismPortal.OptimismPortal_CalldataTooLarge.selector);
@@ -232,8 +228,6 @@ contract OptimismPortal2_Test is CommonTest {
 
     /// @dev Tests that `depositTransaction` reverts when the gas limit is too small.
     function test_depositTransaction_smallGasLimit_reverts() external {
-        // TODO(opcm upgrades): remove skip once upgrade path is implemented
-        skipIfForkTest("OptimismPortal2_Test: error is different on OP Mainnet");
         vm.expectRevert(IOptimismPortal.OptimismPortal_GasLimitTooLow.selector);
         optimismPortal2.depositTransaction({ _to: address(1), _value: 0, _gasLimit: 0, _isCreation: false, _data: hex"" });
     }
@@ -244,8 +238,6 @@ contract OptimismPortal2_Test is CommonTest {
         uint64 gasLimit = optimismPortal2.minimumGasLimit(uint64(_data.length));
         if (_shouldFail) {
             gasLimit = uint64(bound(gasLimit, 0, gasLimit - 1));
-            // TODO(opcm upgrades): remove skip once upgrade path is implemented
-            skipIfForkTest("OptimismPortal2_Test: error is different on OP Mainnet");
             vm.expectRevert(IOptimismPortal.OptimismPortal_GasLimitTooLow.selector);
         }
 
