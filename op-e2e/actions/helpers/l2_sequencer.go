@@ -204,6 +204,12 @@ func (s *L2Sequencer) ActBuildL2ToTime(t Testing, target uint64) {
 	}
 }
 
+func (s *L2Sequencer) ActBuildL2ToOffset(t Testing, offset uint64) {
+	for s.L2Unsafe().Time < s.RollupCfg.Genesis.L2Time+offset {
+		s.ActL2EmptyBlock(t)
+	}
+}
+
 func (s *L2Sequencer) ActBuildL2ToCanyon(t Testing) {
 	require.NotNil(t, s.RollupCfg.CanyonTime, "cannot activate CanyonTime when it is not scheduled")
 	for s.L2Unsafe().Time < *s.RollupCfg.CanyonTime {
@@ -242,6 +248,13 @@ func (s *L2Sequencer) ActBuildL2ToHolocene(t Testing) {
 func (s *L2Sequencer) ActBuildL2ToIsthmus(t Testing) {
 	require.NotNil(t, s.RollupCfg.IsthmusTime, "cannot activate IsthmusTime when it is not scheduled")
 	for s.L2Unsafe().Time < *s.RollupCfg.IsthmusTime {
+		s.ActL2EmptyBlock(t)
+	}
+}
+
+func (s *L2Sequencer) ActBuildL2ToFork(t Testing, fork rollup.ForkName) {
+	// TODO: add check that fork is set in rollup config
+	for s.RollupCfg.IsActivationBlock(s.L2Unsafe().Time-s.RollupCfg.BlockTime, s.L2Unsafe().Time) != fork {
 		s.ActL2EmptyBlock(t)
 	}
 }

@@ -51,9 +51,15 @@ func TestIsthmusSourcesMatchSpec(t *testing.T) {
 }
 
 func TestIsthmusNetworkTransactions(t *testing.T) {
-	upgradeTxns, err := IsthmusNetworkUpgradeTransactions()
+	upgradeTxns, upgradeGas, err := IsthmusNetworkUpgradeTransactions()
 	require.NoError(t, err)
 	require.Len(t, upgradeTxns, 8)
+	var gas uint64
+	for _, txb := range upgradeTxns {
+		_, tx := toDepositTxn(t, txb)
+		gas += tx.Gas()
+	}
+	require.Equal(t, gas, upgradeGas)
 
 	deployL1BlockSender, deployL1Block := toDepositTxn(t, upgradeTxns[0])
 	require.Equal(t, deployL1BlockSender, common.HexToAddress("0x4210000000000000000000000000000000000003"))

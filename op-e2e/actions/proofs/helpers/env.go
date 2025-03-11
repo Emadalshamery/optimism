@@ -66,7 +66,11 @@ func NewL2FaultProofEnv[c any](t helpers.Testing, testCfg *TestCfg[c], tp *e2eut
 		case Holocene:
 			dp.DeployConfig.ActivateForkAtGenesis(rollup.Holocene)
 		case Isthmus:
+			// Isthmus usually runs on a Prague L1 network
+			dp.DeployConfig.L1PragueTimeOffset = &genesisBlock
 			dp.DeployConfig.ActivateForkAtGenesis(rollup.Isthmus)
+		case Interop:
+			dp.DeployConfig.ActivateForkAtGenesis(rollup.Interop)
 		}
 
 		for _, override := range deployConfigOverrides {

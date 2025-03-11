@@ -56,6 +56,25 @@ func holoceneAt(t *uint64) func(*rollup.Config) {
 	}
 }
 
+func isthmusAt(t *uint64) func(*rollup.Config) {
+	return func(c *rollup.Config) {
+		c.DeltaTime = &zero64
+		c.FjordTime = &zero64
+		c.HoloceneTime = &zero64
+		c.IsthmusTime = t
+	}
+}
+
+func interopAt(t *uint64) func(*rollup.Config) {
+	return func(c *rollup.Config) {
+		c.DeltaTime = &zero64
+		c.FjordTime = &zero64
+		c.HoloceneTime = &zero64
+		c.IsthmusTime = &zero64
+		c.InteropTime = t
+	}
+}
+
 const defaultBlockTime = 2
 
 func TestValidBatch(t *testing.T) {
@@ -540,6 +559,42 @@ func TestValidBatch(t *testing.T) {
 			Expected: BatchDrop, // dropped because it could have advanced the epoch to B
 		},
 		{
+			Name:       "transactions in Isthmus upgrade block",
+			L1Blocks:   []eth.L1BlockRef{l1A, l1B, l1C},
+			L2SafeHead: l2A0,
+			Batch: BatchWithL1InclusionBlock{
+				L1InclusionBlock: l1B,
+				Batch: &SingularBatch{
+					ParentHash:   l2A1.ParentHash,
+					EpochNum:     rollup.Epoch(l2A1.L1Origin.Number),
+					EpochHash:    l2A1.L1Origin.Hash,
+					Timestamp:    l2A1.Time,
+					Transactions: []hexutil.Bytes{[]byte("invalid tx in isthmus upgrade block")},
+				},
+			},
+			Expected:    BatchDrop,
+			ExpectedLog: "dropping batch with user transactions in fork activation block",
+			ConfigMod:   isthmusAt(&l2A1.Time),
+		},
+		{
+			Name:       "transactions in Interop upgrade block",
+			L1Blocks:   []eth.L1BlockRef{l1A, l1B, l1C},
+			L2SafeHead: l2A0,
+			Batch: BatchWithL1InclusionBlock{
+				L1InclusionBlock: l1B,
+				Batch: &SingularBatch{
+					ParentHash:   l2A1.ParentHash,
+					EpochNum:     rollup.Epoch(l2A1.L1Origin.Number),
+					EpochHash:    l2A1.L1Origin.Hash,
+					Timestamp:    l2A1.Time,
+					Transactions: []hexutil.Bytes{[]byte("invalid tx in isthmus upgrade block")},
+				},
+			},
+			Expected:    BatchDrop,
+			ExpectedLog: "dropping batch with user transactions in fork activation block",
+			ConfigMod:   interopAt(&l2A1.Time),
+		},
+		{
 			Name:       "empty tx included",
 			L1Blocks:   []eth.L1BlockRef{l1A, l1B},
 			L2SafeHead: l2A0,
@@ -630,6 +685,7 @@ func TestValidBatch(t *testing.T) {
 			Expected: BatchDrop,
 		},
 	}
+
 	spanBatchTestCases := []ValidBatchTestCase{
 		{
 			Name:       "missing L1 info",
