@@ -1308,6 +1308,29 @@ jobs:
       - notify-failures-on-develop:
           mentions: "@proofs-team"
 
+  analyze-op-program-client:
+    docker:
+      - image: cimg/go:1.21
+    steps:
+      - checkout
+
+      - run:
+          name: Install Dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y llvm curl
+
+      - run:
+          name: Set up LLVM Path
+          command: |
+            export PATH="/usr/bin:$PATH"  # Ensure LLVM is in PATH
+            echo 'export PATH="/usr/bin:$PATH"' >> $BASH_ENV
+
+      - run:
+          name: Run Analyzer
+          command: |
+            make analyze-op-program-client
+
   op-program-compat:
     machine: true
     resource_class: ethereum-optimism/latitude-1
@@ -1555,6 +1578,7 @@ workflows:
             - contracts-bedrock-build
             - cannon-prestate-quick
       - op-program-compat
+      - analyze-op-program-client
       - bedrock-go-tests:
           requires:
             - go-lint
