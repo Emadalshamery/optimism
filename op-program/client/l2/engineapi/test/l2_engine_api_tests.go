@@ -403,6 +403,7 @@ func (h *testHelper) startBlockBuilding(head *types.Header, newBlockTimestamp et
 		Transactions:          txData,
 		NoTxPool:              true,
 		GasLimit:              &gasLimit,
+		EIP1559Params:         new(eth.Bytes8),
 	}
 	n := new(big.Int).Add(head.Number, big.NewInt(1))
 	if h.backend.Config().IsShanghai(n, uint64(newBlockTimestamp)) {
