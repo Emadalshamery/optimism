@@ -143,12 +143,10 @@ verify-sepolia-fjord: op-program-host op-program-client
 verify-compat: verify-sepolia-delta verify-sepolia-ecotone verify-mainnet-genesis
 
 # Install llvm-objdump if missing
-.PHONY: install-llvm
 install-llvm:
 	@echo "Checking if llvm-objdump is installed..."
 	@which llvm-objdump >/dev/null 2>&1 || (echo "Installing llvm-objdump..." && $(PKG_MANAGER) llvm)
 
-.PHONY: fetch-analyzer
 fetch-analyzer:
 	@if [ -f "$(ANALYZER_BIN)" ]; then \
 		echo "Analyzer binary already exists, skipping download."; \
@@ -159,18 +157,15 @@ fetch-analyzer:
 		chmod +x $(ANALYZER_BIN); \
 	fi
 
-.PHONY: analyze-op-program-client
 analyze-op-program-client: analyze-op-program-client-cannon-singlethreaded-32 analyze-op-program-client-cannon-multithreaded-64
 
-.PHONY: analyze-op-program-client-cannon-singlethreaded-32
 analyze-op-program-client-cannon-singlethreaded-32: fetch-analyzer install-llvm
 	@echo "Analyzing op-program-client for cannon-singlethreaded-32..."
-	$(ANALYZER_BIN) analyze  --with-trace=true --format=json  --vm-profile cannon-singlethreaded-32 --baseline-report ./compatibility-test/op-program-cannon-singlethreaded-32.json ./client/cmd/main.go
+	$(ANALYZER_BIN) analyze  --with-trace=true --format=json  --vm-profile cannon-singlethreaded-32 --baseline-report ./compatibility-test/baseline-cannon-singlethreaded-32.json ./client/cmd/main.go
 
-.PHONY: analyze-op-program-client-cannon-multithreaded-64
 analyze-op-program-client-cannon-multithreaded-64: fetch-analyzer install-llvm
 	@echo "Analyzing op-program-client for cannon-multithreaded-64..."
-	$(ANALYZER_BIN) analyze  --with-trace=true --format=json  --vm-profile cannon-multithreaded-64 --baseline-report ./compatibility-test/op-program-cannon-multithreaded-64.json ./client/cmd/main.go
+	$(ANALYZER_BIN) analyze  --with-trace=true --format=json  --vm-profile cannon-multithreaded-64 --baseline-report ./compatibility-test/baseline-cannon-multithreaded-64.json ./client/cmd/main.go
 
 .PHONY: \
 	op-program \
@@ -191,4 +186,9 @@ analyze-op-program-client-cannon-multithreaded-64: fetch-analyzer install-llvm
 	capture-chain-test-data \
 	run-goerli-verify \
 	run-sepolia-verify \
-	run-compat
+	run-compat \
+	install-llvm \
+	fetch-analyzer \
+	analyze-op-program-client \
+	analyze-op-program-client-cannon-singlethreaded-32 \
+	analyze-op-program-client-cannon-multithreaded-64
