@@ -337,6 +337,43 @@ func TestGetClaim(t *testing.T) {
 	}
 }
 
+func TestGetResolvedClaim(t *testing.T) {
+	for _, version := range versions {
+		version := version
+		t.Run(version.String(), func(t *testing.T) {
+			stubRpc, game := setupFaultDisputeGameTest(t, version)
+			idx := big.NewInt(2)
+			parentIndex := uint32(1)
+			counteredBy := common.Address{0x01}
+			claimant := common.Address{0x02}
+			position := big.NewInt(2)
+			bond := big.NewInt(5)
+			contractBond := bond
+			if version.Is(vers080) {
+				contractBond = resolvedBondAmount
+				stubRpc.SetResponse(fdgAddr, methodRequiredBond, rpcblock.Latest, []interface{}{position}, []interface{}{bond})
+			}
+			value := common.Hash{0xab}
+			clock := big.NewInt(1234)
+			stubRpc.SetResponse(fdgAddr, methodClaim, rpcblock.Latest, []interface{}{idx}, []interface{}{parentIndex, counteredBy, claimant, contractBond, value, position, clock})
+			status, err := game.GetClaim(context.Background(), idx.Uint64())
+			require.NoError(t, err)
+			require.Equal(t, faultTypes.Claim{
+				ClaimData: faultTypes.ClaimData{
+					Value:    value,
+					Position: faultTypes.NewPositionFromGIndex(position),
+					Bond:     bond,
+				},
+				CounteredBy:         counteredBy,
+				Claimant:            claimant,
+				Clock:               decodeClock(big.NewInt(1234)),
+				ContractIndex:       int(idx.Uint64()),
+				ParentContractIndex: 1,
+			}, status)
+		})
+	}
+}
+
 func TestGetAllClaims(t *testing.T) {
 	for _, version := range versions {
 		version := version

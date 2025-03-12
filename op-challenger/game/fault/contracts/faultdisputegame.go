@@ -65,6 +65,8 @@ type FaultDisputeGameContractLatest struct {
 	metrics     metrics.ContractMetricer
 	multiCaller *batching.MultiCaller
 	contract    *batching.BoundContract
+
+	ops *faultDisputeGameOps
 }
 
 // outputRootProof is designed to match the solidity OutputRootProof struct.
@@ -73,6 +75,84 @@ type outputRootProof struct {
 	StateRoot                [32]byte
 	MessagePasserStorageRoot [32]byte
 	LatestBlockhash          [32]byte
+}
+
+/*
+f.contract.Call(methodL1Head),
+f.contract.Call(methodL2BlockNumber),
+f.contract.Call(methodRootClaim),
+f.contract.Call(methodStatus),
+f.contract.Call(methodMaxClockDuration),
+f.contract.Call(methodL2BlockNumberChallenged),
+f.contract.Call(methodL2BlockNumberChallenger),
+*/
+type faultDisputeGameOps struct {
+	GetClaim                   func(contract *batching.BoundContract, idx uint64) GetterContractOp[types.Claim]
+	GetL1Head                  func(contract *batching.BoundContract) GetterContractOp[common.Hash]
+	GetL2SequenceNumber        func(contract *batching.BoundContract) GetterContractOp[uint64]
+	GetRootClaim               func(contract *batching.BoundContract) GetterContractOp[common.Hash]
+	GetStatus                  func(contract *batching.BoundContract) GetterContractOp[gameTypes.GameStatus]
+	GetMaxClockDuration        func(contract *batching.BoundContract) GetterContractOp[uint64]
+	GetL2BlockNumberChallenged func(contract *batching.BoundContract) GetterContractOp[bool]
+	GetL2BlockNumberChallenger func(contract *batching.BoundContract) GetterContractOp[common.Address]
+
+	ChallengeL2BlockNumberTx func(contract *batching.BoundContract, challenge *types.InvalidL2BlockNumberChallenge) (txmgr.TxCandidate, error)
+}
+
+func latestFaultDisputeGameOps() *faultDisputeGameOps {
+	return &faultDisputeGameOps{
+		GetClaim: func(contract *batching.BoundContract, idx uint64) GetterContractOp[types.Claim] {
+			return NewGetClaimOp(contract, idx)
+		},
+		GetL1Head: func(contract *batching.BoundContract) GetterContractOp[common.Hash] {
+			return NewSimpleGetterOp(contract, methodL1Head, func(result *batching.CallResult) (common.Hash, error) {
+				return result.GetHash(0), nil
+			})
+		},
+		GetL2SequenceNumber: func(contract *batching.BoundContract) GetterContractOp[uint64] {
+			return NewSimpleGetterOp(contract, methodL2BlockNumber, func(result *batching.CallResult) (uint64, error) {
+				return result.GetBigInt(0).Uint64(), nil
+			})
+		},
+		GetRootClaim: func(contract *batching.BoundContract) GetterContractOp[common.Hash] {
+			return NewSimpleGetterOp(contract, methodRootClaim, func(result *batching.CallResult) (common.Hash, error) {
+				return result.GetHash(0), nil
+			})
+		},
+		GetStatus: func(contract *batching.BoundContract) GetterContractOp[gameTypes.GameStatus] {
+			return NewSimpleGetterOp(contract, methodStatus, func(result *batching.CallResult) (gameTypes.GameStatus, error) {
+				statusCode := result.GetUint8(0)
+				return gameTypes.GameStatusFromUint8(statusCode)
+			})
+		},
+		GetMaxClockDuration: func(contract *batching.BoundContract) GetterContractOp[uint64] {
+			return NewSimpleGetterOp(contract, methodMaxClockDuration, func(result *batching.CallResult) (uint64, error) {
+				return result.GetUint64(0), nil
+			})
+		},
+		GetL2BlockNumberChallenged: func(contract *batching.BoundContract) GetterContractOp[bool] {
+			return NewSimpleGetterOp(contract, methodL2BlockNumberChallenged, func(result *batching.CallResult) (bool, error) {
+				return result.GetBool(0), nil
+			})
+		},
+		GetL2BlockNumberChallenger: func(contract *batching.BoundContract) GetterContractOp[common.Address] {
+			return NewSimpleGetterOp(contract, methodL2BlockNumberChallenger, func(result *batching.CallResult) (common.Address, error) {
+				return result.GetAddress(0), nil
+			})
+		},
+		ChallengeL2BlockNumberTx: func(contract *batching.BoundContract, challenge *types.InvalidL2BlockNumberChallenge) (txmgr.TxCandidate, error) {
+			headerRlp, err := rlp.EncodeToBytes(challenge.Header)
+			if err != nil {
+				return txmgr.TxCandidate{}, fmt.Errorf("failed to serialize header: %w", err)
+			}
+			return contract.Call(methodChallengeRootL2Block, outputRootProof{
+				Version:                  challenge.Output.Version,
+				StateRoot:                challenge.Output.StateRoot,
+				MessagePasserStorageRoot: challenge.Output.WithdrawalStorageRoot,
+				LatestBlockhash:          challenge.Output.BlockRef.Hash,
+			}, headerRlp).ToTxCandidate()
+		},
+	}
 }
 
 func NewFaultDisputeGameContract(ctx context.Context, metrics metrics.ContractMetricer, addr common.Address, caller *batching.MultiCaller) (FaultDisputeGameContract, error) {
@@ -90,15 +170,42 @@ func NewFaultDisputeGameContract(ctx context.Context, metrics metrics.ContractMe
 
 func NewPreInteropFaultDisputeGameContract(ctx context.Context, metrics metrics.ContractMetricer, addr common.Address, caller *batching.MultiCaller) (FaultDisputeGameContract, error) {
 	contractAbi := snapshots.LoadFaultDisputeGameABI()
+	ops := latestFaultDisputeGameOps()
 
 	var builder VersionedBuilder[FaultDisputeGameContract]
 	builder.AddVersion(0, 8, func() (FaultDisputeGameContract, error) {
 		legacyAbi := mustParseAbi(faultDisputeGameAbi020)
+		// Replace GetClaim with a version that also restores the original bond amount even for resolved claims.
+		// We could make these overrides reusable as well, since 0.8.0 typically has all the overrides from 0.18.0
+		// plus its unique changes. So we could start by applying the ops changes from 0.18.0 then only need to
+		// apply 0.8.0 specific changes here.
+		ops.GetClaim = func(contract *batching.BoundContract, idx uint64) GetterContractOp[types.Claim] {
+			getClaimOp := NewGetClaimOp(contract, idx)
+			fixBondOp := &FixBondOp{getClaimOp}
+			op := ChainOps(getClaimOp.Result, getClaimOp, fixBondOp)
+			return op
+		}
+		ops.GetMaxClockDuration = func(contract *batching.BoundContract) GetterContractOp[uint64] {
+			return NewSimpleGetterOp(contract, methodGameDuration, func(result *batching.CallResult) (uint64, error) {
+				return result.GetUint64(0) / 2, nil
+			})
+		}
+		ops.GetL2BlockNumberChallenged = func(contract *batching.BoundContract) GetterContractOp[bool] {
+			return NewStaticOp(false)
+		}
+		ops.GetL2BlockNumberChallenger = func(contract *batching.BoundContract) GetterContractOp[common.Address] {
+			return NewStaticOp(common.Address{})
+		}
+		// Note: If we made everything that needs to be overridden a ContractOp, we wouldn't need
+		// FaultDisputeGameContract080, we'd just use FaultDisputeGameContractLatest all the time.
+		// And we could potentially then remove the FaultDisputeGame interface as well, since the ops could be
+		// replaced with ones that return static results for mocking.
 		return &FaultDisputeGameContract080{
 			FaultDisputeGameContractLatest: FaultDisputeGameContractLatest{
 				metrics:     metrics,
 				multiCaller: caller,
 				contract:    batching.NewBoundContract(legacyAbi, addr),
+				ops:         ops,
 			},
 		}, nil
 	})
@@ -109,6 +216,7 @@ func NewPreInteropFaultDisputeGameContract(ctx context.Context, metrics metrics.
 				metrics:     metrics,
 				multiCaller: caller,
 				contract:    batching.NewBoundContract(legacyAbi, addr),
+				ops:         ops,
 			},
 		}, nil
 	})
@@ -119,6 +227,7 @@ func NewPreInteropFaultDisputeGameContract(ctx context.Context, metrics metrics.
 				metrics:     metrics,
 				multiCaller: caller,
 				contract:    batching.NewBoundContract(legacyAbi, addr),
+				ops:         ops,
 			},
 		}, nil
 	})
@@ -129,6 +238,7 @@ func NewPreInteropFaultDisputeGameContract(ctx context.Context, metrics metrics.
 				metrics:     metrics,
 				multiCaller: caller,
 				contract:    batching.NewBoundContract(legacyAbi, addr),
+				ops:         ops,
 			},
 		}, nil
 	})
@@ -139,6 +249,7 @@ func NewPreInteropFaultDisputeGameContract(ctx context.Context, metrics metrics.
 				metrics:     metrics,
 				multiCaller: caller,
 				contract:    batching.NewBoundContract(legacyAbi, addr),
+				ops:         ops,
 			},
 		}, nil
 	}
@@ -150,6 +261,7 @@ func NewPreInteropFaultDisputeGameContract(ctx context.Context, metrics metrics.
 			metrics:     metrics,
 			multiCaller: caller,
 			contract:    batching.NewBoundContract(contractAbi, addr),
+			ops:         ops,
 		}, nil
 	})
 }
@@ -211,39 +323,26 @@ type GameMetadata struct {
 // GetGameMetadata returns the game's L1 head, L2 block number, root claim, status, max clock duration, and is l2 block number challenged.
 func (f *FaultDisputeGameContractLatest) GetGameMetadata(ctx context.Context, block rpcblock.Block) (GameMetadata, error) {
 	defer f.metrics.StartContractRequest("GetGameMetadata")()
-	results, err := f.multiCaller.Call(ctx, block,
-		f.contract.Call(methodL1Head),
-		f.contract.Call(methodL2BlockNumber),
-		f.contract.Call(methodRootClaim),
-		f.contract.Call(methodStatus),
-		f.contract.Call(methodMaxClockDuration),
-		f.contract.Call(methodL2BlockNumberChallenged),
-		f.contract.Call(methodL2BlockNumberChallenger),
-	)
+	l1Head := f.ops.GetL1Head(f.contract)
+	l2BlockNumber := f.ops.GetL2SequenceNumber(f.contract)
+	rootClaim := f.ops.GetRootClaim(f.contract)
+	status := f.ops.GetStatus(f.contract)
+	maxClockDuration := f.ops.GetMaxClockDuration(f.contract)
+	l2BlockNumberChallenged := f.ops.GetL2BlockNumberChallenged(f.contract)
+	l2BlockNumberChallenger := f.ops.GetL2BlockNumberChallenger(f.contract)
+
+	err := ExecuteOps(ctx, block, f.multiCaller, l1Head, l2BlockNumber, rootClaim, status, maxClockDuration, l2BlockNumberChallenged, l2BlockNumberChallenger)
 	if err != nil {
 		return GameMetadata{}, fmt.Errorf("failed to retrieve game metadata: %w", err)
 	}
-	if len(results) != 7 {
-		return GameMetadata{}, fmt.Errorf("expected 7 results but got %v", len(results))
-	}
-	l1Head := results[0].GetHash(0)
-	l2BlockNumber := results[1].GetBigInt(0).Uint64()
-	rootClaim := results[2].GetHash(0)
-	status, err := gameTypes.GameStatusFromUint8(results[3].GetUint8(0))
-	if err != nil {
-		return GameMetadata{}, fmt.Errorf("failed to convert game status: %w", err)
-	}
-	duration := results[4].GetUint64(0)
-	blockChallenged := results[5].GetBool(0)
-	blockChallenger := results[6].GetAddress(0)
 	return GameMetadata{
-		L1Head:                  l1Head,
-		L2BlockNum:              l2BlockNumber,
-		RootClaim:               rootClaim,
-		Status:                  status,
-		MaxClockDuration:        duration,
-		L2BlockNumberChallenged: blockChallenged,
-		L2BlockNumberChallenger: blockChallenger,
+		L1Head:                  l1Head.Result(),
+		L2BlockNum:              l2BlockNumber.Result(),
+		RootClaim:               rootClaim.Result(),
+		Status:                  status.Result(),
+		MaxClockDuration:        maxClockDuration.Result(),
+		L2BlockNumberChallenged: l2BlockNumberChallenged.Result(),
+		L2BlockNumberChallenger: l2BlockNumberChallenger.Result(),
 	}, nil
 }
 
@@ -454,11 +553,12 @@ func (f *FaultDisputeGameContractLatest) GetClaimCount(ctx context.Context) (uin
 
 func (f *FaultDisputeGameContractLatest) GetClaim(ctx context.Context, idx uint64) (types.Claim, error) {
 	defer f.metrics.StartContractRequest("GetClaim")()
-	result, err := f.multiCaller.SingleCall(ctx, rpcblock.Latest, f.contract.Call(methodClaim, new(big.Int).SetUint64(idx)))
+	op := f.ops.GetClaim(f.contract, idx)
+	err := ExecuteOps(ctx, rpcblock.Latest, f.multiCaller, op)
 	if err != nil {
 		return types.Claim{}, fmt.Errorf("failed to fetch claim %v: %w", idx, err)
 	}
-	return f.decodeClaim(result, int(idx)), nil
+	return op.Result(), nil
 }
 
 func (f *FaultDisputeGameContractLatest) GetAllClaims(ctx context.Context, block rpcblock.Block) ([]types.Claim, error) {
@@ -513,24 +613,15 @@ func (f *FaultDisputeGameContractLatest) Vm(ctx context.Context) (*VMContract, e
 
 func (f *FaultDisputeGameContractLatest) IsL2BlockNumberChallenged(ctx context.Context, block rpcblock.Block) (bool, error) {
 	defer f.metrics.StartContractRequest("IsL2BlockNumberChallenged")()
-	result, err := f.multiCaller.SingleCall(ctx, block, f.contract.Call(methodL2BlockNumberChallenged))
-	if err != nil {
+	op := f.ops.GetL2BlockNumberChallenged(f.contract)
+	if err := ExecuteOps(ctx, block, f.multiCaller, op); err != nil {
 		return false, fmt.Errorf("failed to fetch block number challenged: %w", err)
 	}
-	return result.GetBool(0), nil
+	return op.Result(), nil
 }
 
 func (f *FaultDisputeGameContractLatest) ChallengeL2BlockNumberTx(challenge *types.InvalidL2BlockNumberChallenge) (txmgr.TxCandidate, error) {
-	headerRlp, err := rlp.EncodeToBytes(challenge.Header)
-	if err != nil {
-		return txmgr.TxCandidate{}, fmt.Errorf("failed to serialize header: %w", err)
-	}
-	return f.contract.Call(methodChallengeRootL2Block, outputRootProof{
-		Version:                  challenge.Output.Version,
-		StateRoot:                challenge.Output.StateRoot,
-		MessagePasserStorageRoot: challenge.Output.WithdrawalStorageRoot,
-		LatestBlockhash:          challenge.Output.BlockRef.Hash,
-	}, headerRlp).ToTxCandidate()
+	return f.ops.ChallengeL2BlockNumberTx(f.contract, challenge)
 }
 
 func (f *FaultDisputeGameContractLatest) AttackTx(ctx context.Context, parent types.Claim, pivot common.Hash) (txmgr.TxCandidate, error) {
