@@ -13,8 +13,8 @@ contract OptimismPortalInterop is OptimismPortal2 {
     /// @param _proofMaturityDelaySeconds The proof maturity delay in seconds.
     constructor(uint256 _proofMaturityDelaySeconds) OptimismPortal2(_proofMaturityDelaySeconds) { }
 
-    /// @custom:semver +interop.4
+    /// @custom:semver +interop.5
     function version() public pure override returns (string memory) {
-        return string.concat(super.version(), "+interop.4");
+        return string.concat(super.version(), "+interop.5");
     }
 }

@@ -122,7 +122,7 @@ interface IOptimismPortal2 is IProxyAdminOwnedBase {
     function superchainConfig() external view returns (ISuperchainConfig);
     function superRootsActive() external view returns (bool);
     function systemConfig() external view returns (ISystemConfig);
-    function callProxyAdmin(uint32 _gasLimit, bytes memory _calldata) external;
+    function callL2ProxyAdmin(uint32 _gasLimit, bytes memory _calldata) external;
     function upgrade(
         IAnchorStateRegistry _anchorStateRegistry,
         IETHLockbox _ethLockbox,

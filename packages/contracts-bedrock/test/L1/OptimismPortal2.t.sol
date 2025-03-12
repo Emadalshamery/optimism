@@ -528,8 +528,8 @@ contract OptimismPortal2_Test is CommonTest {
         optimismPortal2.setConfig(Types.ConfigType(_configType), _data);
     }
 
-    /// @dev Tests that the callProxyAdmin function succeeds.
-    function testFuzz_callProxyAdmin_succeeds(uint32 _gasLimit, bytes memory _calldata) external {
+    /// @dev Tests that the callL2ProxyAdmin function succeeds.
+    function testFuzz_callL2ProxyAdmin_succeeds(uint32 _gasLimit, bytes memory _calldata) external {
         vm.expectEmit(address(optimismPortal2));
         emit TransactionDeposited(
             Constants.DEPOSITOR_ACCOUNT,
@@ -545,13 +545,13 @@ contract OptimismPortal2_Test is CommonTest {
         );
 
         vm.prank(superchainConfig.upgrader());
-        optimismPortal2.callProxyAdmin(_gasLimit, _calldata);
+        optimismPortal2.callL2ProxyAdmin(_gasLimit, _calldata);
     }
 
-    /// @notice Ensures that the deposit event is correct for the `callProxyAdmin`
+    /// @notice Ensures that the deposit event is correct for the `callL2ProxyAdmin`
     ///         code path that manually emits a deposit transaction outside of the
     ///         `depositTransaction` function. This is a simple differential test.
-    function testFuzz_callProxyAdmin_correctEvent_succeeds(uint32 _gasLimit, bytes memory _calldata) external {
+    function testFuzz_callL2ProxyAdmin_correctEvent_succeeds(uint32 _gasLimit, bytes memory _calldata) external {
         vm.assume(_calldata.length <= 120_000);
         IResourceMetering.ResourceConfig memory rcfg = systemConfig.resourceConfig();
         _gasLimit =
@@ -559,7 +559,7 @@ contract OptimismPortal2_Test is CommonTest {
 
         vm.recordLogs();
         vm.prank(superchainConfig.upgrader());
-        optimismPortal2.callProxyAdmin(_gasLimit, _calldata);
+        optimismPortal2.callL2ProxyAdmin(_gasLimit, _calldata);
 
         /// Roll the block number to ensure that the deposit transaction is processed in the next block
         /// This is necessary otherwise the call fails with OutOfGas
@@ -588,8 +588,8 @@ contract OptimismPortal2_Test is CommonTest {
         assertEq(systemPath.data, userPath.data);
     }
 
-    /// @dev Tests that the `callProxyAdmin` function reverts when called by a non-upgrader.
-    function testFuzz_callProxyAdmin_unauthorized_reverts(
+    /// @dev Tests that the `callL2ProxyAdmin` function reverts when called by a non-upgrader.
+    function testFuzz_callL2ProxyAdmin_unauthorized_reverts(
         address _caller,
         uint32 _gasLimit,
         bytes memory _calldata
@@ -600,7 +600,7 @@ contract OptimismPortal2_Test is CommonTest {
 
         vm.expectRevert(IOptimismPortal.OptimismPortal_Unauthorized.selector);
         vm.prank(_caller);
-        optimismPortal2.callProxyAdmin(_gasLimit, _calldata);
+        optimismPortal2.callL2ProxyAdmin(_gasLimit, _calldata);
     }
 
     /// @dev Tests that the donateETH function donates ETH and does no state read/write
