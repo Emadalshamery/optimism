@@ -42,6 +42,7 @@ type AddGameTypeInput struct {
 	VM                      common.Address `json:"vm" evm:"proofVM"`
 	Permissioned            bool           `json:"permissioned"`
 	Prank                   common.Address `json:"prank"`
+	OPCM                    common.Address `json:"opcm" evm:"opcm"`
 }
 
 type AddGameTypeOutput struct {
