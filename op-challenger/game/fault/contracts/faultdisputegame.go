@@ -77,15 +77,6 @@ type outputRootProof struct {
 	LatestBlockhash          [32]byte
 }
 
-/*
-f.contract.Call(methodL1Head),
-f.contract.Call(methodL2BlockNumber),
-f.contract.Call(methodRootClaim),
-f.contract.Call(methodStatus),
-f.contract.Call(methodMaxClockDuration),
-f.contract.Call(methodL2BlockNumberChallenged),
-f.contract.Call(methodL2BlockNumberChallenger),
-*/
 type faultDisputeGameOps struct {
 	GetClaim                   func(contract *batching.BoundContract, idx uint64) GetterContractOp[types.Claim]
 	GetL1Head                  func(contract *batching.BoundContract) GetterContractOp[common.Hash]

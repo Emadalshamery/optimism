@@ -15,7 +15,7 @@ var (
 	methodL2SequenceNumber = "l2SequenceNumber"
 )
 
-func NewSuperFaultDisputeGameContract(ctx context.Context, metrics metrics.ContractMetricer, addr common.Address, caller *batching.MultiCaller) (FaultDisputeGameContract, error) {
+func NewSuperFaultDisputeGameContract(_ context.Context, metrics metrics.ContractMetricer, addr common.Address, caller *batching.MultiCaller) (FaultDisputeGameContract, error) {
 	contractAbi := snapshots.LoadFaultDisputeGameABI()
 	contract := batching.NewBoundContract(contractAbi, addr)
 	ops := latestFaultDisputeGameOps()
@@ -25,13 +25,14 @@ func NewSuperFaultDisputeGameContract(ctx context.Context, metrics metrics.Contr
 	ops.GetL2BlockNumberChallenger = func(contract *batching.BoundContract) GetterContractOp[common.Address] {
 		return NewStaticOp(common.Address{})
 	}
+	ops.ChallengeL2BlockNumberTx = func(_ *batching.BoundContract, _ *types.InvalidL2BlockNumberChallenge) (txmgr.TxCandidate, error) {
+		return txmgr.TxCandidate{}, ErrChallengeL2BlockNotSupported
+	}
+
 	ops.GetL2SequenceNumber = func(contract *batching.BoundContract) GetterContractOp[uint64] {
 		return NewSimpleGetterOp(contract, methodL2SequenceNumber, func(result *batching.CallResult) (uint64, error) {
 			return result.GetBigInt(0).Uint64(), nil
 		})
-	}
-	ops.ChallengeL2BlockNumberTx = func(_ *batching.BoundContract, _ *types.InvalidL2BlockNumberChallenge) (txmgr.TxCandidate, error) {
-		return txmgr.TxCandidate{}, ErrChallengeL2BlockNotSupported
 	}
 	return &FaultDisputeGameContractLatest{
 		metrics:     metrics,
