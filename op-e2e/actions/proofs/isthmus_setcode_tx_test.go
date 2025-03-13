@@ -24,9 +24,7 @@ func TestSetCodeTxTypeIsthmus(gt *testing.T) {
 	)
 
 	// hardcoded because it's not available until after we need it
-	var (
-		bobAddr = common.HexToAddress("0x14dC79964da2C08b23698B3D3cc7Ca32193d9955")
-	)
+	bobAddr := common.HexToAddress("0x14dC79964da2C08b23698B3D3cc7Ca32193d9955")
 
 	// Create 2 contracts, (1) writes 42 to slot 42, (2) calls (1)
 	store42Program := program.New().Sstore(0x42, 0x42)
@@ -55,18 +53,7 @@ func TestSetCodeTxTypeIsthmus(gt *testing.T) {
 
 	require.Equal(gt, env.Bob.Address(), bobAddr)
 
-	// go-ethereum test called TestEIP7702 reimplemented here
-	// https://github.com/ethereum/go-ethereum/blob/39638c81c56db2b2dfe6f51999ffd3029ee212cb/core/blockchain_test.go#L4180
-	// p := &e2eutils.TestParams{
-	// 	MaxSequencerDrift:   20,
-	// 	SequencerWindowSize: 24,
-	// 	ChannelTimeout:      20,
-	// 	L1BlockTime:         12,
-	// 	AllocType:           config.AllocTypeStandard,
-	// }
-
 	cl := env.Engine.EthClient()
-	// rollupSeqCl := env.Sequencer.RollupClient()
 
 	env.Sequencer.ActL2PipelineFull(t)
 	env.Miner.ActEmptyBlock(t)
@@ -152,12 +139,4 @@ func TestSetCodeTxTypeIsthmus(gt *testing.T) {
 	env.RunFaultProofProgram(t, latestBlock.NumberU64(), func(t actionsHelpers.Testing, err error) {
 		require.NoError(t, err, "no error expected running FP program")
 	})
-
-	// ensure verifier can verify the batch (needs authorization list or tx will fail)
-	// verifier.ActL1HeadSignal(t)
-	// verifier.ActL2PipelineFull(t)
-
-	// require.Equal(t, sequencer.L2Unsafe(), sequencer.L2Safe())
-	// require.Equal(t, verifier.L2Unsafe(), verifier.L2Safe())
-	// require.Equal(t, sequencer.L2Safe(),  .L2Safe())
 }
