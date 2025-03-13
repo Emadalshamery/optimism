@@ -123,9 +123,7 @@ func runSetCodeTxTypeTest(gt *testing.T, testCfg *helpers.TestCfg[any]) {
 	latestBlock, err := cl.BlockByNumber(t.Ctx(), nil)
 	require.NoError(t, err, "error fetching latest block")
 
-	env.RunFaultProofProgram(t, latestBlock.NumberU64(), func(t actionsHelpers.Testing, err error) {
-		require.NoError(t, err, "no error expected running FP program")
-	})
+	env.RunFaultProofProgram(t, latestBlock.NumberU64(), testCfg.CheckResult, testCfg.InputParams...)
 }
 
 func TestSetCodeTx(gt *testing.T) {
