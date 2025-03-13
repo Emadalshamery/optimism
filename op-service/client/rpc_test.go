@@ -24,7 +24,7 @@ func startTestJSONRPCServerWithDataField() *httptest.Server {
 			"id": "0",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	return httptest.NewServer(handler)
 }
@@ -40,7 +40,7 @@ func startTestJSONRPCServerWithoutDataField() *httptest.Server {
 			"id": "0",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	return httptest.NewServer(handler)
 }
