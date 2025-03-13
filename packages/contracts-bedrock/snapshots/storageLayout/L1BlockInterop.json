@@ -89,6 +89,7 @@
     "offset": 8,
     "slot": "8",
     "type": "uint32"
+<<<<<<< HEAD
   },
   {
     "bytes": "1",
@@ -103,5 +104,7 @@
     "offset": 0,
     "slot": "9",
     "type": "struct EnumerableSet.UintSet"
+=======
+>>>>>>> 7e561276c8edee224d65f281b51ee20b3d42fec3
   }
 ]

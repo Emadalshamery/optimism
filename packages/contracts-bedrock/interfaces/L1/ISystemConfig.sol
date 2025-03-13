@@ -18,7 +18,6 @@ interface ISystemConfig {
         address l1CrossDomainMessenger;
         address l1ERC721Bridge;
         address l1StandardBridge;
-        address disputeGameFactory;
         address optimismPortal;
         address optimismMintableERC20Factory;
     }
@@ -36,7 +35,6 @@ interface ISystemConfig {
     error UnsafeCast();
 
     function BATCH_INBOX_SLOT() external view returns (bytes32);
-    function DISPUTE_GAME_FACTORY_SLOT() external view returns (bytes32);
     function L1_CROSS_DOMAIN_MESSENGER_SLOT() external view returns (bytes32);
     function L1_ERC_721_BRIDGE_SLOT() external view returns (bytes32);
     function L1_STANDARD_BRIDGE_SLOT() external view returns (bytes32);

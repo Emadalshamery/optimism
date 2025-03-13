@@ -26,7 +26,6 @@ const (
 	ProofMaturityDelaySeconds       uint64 = 604800
 	DisputeGameFinalityDelaySeconds uint64 = 302400
 	MIPSVersion                     uint64 = 1
-	DisputeGameUsesSuperRoots       bool   = false
 	DisputeGameType                 uint32 = 1 // PERMISSIONED game type
 	DisputeMaxGameDepth             uint64 = 73
 	DisputeSplitDepth               uint64 = 30
@@ -167,6 +166,17 @@ func L1ProxyAdminOwner(chainID uint64) (common.Address, error) {
 		return common.Address(validation.StandardConfigRolesMainnet.L1ProxyAdminOwner), nil
 	case 11155111:
 		return common.Address(validation.StandardConfigRolesSepolia.L1ProxyAdminOwner), nil
+	default:
+		return common.Address{}, fmt.Errorf("unsupported chain ID: %d", chainID)
+	}
+}
+
+func L2ProxyAdminOwner(chainID uint64) (common.Address, error) {
+	switch chainID {
+	case 1:
+		return common.Address(validation.StandardConfigRolesMainnet.L2ProxyAdminOwner), nil
+	case 11155111:
+		return common.Address(validation.StandardConfigRolesSepolia.L2ProxyAdminOwner), nil
 	default:
 		return common.Address{}, fmt.Errorf("unsupported chain ID: %d", chainID)
 	}
