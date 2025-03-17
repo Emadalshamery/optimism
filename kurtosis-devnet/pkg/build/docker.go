@@ -56,6 +56,9 @@ func (p *defaultDockerProvider) newClient() (dockerClient, error) {
 	opts := []client.Opt{client.FromEnv}
 
 	// Check if default docker socket exists
+	// See https://github.com/moby/moby/discussions/46015 :
+	// the ParseHostURL function does not technically support `unix`,
+	// and the non-scheme part just ends up in the `.Host` instead of `.Path`
 	hostURL, err := client.ParseHostURL(client.DefaultDockerHost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse default docker host: %w", err)
@@ -65,6 +68,8 @@ func (p *defaultDockerProvider) newClient() (dockerClient, error) {
 	if hostURL.Scheme == "unix" {
 		if _, err := os.Stat(hostURL.Host); os.IsNotExist(err) {
 			// Default socket doesn't exist, try alternate location. Docker Desktop uses ~/.docker/run/docker.sock
+			// Docker Desktop uses ~/.docker/run/docker.sock
+			// or also ~/.docker/desktop/docker.sock
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get user home directory: %w", err)
@@ -73,6 +78,7 @@ func (p *defaultDockerProvider) newClient() (dockerClient, error) {
 			if _, err := os.Stat(homeSocketHost); os.IsNotExist(err) {
 				return nil, errors.New("failed to find docker socket")
 			}
+			log.Printf("WARNING: using implied user docker socket: %q, make sure Kurtosis is running inside of the same docker context!", homeSocketHost)
 			socketURL := &url.URL{
 				Scheme: "unix",
 				Host:   homeSocketHost,
