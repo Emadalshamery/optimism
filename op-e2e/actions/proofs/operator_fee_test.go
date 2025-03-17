@@ -33,14 +33,14 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 	testStorageUpdateContractAddress := common.HexToAddress("0xffffffff")
 	// contract TestSetter {
 	//   uint x;
-	//   function set(uint _x) public { x = _x }
+	//   function set(uint _x) public { x = _x; }
 	// }
-	// The bytecode below is from the contract above
-	testStorageUpdateContractCode := common.FromHex("0x6080604052348015600e575f80fd5b5060d980601a5f395ff3fe6080604052348015600e575f80fd5b50600436106026575f3560e01c806360fe47b114602a575b5f80fd5b60406004803603810190603c9190607d565b6042565b005b805f8190555050565b5f80fd5b5f819050919050565b605f81604f565b81146068575f80fd5b50565b5f813590506077816058565b92915050565b5f60208284031215608f57608e604b565b5b5f609a84828501606b565b9150509291505056fea2646970667358221220fafa0f1a19c76eab34a04a6b16474af0eadca44700dc8b07a9184a36fa03742a64736f6c634300081a0033")
+	// The deployed bytecode below is from the contract above
+	testStorageUpdateContractCode := common.FromHex("0x6080604052348015600e575f80fd5b50600436106026575f3560e01c806360fe47b114602a575b5f80fd5b60406004803603810190603c9190607d565b6042565b005b805f8190555050565b5f80fd5b5f819050919050565b605f81604f565b81146068575f80fd5b50565b5f813590506077816058565b92915050565b5f60208284031215608f57608e604b565b5b5f609a84828501606b565b9150509291505056fea26469706673582212201712a1e6e9c5e2ba1f8f7403f5d6e00090c6fa2b70c632beea4be8009331bd2064736f6c63430008190033")
 
 	runIsthmusDerivationTest := func(gt *testing.T, testCfg *helpers.TestCfg[testCase]) {
 		t := actionsHelpers.NewDefaultTesting(gt)
-		var deployConfigOverrides = func(dp *genesis.DeployConfig) {}
+		deployConfigOverrides := func(dp *genesis.DeployConfig) {}
 
 		if testCfg.Custom == StateRefund {
 			testCfg.Allocs = actionsHelpers.DefaultAlloc
@@ -78,7 +78,8 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 			return alice, l1FeeVault, baseFeeVault, sequencerFeeVault, operatorFeeVault
 		}
 
-		setStorageInUpdateContractTo := func(t actionsHelpers.Testing, value byte) {
+		setStorageInUpdateContractTo := func(value byte) {
+			t.Helper()
 			input := common.RightPadBytes(common.FromHex("0x60fe47b1"), 36)
 			input[35] = value
 			env.Sequencer.ActL2StartBlock(t)
@@ -88,6 +89,8 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 			env.Alice.L2.ActMakeTx(t)
 			env.Engine.ActL2IncludeTx(env.Alice.Address())(t)
 			env.Sequencer.ActL2EndBlock(t)
+			r := env.Alice.L2.LastTxReceipt(t)
+			require.Equal(t, types.ReceiptStatusSuccessful, r.Status, "tx unsuccessful")
 		}
 
 		t.Logf("L2 Genesis Time: %d, IsthmusTime: %d ", env.Sequencer.RollupCfg.Genesis.L2Time, *env.Sequencer.RollupCfg.IsthmusTime)
@@ -110,8 +113,6 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 		env.Sequencer.ActL1HeadSignal(t)
 		env.Sequencer.ActBuildToL1Head(t)
 		env.BatchAndMine(t)
-		env.Miner.ActL1StartBlock(12)(t)
-		env.Miner.ActL1EndBlock(t)
 
 		env.Sequencer.ActL1HeadSignal(t)
 
@@ -125,7 +126,6 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 
 		switch testCfg.Custom {
 		case NormalTx, IsthmusTransitionBlock:
-
 			aliceInitialBalance, l1FeeVaultInitialBalance, baseFeeVaultInitialBalance, sequencerFeeVaultInitialBalance, operatorFeeVaultInitialBalance = getCurrentBalances()
 
 			require.Equal(t, operatorFeeVaultInitialBalance.Sign(), 0)
@@ -135,7 +135,8 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 			env.Alice.L2.ActResetTxOpts(t)
 			env.Alice.L2.ActSetTxToAddr(&env.Dp.Addresses.Bob)
 			env.Alice.L2.ActMakeTx(t)
-			env.Engine.ActL2IncludeTx(env.Alice.Address())(t)
+			// we usually don't include txs in the transition block, so we force-include it
+			env.Engine.ActL2IncludeTxIgnoreForcedEmpty(env.Alice.Address())(t)
 			env.Sequencer.ActL2EndBlock(t)
 
 			if testCfg.Custom == IsthmusTransitionBlock {
@@ -143,26 +144,24 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 			}
 
 		case StateRefund:
-			setStorageInUpdateContractTo(t, 1)
+			setStorageInUpdateContractTo(1)
+			rSet := env.Alice.L2.LastTxReceipt(t)
+			require.Equal(t, uint64(43696), rSet.GasUsed)
 			aliceInitialBalance, l1FeeVaultInitialBalance, baseFeeVaultInitialBalance, sequencerFeeVaultInitialBalance, operatorFeeVaultInitialBalance = getCurrentBalances()
-			setStorageInUpdateContractTo(t, 0)
-		case DepositTx:
-			// regular L2 tx, in new L2 block
-			env.Alice.L2.ActResetTxOpts(t)
-			env.Alice.L2.ActSetTxToAddr(&env.Dp.Addresses.Bob)(t)
-			env.Alice.L2.ActMakeTx(t)
-			env.Sequencer.ActL2StartBlock(t)
-			env.Engine.ActL2IncludeTx(env.Alice.Address())(t)
-			env.Sequencer.ActL2EndBlock(t)
-			env.Alice.L2.ActCheckReceiptStatusOfLastTx(true)(t)
+			setStorageInUpdateContractTo(0)
+			rUnset := env.Alice.L2.LastTxReceipt(t)
+			// we assert on the exact gas used to show that a refund is happening
+			require.Equal(t, uint64(21784), rUnset.GasUsed)
 
+		case DepositTx:
 			aliceInitialBalance, l1FeeVaultInitialBalance, baseFeeVaultInitialBalance, sequencerFeeVaultInitialBalance, operatorFeeVaultInitialBalance = getCurrentBalances()
 
 			bobInitialBalance := balanceAt(env.Bob.Address())
 
 			// regular Deposit, in new L1 block
 			env.Alice.L1.ActResetTxOpts(t)
-			env.Alice.L2.ActSetTxValue(new(big.Int).SetUint64(10000))(t)
+			env.Alice.L2.ActSetTxToAddr(&env.Dp.Addresses.Bob)(t)
+			env.Alice.L2.ActSetTxValue(new(big.Int).SetUint64(testDepositValue))(t)
 			env.Alice.ActDeposit(t)
 			env.Miner.ActL1StartBlock(12)(t)
 			env.Miner.ActL1IncludeTx(env.Alice.Address())(t)
@@ -194,7 +193,6 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 
 			// Nothing should has been sent to operator fee vault
 			require.Equal(t, operatorFeeVaultInitialBalance, operatorFeeVaultFinalBalance)
-
 		} else {
 			// Check that the operator fee was applied
 			require.Equal(t, testOperatorFeeScalar, uint32(*receipt.OperatorFeeScalar))
@@ -214,9 +212,8 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 				),
 				new(big.Int).Sub(operatorFeeVaultFinalBalance, operatorFeeVaultInitialBalance),
 			)
-
-			require.True(t, aliceFinalBalance.Cmp(aliceInitialBalance) < 0, "Alice's balance should decrease")
 		}
+		require.True(t, aliceFinalBalance.Cmp(aliceInitialBalance) < 0, "Alice's balance should decrease")
 
 		// Check that no Ether has been minted or burned
 		finalTotalBalance := new(big.Int).Add(
@@ -249,15 +246,16 @@ func Test_ProgramAction_OperatorFeeConstistency(gt *testing.T) {
 		l2SafeHead := env.Engine.L2Chain().CurrentSafeBlock()
 
 		require.Equal(t, eth.HeaderBlockID(l2SafeHead), eth.HeaderBlockID(l2UnsafeHead), "derivation leads to the same block")
+
+		env.RunFaultProofProgram(t, l2SafeHead.Number.Uint64(), testCfg.CheckResult, testCfg.InputParams...)
 	}
 
 	matrix := helpers.NewMatrix[testCase]()
-	defer matrix.Run(gt)
-
 	matrix.AddDefaultTestCasesWithName("NormalTx", NormalTx, helpers.NewForkMatrix(helpers.Isthmus), runIsthmusDerivationTest)
 	matrix.AddDefaultTestCasesWithName("DepositTx", DepositTx, helpers.NewForkMatrix(helpers.Isthmus), runIsthmusDerivationTest)
 	matrix.AddDefaultTestCasesWithName("StateRefund", StateRefund, helpers.NewForkMatrix(helpers.Isthmus), runIsthmusDerivationTest)
 	matrix.AddDefaultTestCasesWithName("IsthmusTransitionBlock", IsthmusTransitionBlock, helpers.NewForkMatrix(helpers.Holocene), runIsthmusDerivationTest)
+	matrix.Run(gt)
 }
 
 func ptr[T any](v T) *T {

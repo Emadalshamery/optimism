@@ -166,6 +166,7 @@ func (s *BasicUser[B]) ActResetTxOpts(t Testing) {
 }
 
 func (s *BasicUser[B]) ActRandomTxToAddr(t Testing) {
+	t.Helper()
 	i := s.rng.Intn(len(s.env.AddressCorpora))
 	var to *common.Address
 	if i > 0 { // 0 == nil
@@ -204,6 +205,7 @@ func (s *BasicUser[B]) ActSetTxValue(value *big.Int) Action {
 }
 
 func (s *BasicUser[B]) ActRandomTxData(t Testing) {
+	t.Helper()
 	dataLen := s.rng.Intn(128_000)
 	out := make([]byte, dataLen)
 	_, err := s.rng.Read(out[:])
@@ -212,6 +214,7 @@ func (s *BasicUser[B]) ActRandomTxData(t Testing) {
 }
 
 func (s *BasicUser[B]) PendingNonce(t Testing) uint64 {
+	t.Helper()
 	if s.txOpts.Nonce != nil {
 		return s.txOpts.Nonce.Uint64()
 	}
@@ -229,6 +232,7 @@ func (s *BasicUser[B]) TxValue() *big.Int {
 }
 
 func (s *BasicUser[B]) LastTxReceipt(t Testing) *types.Receipt {
+	t.Helper()
 	require.NotEqual(t, s.lastTxHash, common.Hash{}, "must send tx before getting last receipt")
 	receipt, err := s.env.EthCl.TransactionReceipt(t.Ctx(), s.lastTxHash)
 	require.NoError(t, err)
@@ -264,6 +268,7 @@ func (s *BasicUser[B]) MakeTransaction(t Testing) *types.Transaction {
 // ActMakeTx makes a tx with the predetermined contents (see randomization and other actions)
 // and sends it to the tx pool
 func (s *BasicUser[B]) ActMakeTx(t Testing) {
+	t.Helper()
 	tx := s.MakeTransaction(t)
 	err := s.env.EthCl.SendTransaction(t.Ctx(), tx)
 	require.NoError(t, err, "must send tx")
@@ -279,6 +284,7 @@ func (s *BasicUser[B]) ActCheckReceiptStatusOfLastTx(success bool) func(t Testin
 }
 
 func (s *BasicUser[B]) CheckReceipt(t Testing, success bool, txHash common.Hash) *types.Receipt {
+	t.Helper()
 	receipt, err := s.env.EthCl.TransactionReceipt(t.Ctx(), txHash)
 	if receipt != nil && err == nil {
 		expected := types.ReceiptStatusFailed
@@ -391,6 +397,7 @@ func (s *CrossLayerUser) ActCheckDepositStatus(l1Success, l2Success bool) Action
 }
 
 func (s *CrossLayerUser) CheckDepositTx(t Testing, l1TxHash common.Hash, index int, l1Success, l2Success bool) {
+	t.Helper()
 	depositReceipt := s.L1.CheckReceipt(t, l1Success, l1TxHash)
 	if depositReceipt == nil {
 		require.False(t, l1Success)
