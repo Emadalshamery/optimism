@@ -36,6 +36,8 @@ type rewinderDB interface {
 	FindSealedBlock(eth.ChainID, uint64) (types.BlockSeal, error)
 	Finalized(eth.ChainID) (types.BlockSeal, error)
 
+	PreviousDerived(chain eth.ChainID, derived eth.BlockID) (prevDerived types.BlockSeal, err error)
+
 	LocalDerivedToSource(chain eth.ChainID, derived eth.BlockID) (source types.BlockSeal, err error)
 }
 
@@ -141,6 +143,26 @@ func (r *Rewinder) handleLocalDerivedEvent(ev superevents.LocalSafeUpdateEvent) 
 		r.log.Error("failed to rewind logs DB", "chain", ev.ChainID, "err", err)
 		return
 	}
+
+	// Emit new unsafe block event with the replacement block data
+	parent, err := r.db.PreviousDerived(ev.ChainID, newSafeHead.ID())
+	if err != nil {
+		r.log.Error("failed to rewind logs DB", "chain", ev.ChainID, "err", err)
+		return
+	}
+
+	ref, err := newSafeHead.WithParent(parent.ID())
+	if err != nil {
+		r.log.Error("failed to rewind logs DB", "chain", ev.ChainID, "err", err)
+		return
+	}
+
+	r.log.Info("rewinding replacement", "chain", ev.ChainID, "new unsafe block", ref.ID(), "old unsafe block", unsafeVersion.ID())
+
+	r.emitter.Emit(superevents.LocalUnsafeReceivedEvent{
+		ChainID:        ev.ChainID,
+		NewLocalUnsafe: ref,
+	})
 
 	// Emit event to trigger node reset with new heads
 	r.emitter.Emit(superevents.ChainRewoundEvent{ChainID: ev.ChainID})
