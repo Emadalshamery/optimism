@@ -1301,16 +1301,16 @@ jobs:
       - utils/checkout-with-mise
 
       - run:
-          name: Install Dependencies
+          name: Install Build Dependencies
           command: |
             sudo apt-get update
-            sudo apt-get install -y llvm curl
+            sudo apt-get install -y build-essential cmake ninja-build python3 curl git clang lld libc++-dev libc++abi-dev
 
       - run:
-          name: Set up LLVM Path
-          command: |
-            export PATH="/usr/bin:$PATH"  # Ensure LLVM is in PATH
-            echo 'export PATH="/usr/bin:$PATH"' >> $BASH_ENV
+           name: Install LLVM Objdump via Mise
+           command: |
+             CC=clang CXX=clang++ mise install llvm-objdump@20.1.0
+             mise use -g llvm-objdump@20.1.0
 
       - run:
           name: Run Analyzer
