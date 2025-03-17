@@ -442,96 +442,30 @@ func TestInteropExecutingMessageOutOfRangeLogIndex(gt *testing.T) {
 	actors.PrepareChainState(t)
 	aliceA := setupUser(t, is, actors.ChainA, 0)
 
-	// Create initiating and executing messages within the same block
-	var (
-		chainAExecTx *dsl.GeneratedTransaction
-		chainBExecTx *dsl.GeneratedTransaction
-		chainBInitTx *dsl.GeneratedTransaction
-	)
-	{
-		actors.ChainA.Sequencer.ActL2StartBlock(t)
-		actors.ChainB.Sequencer.ActL2StartBlock(t)
-
-		chainAInitTx := emitterContract.EmitMessage(alice, "chainA message")(actors.ChainA)
-		chainAInitTx.Include()
-
-		// Create messages with a conflicting payload on chain B, while also emitting an initiating message
-		chainBExecTx := system.InboxContract.Execute(alice, chainAInitTx,
-			dsl.WithPayload([]byte("this message was never emitted")))(actors.ChainB)
-		chainBExecTx.Include()
-		chainBInitTx = emitterContract.EmitMessage(alice, "chainB message")(actors.ChainB)
-		chainBInitTx.Include()
-
-		// Create a message with a valid message on chain A, pointing to the initiating message on B from the same block
-		// as an invalid message.
-		chainAExecTx = system.InboxContract.Execute(alice, chainBInitTx)(actors.ChainA)
-		chainAExecTx.Include()
-
-		actors.ChainA.Sequencer.ActL2EndBlock(t)
-		actors.ChainB.Sequencer.ActL2EndBlock(t)
+	// Execute a fake log on chain A
+	chainBHead := actors.ChainB.Sequencer.SyncStatus().UnsafeL2
+	nonExistentID := stypes.Identifier{
+		Origin:      aliceA.address,
+		BlockNumber: chainBHead.Number,
+		LogIndex:    0,
+		Timestamp:   chainBHead.Time,
+		ChainID:     eth.ChainIDFromBig(actors.ChainB.RollupCfg.L2ChainID),
 	}
+	nonExistentHash := crypto.Keccak256Hash([]byte("fake message"))
+	tx := newExecuteMessageTxFromIDAndHash(t, aliceA, actors.ChainA, nonExistentID, nonExistentHash)
+	includeTxOnChainBasic(t, actors.ChainA, tx, aliceA.address)
+	actors.ChainB.Sequencer.ActL2EmptyBlock(t)
 
-	assertHeads(t, actors.ChainA, 2, 1, 0, 0)
-	assertHeads(t, actors.ChainB, 2, 1, 0, 0)
-
-	system.SubmitBatchData(func(opts *dsl.SubmitBatchDataOpts) {
-		opts.SkipCrossSafeUpdate = true
-	})
-
-	assertHeads(t, actors.ChainA, 2, 1, 2, 0)
-	assertHeads(t, actors.ChainB, 2, 1, 2, 0)
-
-	statusA, statusB := actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
-	initialChainABlock := statusA.LocalSafeL2
-	initialChainBBlock := statusB.LocalSafeL2
-
+	// Sync the system
 	actors.ChainA.Sequencer.SyncSupervisor(t)
 	actors.ChainB.Sequencer.SyncSupervisor(t)
 	actors.Supervisor.ProcessFull(t)
 	actors.ChainA.Sequencer.ActL2PipelineFull(t)
 	actors.ChainB.Sequencer.ActL2PipelineFull(t)
 
-	// We now have invalid blocks on both chains
-	// We should be checking both blocks and first seeing that chainB is invalid
-	// We should then replace the LocalSafe chainB block with a replacement block
-	// *Then* we should see that chainA is invalid, either because our check on B was through the hazard set or because there is now a block mismatch
-	// So we should then also replace the LocalSafe chainA block with a replacement block
-	// In doing the replacements of the Safe blocks we should also see the related Unsafe blocks being rewound
-
-	statusA, statusB = actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
-	require.NotEqual(t, initialChainABlock, statusA.LocalSafeL2)
-	require.NotEqual(t, initialChainBBlock, statusB.LocalSafeL2)
-	system.AddL2Block(actors.ChainA)
-	system.AddL2Block(actors.ChainB, dsl.WithL1BlockCrossUnsafe())
-	system.SubmitBatchData(func(opts *dsl.SubmitBatchDataOpts) {
-		opts.SkipCrossSafeUpdate = true
-	})
-	statusA, statusB = actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
-	t.Logf("statusA :%#v", statusA)
-	t.Logf("statusB :%#v", statusB)
-
-	system.AddL2Block(actors.ChainA)
-	// A cross-unsafe head advances, but B's cross-unsafe head stalls
-	system.AddL2Block(actors.ChainB, dsl.WithL1BlockCrossUnsafe())
-	statusA, statusB = actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
-	t.Logf("statusA :%#v", statusA)
-	t.Logf("statusB :%#v", statusB)
-	actors.ChainA.Sequencer.SyncSupervisor(t)
-	actors.ChainB.Sequencer.SyncSupervisor(t)
-	actors.Supervisor.ProcessFull(t)
-	actors.ChainA.Sequencer.ActL2PipelineFull(t)
-	actors.ChainB.Sequencer.ActL2PipelineFull(t)
-	statusA, statusB = actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
-	t.Logf("statusA :%#v", statusA)
-	t.Logf("statusB :%#v", statusB)
-	require.Greater(t, statusA.CrossUnsafeL2.Number, uint64(1), "chainA cross-unsafe head is stalled")
-	// cross-unsafe on A advances again, but B continues to stall
-	require.Greater(t, statusB.CrossUnsafeL2.Number, uint64(1), "chainB cross-unsafe head is stalled")
-
-	// assert that the invalid message txs were reorged out
-	chainBExecTx.CheckNotIncluded()
-	chainBInitTx.CheckNotIncluded() // Should have been reorged out with chainBExecTx
-	chainAExecTx.CheckNotIncluded() // Reorged out because chainBInitTx was reorged out
+	// Assert that chainA's block is not cross-safe but chainB's is.
+	assertHeads(t, actors.ChainA, 1, 0, 0, 0)
+	assertHeads(t, actors.ChainB, 1, 0, 1, 0)
 }
 
 func TestInterop_IntraBlockReferenceReplacement(gt *testing.T) {
