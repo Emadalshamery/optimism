@@ -63,19 +63,19 @@ func (p *defaultDockerProvider) newClient() (dockerClient, error) {
 
 	// For unix sockets, check if the socket file exists
 	if hostURL.Scheme == "unix" {
-		if _, err := os.Stat(hostURL.Path); os.IsNotExist(err) {
+		if _, err := os.Stat(hostURL.Host); os.IsNotExist(err) {
 			// Default socket doesn't exist, try alternate location. Docker Desktop uses ~/.docker/run/docker.sock
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get user home directory: %w", err)
 			}
-			homeSocketPath := fmt.Sprintf("%s/.docker/run/docker.sock", homeDir)
-			if _, err := os.Stat(homeSocketPath); os.IsNotExist(err) {
+			homeSocketHost := fmt.Sprintf("%s/.docker/run/docker.sock", homeDir)
+			if _, err := os.Stat(homeSocketHost); os.IsNotExist(err) {
 				return nil, errors.New("failed to find docker socket")
 			}
 			socketURL := &url.URL{
 				Scheme: "unix",
-				Path:   homeSocketPath,
+				Host:   homeSocketHost,
 			}
 			// prepend the host, so that it can still be overridden by the environment.
 			opts = append([]client.Opt{client.WithHost(socketURL.String())}, opts...)
