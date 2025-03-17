@@ -129,6 +129,13 @@ func (s *L2Sequencer) ActL2EndBlock(t Testing) {
 	}, false))
 	require.Equal(t, s.engine.UnsafeL2Head(), s.syncStatus.SyncStatus().UnsafeL2,
 		"sync status must be accurate after block building")
+
+	unsafeHead := s.engine.UnsafeL2Head()
+	unsafeHash := unsafeHead.ID().Hash
+	block, err := s.Eng.PayloadByHash(t.Ctx(), unsafeHash)
+	require.NoError(t, err, "failed to get block by hash: %s", unsafeHash)
+	txs := block.ExecutionPayload.Transactions
+	s.log.Info("New L2 block", "chain", s.RollupCfg.L2ChainID, "number", block.ExecutionPayload.BlockNumber, "hash", unsafeHash.Hex(), "txs", len(txs))
 }
 
 func (s *L2Sequencer) ActL2EmptyBlock(t Testing) {

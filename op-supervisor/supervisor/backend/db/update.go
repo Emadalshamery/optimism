@@ -322,6 +322,7 @@ func (db *ChainsDB) onReplaceBlock(chainID eth.ChainID, replacement eth.BlockRef
 		ChainID:        chainID,
 		NewLocalUnsafe: replacement,
 	})
+	db.logger.Info("Replaced invalidated block in local-safe DB")
 	// The local-safe DB changed, so emit an event, so other sub-systems can react to the change.
 	db.emitter.Emit(superevents.LocalSafeUpdateEvent{
 		ChainID:      chainID,

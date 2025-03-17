@@ -290,6 +290,7 @@ func (db *DB) Contains(query types.ContainsQuery) (types.BlockSeal, error) {
 		if db.lastEntryContext.timestamp > timestamp {
 			return types.BlockSeal{}, types.ErrConflict
 		}
+		db.log.Debug("No block yet", "blockNum", blockNum, "lastBlockNum", db.lastEntryContext.blockNum, "logIdx", logIdx, "complete", db.lastEntryContext.hasCompleteBlock())
 		return types.BlockSeal{}, types.ErrFuture
 	}
 

@@ -88,18 +88,26 @@ func (r *Rewinder) handleRewindL1Event(ev superevents.RewindL1Event) {
 // If it doesn't match, we need to rewind the logs DB to the common ancestor between
 // the LocalUnsafe head and the new LocalSafe block
 func (r *Rewinder) handleLocalDerivedEvent(ev superevents.LocalSafeUpdateEvent) {
+	r.log.Debug("Rewinder: rewinding local derived", "chain", ev.ChainID, "new safe head", ev.NewLocalSafe.Derived.ID())
+
 	// Get the block at the derived height from our unsafe chain
 	newSafeHead := ev.NewLocalSafe.Derived
 	unsafeVersion, err := r.db.FindSealedBlock(ev.ChainID, newSafeHead.Number)
 	if err != nil {
-		r.log.Error("failed to get unsafe block at derived height", "chain", ev.ChainID, "height", newSafeHead.Number, "err", err)
-		return
+		r.log.Debug("Rewinder: FindSealedBlock err", "chain", ev.ChainID, "new safe head", newSafeHead.ID(), "err", err)
+		if !errors.Is(err, types.ErrFuture) {
+			r.log.Debug("Rewinder: local derived is not future", "chain", ev.ChainID, "new safe head", newSafeHead.ID())
+			return
+		}
 	}
 
 	// If the block hashes match, our unsafe chain is still valid
 	if unsafeVersion.Hash == newSafeHead.Hash {
+		r.log.Debug("Rewinder: local derived matches unsafe", "chain", ev.ChainID, "new safe head", newSafeHead.ID(), "old unsafe block", unsafeVersion.ID())
 		return
 	}
+
+	r.log.Debug("Rewinder: rewinding local derived does not match", "chain", ev.ChainID, "new safe head", newSafeHead.ID(), "old unsafe block", unsafeVersion.ID())
 
 	// Try rewinding the logs DB to the parent of the new safe head
 	// If it fails with a data conflict walk back through the chain
@@ -134,6 +142,8 @@ func (r *Rewinder) handleLocalDerivedEvent(ev superevents.LocalSafeUpdateEvent) 
 
 		break
 	}
+
+	r.log.Debug("Rewinder: rewinding local derived", "chain", ev.ChainID, "rewind target", target.ID())
 
 	// Try to rewind and stop if it succeeds
 	err = r.db.RewindLogs(ev.ChainID, target)
