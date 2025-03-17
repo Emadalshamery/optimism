@@ -451,7 +451,8 @@ func (m *ManagedNode) resetIfInconsistent() {
 		m.log.Warn("local safe block is inconsistent with logs db. Initiating reset",
 			"lastSafeblock", m.lastNodeLocalSafe,
 			"err", err)
-		last = m.lastNodeLocalSafe
+		//TODO: uncomment this!
+		//last = m.lastNodeLocalSafe
 	}
 
 	// there is inconsistency. begin the reset process

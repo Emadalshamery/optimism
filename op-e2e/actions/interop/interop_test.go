@@ -1,6 +1,7 @@
 package interop
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -526,6 +527,7 @@ func TestInterop_IntraBlockReferenceReplacement(gt *testing.T) {
 	assertHeads(t, actors.ChainA, 2, 1, 2, 0)
 	assertHeads(t, actors.ChainB, 2, 1, 2, 0)
 
+	fmt.Println("BEFORE#############################################################################################################################################################################################")
 	statusA, statusB := actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
 	initialChainABlock := statusA.LocalSafeL2
 	initialChainBBlock := statusB.LocalSafeL2
@@ -534,7 +536,15 @@ func TestInterop_IntraBlockReferenceReplacement(gt *testing.T) {
 	actors.ChainB.Sequencer.SyncSupervisor(t)
 	actors.Supervisor.ProcessFull(t)
 	actors.ChainA.Sequencer.ActL2PipelineFull(t)
+	actors.ChainA.Sequencer.SyncSupervisor(t)
 	actors.ChainB.Sequencer.ActL2PipelineFull(t)
+
+	fmt.Println("MIDDD#############################################################################################################################################################################################")
+	actors.Supervisor.ProcessFull(t)
+	actors.ChainB.Sequencer.SyncSupervisor(t)
+	actors.ChainB.Sequencer.ActL2PipelineFull(t)
+
+	fmt.Println("AFTER#############################################################################################################################################################################################")
 
 	// We now have invalid blocks on both chains
 	// We should be checking both blocks and first seeing that chainB is invalid
@@ -546,6 +556,10 @@ func TestInterop_IntraBlockReferenceReplacement(gt *testing.T) {
 	statusA, statusB = actors.ChainA.Sequencer.SyncStatus(), actors.ChainB.Sequencer.SyncStatus()
 	require.NotEqual(t, initialChainABlock, statusA.LocalSafeL2)
 	require.NotEqual(t, initialChainBBlock, statusB.LocalSafeL2)
+
+	actors.ChainA.Sequencer.ActL2PipelineFull(t)
+	actors.ChainB.Sequencer.ActL2PipelineFull(t)
+
 	system.AddL2Block(actors.ChainA)
 	system.AddL2Block(actors.ChainB, dsl.WithL1BlockCrossUnsafe())
 	system.SubmitBatchData(func(opts *dsl.SubmitBatchDataOpts) {
