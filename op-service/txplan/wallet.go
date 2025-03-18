@@ -24,7 +24,7 @@ type wallet struct {
 	ctx    context.Context
 }
 
-func newWallet(rpcURL, privHex string, clCfg *sources.EthClientConfig, log log.Logger) (*wallet, error) {
+func newWallet(ctx context.Context, rpcURL, privHex string, clCfg *sources.EthClientConfig, log log.Logger) (*wallet, error) {
 	privRaw, err := hexutil.Decode(privHex)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,6 @@ func newWallet(rpcURL, privHex string, clCfg *sources.EthClientConfig, log log.L
 			MethodResetDuration:   time.Minute,
 		}
 	}
-	ctx := context.Background()
 	rpcClient, err := rpc.DialContext(ctx, rpcURL)
 	if err != nil {
 		return nil, err

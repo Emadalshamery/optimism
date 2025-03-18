@@ -32,7 +32,7 @@ func TestSimpleTx(t *testing.T) {
 
 	logger := testlog.Logger(t, log.LevelInfo)
 
-	wallet, err := newWallet(rpcURL, privHex, nil, logger)
+	wallet, err := newWallet(ctx, rpcURL, privHex, nil, logger)
 	require.NoError(t, err)
 
 	// send eth to null address
@@ -55,7 +55,7 @@ func buildSendMessageCalldata(chainID eth.ChainID, addr common.Address, msg []by
 	return sendMessage.EncodeArgs(chainID.ToBig(), addr, msg)
 }
 
-func TestInteropTx(t *testing.T) {
+func TestInteropTxUsingL2toL2CDM(t *testing.T) {
 	// t.Skip() // temporal addition for make CI pass.
 
 	rng := rand.New(rand.NewSource(1234))
@@ -70,9 +70,9 @@ func TestInteropTx(t *testing.T) {
 	privHexB := "0xeaa861a9a01391ed3d587d8a5a84ca56ee277629a8b02c22093a419bf240e65d"
 	rpcURLB := "http://127.0.0.1:32961"
 
-	walletA, err := newWallet(rpcURLA, privHexA, nil, logger)
+	walletA, err := newWallet(ctx, rpcURLA, privHexA, nil, logger)
 	require.NoError(t, err)
-	walletB, err := newWallet(rpcURLB, privHexB, nil, logger)
+	walletB, err := newWallet(ctx, rpcURLB, privHexB, nil, logger)
 	require.NoError(t, err)
 
 	optsFunc := func(w Wallet) Option {
