@@ -58,7 +58,7 @@ func (ptx *PlannedTx) String() string {
 
 type Option func(tx *PlannedTx)
 
-func Combine(opts ...Option) Option {
+func CombineOptions(opts ...Option) Option {
 	return func(tx *PlannedTx) {
 		for _, opt := range opts {
 			opt(tx)
@@ -66,12 +66,28 @@ func Combine(opts ...Option) Option {
 	}
 }
 
+func DefaultTxSubmitOptions(w Wallet) Option {
+	return CombineOptions(
+		WithPrivateKey(w.PrivateKey()),
+		WithChainID(w.Client()),
+		WithAgainstLatestBlock(w.Client()),
+		WithPendingNonce(w.Client()),
+		WithEstimator(w.Client(), false),
+		WithTransactionSubmitter(w.Client()),
+	)
+}
+
+func DefaultTxInclusionOptions(w Wallet) Option {
+	return CombineOptions(
+		WithRetryInclusion(w.Client(), 10, retry.Exponential()),
+		WithBlockInclusionInfo(w.Client()),
+	)
+}
+
 func NewPlannedTx(opts ...Option) *PlannedTx {
 	tx := &PlannedTx{}
 	tx.Defaults()
-	for _, opt := range opts {
-		opt(tx)
-	}
+	CombineOptions(opts...)(tx)
 	return tx
 }
 
