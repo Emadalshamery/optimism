@@ -31,6 +31,7 @@ type backend interface {
 	FindSealedBlock(ctx context.Context, chainID eth.ChainID, number uint64) (eth.BlockID, error)
 	IsLocalSafe(ctx context.Context, chainID eth.ChainID, block eth.BlockID) error
 	IsCrossSafe(ctx context.Context, chainID eth.ChainID, block eth.BlockID) error
+	IsReplacement(ctx context.Context, chainID eth.ChainID, block eth.BlockID) error
 	IsLocalUnsafe(ctx context.Context, chainID eth.ChainID, block eth.BlockID) error
 	SafeDerivedAt(ctx context.Context, chainID eth.ChainID, source eth.BlockID) (derived eth.BlockID, err error)
 	L1BlockRefByNumber(ctx context.Context, number uint64) (eth.L1BlockRef, error)
@@ -202,7 +203,11 @@ func (m *ManagedNode) Start() {
 			case <-m.ctx.Done():
 				m.log.Info("Exiting node syncing")
 				return
-			case ev := <-m.nodeEvents: // nil, indefinitely blocking, if no node-events subscriber is set up.
+			case ev, ok := <-m.nodeEvents: // nil, indefinitely blocking, if no node-events subscriber is set up.
+				if !ok {
+					m.log.Info("Node events channel closed, stopping")
+					return
+				}
 				m.onNodeEvent(ev)
 			}
 		}
@@ -264,10 +269,15 @@ func (m *ManagedNode) onResetEvent(errStr string) {
 func (m *ManagedNode) onUpdateLocalSafeFailed(ev superevents.UpdateLocalSafeFailedEvent) {
 	switch {
 	case errors.Is(ev.Err, types.ErrConflict):
-		m.log.Warn("DB indicated a conflict, checking consistency")
+		m.log.Warn("DB indicated a conflict with this node")
+		if m.replaceIfNeeded() {
+			m.log.Warn("Node was instructed to replace its local safe block")
+			return
+		}
+		m.log.Warn("Node is inconsistent with the logs db, resetting")
 		m.resetIfInconsistent()
 	case errors.Is(ev.Err, types.ErrFuture):
-		m.log.Warn("DB indicated an update is in the future, checking if node is ahead")
+		m.log.Warn("DB indicated this node provided an update from the future, checking if node is ahead")
 		m.resetIfAhead()
 	}
 }
@@ -407,6 +417,10 @@ func (m *ManagedNode) onReplaceBlock(replacement types.BlockReplacement) {
 		ChainID:     m.chainID,
 		Replacement: replacement,
 	})
+	// if the node replaced a block, both the unsafe and safe are reset to this point
+	m.lastNodeLocalSafe = replacement.Replacement.ID()
+	m.lastNodeLocalUnsafe = replacement.Replacement.ID()
+	m.resetIfInconsistent()
 }
 
 func (m *ManagedNode) Close() error {
@@ -418,6 +432,34 @@ func (m *ManagedNode) Close() error {
 		sub.Unsubscribe()
 	}
 	return nil
+}
+
+// replaceIfNeeded checks the node's last local safe block against the backend
+// to see if it should be replaced. If so, it invalidates the block and returns true.
+// if replacement doesn't happen, it returns false.
+// This codepath is triggered when a node is syncing,
+// and the Supervisor has already dealth with the invalidation and replacement.
+// nodes which are catching up need to know if a replacement is canonical at this point,
+func (m *ManagedNode) replaceIfNeeded() bool {
+	ctx, cancel := context.WithTimeout(m.ctx, internalTimeout)
+	defer cancel()
+	err := m.backend.IsReplacement(ctx, m.chainID, m.lastNodeLocalSafe)
+	if err != nil {
+		m.log.Info("Replacement block detected, initiating replacement",
+			"lastNodeLocalSafe", m.lastNodeLocalSafe,
+			"err", err)
+		seal := types.BlockSeal{
+			Hash:      m.lastNodeLocalSafe.Hash,
+			Number:    m.lastNodeLocalSafe.Number,
+			Timestamp: 0, // timestamp is not used when invalidating a block
+		}
+		if err := m.Node.InvalidateBlock(ctx, seal); err != nil {
+			m.log.Warn("Failed to invalidate block", "seal", seal, "err", err)
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // resetIfInconsistent checks if the node is consistent with the logs db

@@ -98,6 +98,14 @@ func (db *ChainsDB) IsLocalSafe(chainID eth.ChainID, block eth.BlockID) error {
 	return ldb.ContainsDerived(block)
 }
 
+func (db *ChainsDB) IsReplacement(chainID eth.ChainID, block eth.BlockID) error {
+	ldb, ok := db.localDBs.Get(chainID)
+	if !ok {
+		return types.ErrUnknownChain
+	}
+	return ldb.Replacement(block)
+}
+
 func (db *ChainsDB) IsFinalized(chainID eth.ChainID, block eth.BlockID) error {
 	finL1 := db.FinalizedL1()
 	if finL1 == (eth.BlockRef{}) {

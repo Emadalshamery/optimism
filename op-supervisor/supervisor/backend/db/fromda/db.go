@@ -137,6 +137,19 @@ func (db *DB) Invalidated() (pair types.DerivedBlockSealPair, err error) {
 	}, nil
 }
 
+func (db *DB) Replacement(derived eth.BlockID) error {
+	db.rwLock.RLock()
+	defer db.rwLock.RUnlock()
+	_, link, err := db.derivedNumToFirstSource(derived.Number)
+	if err != nil {
+		return fmt.Errorf("failed to check if block %d is a replacement: %w", derived.Number, err)
+	}
+	if !link.Replacement() {
+		return fmt.Errorf("last entry %s is not a replacement: %w", link, types.ErrConflict)
+	}
+	return nil
+}
+
 // LastDerivedAt returns the last L2 block derived from the given L1 block.
 // This may return types.ErrAwaitReplacementBlock if the entry was invalidated and needs replacement.
 func (db *DB) SourceToLastDerived(source eth.BlockID) (derived types.BlockSeal, err error) {
