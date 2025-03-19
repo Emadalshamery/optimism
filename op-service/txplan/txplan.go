@@ -66,24 +66,6 @@ func CombineOptions(opts ...Option) Option {
 	}
 }
 
-func DefaultTxSubmitOptions(w Wallet) Option {
-	return CombineOptions(
-		WithPrivateKey(w.PrivateKey()),
-		WithChainID(w.Client()),
-		WithAgainstLatestBlock(w.Client()),
-		WithPendingNonce(w.Client()),
-		WithEstimator(w.Client(), false),
-		WithTransactionSubmitter(w.Client()),
-	)
-}
-
-func DefaultTxInclusionOptions(w Wallet) Option {
-	return CombineOptions(
-		WithRetryInclusion(w.Client(), 10, retry.Exponential()),
-		WithBlockInclusionInfo(w.Client()),
-	)
-}
-
 func NewPlannedTx(opts ...Option) *PlannedTx {
 	tx := &PlannedTx{}
 	tx.Defaults()

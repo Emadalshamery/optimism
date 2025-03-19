@@ -1,4 +1,4 @@
-package txplan
+package system
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum-optimism/optimism/devnet-sdk/contracts/constants"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/plan"
+	"github.com/ethereum-optimism/optimism/op-service/txplan"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -83,6 +84,52 @@ func (v *ExecTrigger) AccessList() (types.AccessList, error) {
 	return accessList, nil
 }
 
+type RelayTrigger struct {
+	Executor common.Address // address of the EventLogger contract
+	Msg      suptypes.Message
+	Payload  []byte
+}
+
+func (v *RelayTrigger) To() (*common.Address, error) {
+	return &v.Executor, nil
+}
+
+func (v *RelayTrigger) Data() ([]byte, error) {
+	// TODO: Need to do better construct call input than this
+	relayMessage := w3.MustNewFunc("relayMessage((address Origin, uint256 BlockNumber, uint256 LogIndex, uint256 Timestamp, uint256 ChainId), bytes sentMessage)", "bytes returnData")
+	type Identifier struct {
+		Origin      common.Address
+		BlockNumber *big.Int
+		LogIndex    *big.Int
+		Timestamp   *big.Int
+		ChainId     *big.Int
+	}
+	identifier := &Identifier{
+		v.Msg.Identifier.Origin,
+		big.NewInt(int64(v.Msg.Identifier.BlockNumber)),
+		big.NewInt(int64(v.Msg.Identifier.LogIndex)),
+		big.NewInt(int64(v.Msg.Identifier.Timestamp)),
+		v.Msg.Identifier.ChainID.ToBig(),
+	}
+	relayMessageCalldata, err := relayMessage.EncodeArgs(
+		identifier,
+		v.Payload,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return relayMessageCalldata, nil
+}
+
+func (v *RelayTrigger) AccessList() (types.AccessList, error) {
+	access := v.Msg.Access()
+	accessList := types.AccessList{{
+		Address:     constants.CrossL2Inbox,
+		StorageKeys: suptypes.EncodeAccessList([]suptypes.Access{access}),
+	}}
+	return accessList, nil
+}
+
 type Call interface {
 	To() (*common.Address, error)
 	Data() ([]byte, error)
@@ -133,14 +180,14 @@ func (i *InteropOutput) FromReceipt(ctx context.Context, rec *types.Receipt, inc
 }
 
 type IntentTx[V Call, R Result] struct {
-	PlannedTx *PlannedTx
+	PlannedTx *txplan.PlannedTx
 	Content   plan.Lazy[V]
 	Result    plan.Lazy[R]
 }
 
-func NewIntent[V Call, R Result](opts ...Option) *IntentTx[V, R] {
+func NewIntent[V Call, R Result](opts ...txplan.Option) *IntentTx[V, R] {
 	v := &IntentTx[V, R]{
-		PlannedTx: NewPlannedTx(opts...),
+		PlannedTx: txplan.NewPlannedTx(opts...),
 	}
 	v.PlannedTx.To.DependOn(&v.Content)
 	v.PlannedTx.To.Fn(func(ctx context.Context) (*common.Address, error) {
@@ -163,7 +210,7 @@ func NewIntent[V Call, R Result](opts ...Option) *IntentTx[V, R] {
 	return v
 }
 
-func executeIndexed(executor common.Address, events *plan.Lazy[*InteropOutput], index int) func(ctx context.Context) (*ExecTrigger, error) {
+func ExecuteIndexed(executor common.Address, events *plan.Lazy[*InteropOutput], index int) func(ctx context.Context) (*ExecTrigger, error) {
 	return func(ctx context.Context) (*ExecTrigger, error) {
 		if x := len(events.Value().Entries); x <= index {
 			return nil, fmt.Errorf("invalid index: %d, only have %d events", index, x)
@@ -171,6 +218,28 @@ func executeIndexed(executor common.Address, events *plan.Lazy[*InteropOutput], 
 		return &ExecTrigger{
 			Executor: executor,
 			Msg:      events.Value().Entries[index],
+		}, nil
+	}
+}
+
+func RelayIndexed(executor common.Address, events *plan.Lazy[*InteropOutput], receipt *plan.Lazy[*types.Receipt], index int) func(ctx context.Context) (*RelayTrigger, error) {
+	return func(ctx context.Context) (*RelayTrigger, error) {
+		if x := len(events.Value().Entries); x <= index {
+			return nil, fmt.Errorf("invalid entry index: %d, only have %d events", index, x)
+		}
+		if x := len(receipt.Value().Logs); x <= index {
+			return nil, fmt.Errorf("invalid log index: %d, only have %d events", index, x)
+		}
+		msg := events.Value().Entries[index]
+		payload := suptypes.LogToMessagePayload(receipt.Value().Logs[index])
+		payloadHash := crypto.Keccak256Hash(payload)
+		if msg.PayloadHash != payloadHash {
+			return nil, fmt.Errorf("payload hash does not match, want %s but got %s", msg.PayloadHash.Hex(), payloadHash.Hex())
+		}
+		return &RelayTrigger{
+			Executor: executor,
+			Msg:      msg,
+			Payload:  payload,
 		}, nil
 	}
 }
