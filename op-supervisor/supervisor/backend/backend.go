@@ -164,11 +164,9 @@ func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 			Target:  x.NewLocalUnsafe.Number,
 		})
 	case superevents.LocalUnsafeUpdateEvent:
-		for _, id := range su.depSet.Chains() {
-			su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
-				ChainID: id,
-			})
-		}
+		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
+			ChainID: x.ChainID,
+		})
 	case superevents.CrossUnsafeUpdateEvent:
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
 			ChainID: x.ChainID,
