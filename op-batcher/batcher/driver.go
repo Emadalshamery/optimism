@@ -535,8 +535,6 @@ func (l *BatchSubmitter) receiptsLoop(wg *sync.WaitGroup, receiptsCh chan txmgr.
 	l.Log.Info("receiptsLoop returning")
 }
 
-// setMaxDASizeOnEndpoint attempts to call the SetMaxDASize method on the given RPC endpoint
-// and returns whether it was successful
 func (l *BatchSubmitter) setMaxDASizeOnEndpoint(ctx context.Context, endpoint string, client *rpc.Client, maxTxSize, maxBlockSize uint64) (bool, error) {
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer timeoutCancel()
@@ -575,8 +573,9 @@ func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated 
 	// Initialize clients for DA update endpoints
 	daClients := make(map[string]*rpc.Client)
 
-	// Initialize clients if endpoints are configured
+	// Initialize clients using DAUpdateEndpoints if configured
 	if len(l.Config.DAUpdateEndpoints) > 0 {
+		l.Log.Info("Using DA update endpoints configuration", "count", len(l.Config.DAUpdateEndpoints))
 		for _, endpoint := range l.Config.DAUpdateEndpoints {
 			client, err := rpc.Dial(endpoint)
 			if err != nil {
@@ -586,6 +585,8 @@ func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated 
 			daClients[endpoint] = client
 			l.Log.Info("Connected to endpoint for configuration distribution", "endpoint", endpoint)
 		}
+	} else {
+		l.Log.Info("No DA update endpoints configured, will use default L2 endpoint")
 	}
 
 	updateParams := func(pendingBytes int64) {
