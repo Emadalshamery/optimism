@@ -140,14 +140,6 @@ func (m *ManagedNode) OnEvent(ev event.Event) bool {
 		if x.ChainID != m.chainID {
 			return false
 		}
-	case superevents.LocalUnsafeUpdateEvent:
-		// if x.ChainID == m.chainID {
-		// 	return false
-		// }
-
-		// m.onUnsafeBlock(x.NewLocalUnsafe)
-		seal := types.BlockSealFromRef(x.NewLocalUnsafe)
-		m.onCrossUnsafeUpdate(seal)
 	default:
 		return false
 	}
