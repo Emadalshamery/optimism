@@ -9,6 +9,7 @@ import (
 	"github.com/lmittmann/w3"
 	"github.com/lmittmann/w3/module/eth"
 	"github.com/lmittmann/w3/w3types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +45,7 @@ func TestUpgradeTxGas(t *testing.T) {
 			t.Errorf("Error: %v", err)
 		}
 		t.Log("Chain:", chain, "GasLimit", fmt.Sprintf("%.1fM", float64(gasLimit)/1000000))
-		require.GreaterOrEqual(t, gasLimit, uint64(30_000_000))
+		assert.GreaterOrEqual(t, gasLimit, uint64(30_000_000))
 	}
 }
 
@@ -72,7 +73,7 @@ func TestSuperchainGasLimit(t *testing.T) {
 	t.Logf("%d", gl)
 	for chainID, chainResults := range r {
 		t.Log("Chain:", chainID, "GasLimit", fmt.Sprintf("%.1fM", float64(*chainResults["gasLimit()"].(*uint64))/1000000))
-		require.GreaterOrEqual(t, *chainResults["gasLimit()"].(*uint64), uint64(30_000_000))
+		assert.GreaterOrEqual(t, *chainResults["gasLimit()"].(*uint64), uint64(30_000_000))
 	}
 }
 
@@ -93,8 +94,9 @@ func GetL1SuperchainInformation(calls []call) results {
 	superchains := []string{"sepolia", "mainnet"}
 
 	for _, sc := range superchains {
+		var client *w3.Client
+		rawCalls := make([]w3types.RPCCaller, 0, len(calls)*len(superchain.ChainNames()))
 		for _, chain := range superchain.ChainNames() {
-
 			id, err := superchain.ChainIDByName(chain)
 			if err != nil {
 				panic(err)
@@ -106,29 +108,32 @@ func GetL1SuperchainInformation(calls []call) results {
 			if ch.Network != sc {
 				continue
 			}
+			results[chain] = make(map[string]any)
 			cfg, err := ch.Config()
 			if err != nil {
 				panic(err)
 			}
-			results[chain] = make(map[string]interface{})
 			superC, err := superchain.GetSuperchain(ch.Network)
 			if err != nil {
 				panic(err)
 			}
-			client := w3.MustDial(superC.L1.PublicRPC)
-			defer client.Close()
-
-			// loop over calls
-			rawCalls := make([]w3types.RPCCaller, len(calls))
-			for i, call := range calls {
-				results[chain][call.f.Signature] = call.r()
-				rawCalls[i] = eth.CallFunc(*(call.a(*cfg)), call.f).Returns(results[chain][call.f.Signature])
+			if client == nil {
+				fmt.Printf("dialing client at %s", superC.L1.PublicRPC)
+				client = w3.MustDial(superC.L1.PublicRPC)
 			}
-			err = client.Call(rawCalls...)
-			if err != nil {
-				panic(err)
+			// loop over calls
+			for _, call := range calls {
+				results[chain][call.f.Signature] = call.r()
+				rawCalls = append(rawCalls, eth.CallFunc(*(call.a(*cfg)), call.f).Returns(results[chain][call.f.Signature]))
 			}
 		}
+		fmt.Println("making batch call")
+		err := client.Call(rawCalls...)
+		fmt.Println("finished batch call")
+		if err != nil {
+			panic(err)
+		}
+		client.Close()
 	}
 	return results
 }
