@@ -205,8 +205,6 @@ func messagePassingScenarioWalletV2(lowLevelSystemGetter validators.LowLevelSyst
 		logger.Info("Initiate message", "txHash", recA.TxHash.Hex())
 
 		txB.Content.DependOn(&txA.Result)
-
-		txB.Content.DependOn(&txA.Result)
 		txB.Content.Fn(system.RelayIndexed(eventLogger, &txA.Result, &txA.PlannedTx.Included, 0))
 
 		// Execute message
