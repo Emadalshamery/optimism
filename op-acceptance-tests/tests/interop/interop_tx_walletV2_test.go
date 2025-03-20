@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/testlog"
 	"github.com/ethereum-optimism/optimism/op-service/testutils"
 	"github.com/ethereum-optimism/optimism/op-service/txplan"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,9 +32,6 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		chainA := llsys.L2s()[sourceChainIdx]
 		chainB := llsys.L2s()[destChainIdx]
 
-		clientA, err := chainA.GethClient()
-		require.NoError(t, err)
-
 		// walletA is funded at chainA and want to initialize message at chain A
 		walletA, err := system.NewWalletV2FromWalletAndChain(ctx, sourceWalletGetter(ctx), chainA)
 		require.NoError(t, err)
@@ -43,17 +39,24 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		walletB, err := system.NewWalletV2FromWalletAndChain(ctx, destWalletGetter(ctx), chainB)
 		require.NoError(t, err)
 
+		optsFunc := func(w system.WalletV2) txplan.Option {
+			opts := txplan.CombineOptions(
+				system.DefaultTxSubmitOptions(w),
+				system.DefaultTxInclusionOptions(w),
+			)
+			return opts
+		}
+		optsA := optsFunc(walletA)
+		optsB := optsFunc(walletB)
+
 		logger.Info("Deploying EventLogger", "chainA", chainA.ID)
+		deployCalldata := common.FromHex(bindings.EventloggerBin)
+		deployTx := txplan.NewPlannedTx(optsA, txplan.WithData(deployCalldata))
 
-		opts, err := bind.NewKeyedTransactorWithChainID(walletA.PrivateKey(), chainA.ID())
+		res, err := deployTx.Included.Eval(ctx)
 		require.NoError(t, err)
 
-		eventLoggerAddress, deployTx, _, err := bindings.DeployEventlogger(opts, clientA)
-		require.NoError(t, err)
-
-		_, err = wait.ForReceiptOK(ctx, clientA, deployTx.Hash())
-		require.NoError(t, err)
-
+		eventLoggerAddress := res.ContractAddress
 		logger.Info("Deployed EventLogger", "address", eventLoggerAddress)
 
 		rng := rand.New(rand.NewSource(1234))
@@ -70,12 +73,8 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		data := []byte{0x12, 0x34}
 		log.Info("input", "data", hex.EncodeToString(data))
 
-		txplanOpts := txplan.CombineOptions(
-			txplan.WithTo(&eventLoggerAddress),
-			system.DefaultTxSubmitOptions(walletA),
-			system.DefaultTxInclusionOptions(walletA),
-		)
-		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](txplanOpts)
+		optsA = txplan.CombineOptions(optsA, txplan.WithTo(&eventLoggerAddress))
+		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](optsA)
 		txA.Content.Set(&system.InitTrigger{
 			Emitter:    eventLoggerAddress,
 			Topics:     topics,
@@ -92,15 +91,6 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 			require.Equal(t, topics[idx][:], topic.Bytes())
 		}
 		require.Equal(t, data, log.Data)
-
-		optsFunc := func(w system.WalletV2) txplan.Option {
-			opts := txplan.CombineOptions(
-				system.DefaultTxSubmitOptions(w),
-				system.DefaultTxInclusionOptions(w),
-			)
-			return opts
-		}
-		optsB := optsFunc(walletB)
 
 		txB := system.NewIntent[*system.ExecTrigger, *system.InteropOutput](optsB)
 		txB.Content.DependOn(&txA.Result)
