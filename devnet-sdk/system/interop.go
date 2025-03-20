@@ -29,6 +29,7 @@ func (v *InitTrigger) To() (*common.Address, error) {
 }
 
 func (v *InitTrigger) Data() ([]byte, error) {
+	// TODO: Need to do better construct call input than this
 	emitLog := w3.MustNewFunc("emitLog(bytes32[] topics, bytes data)", "")
 	return emitLog.EncodeArgs(v.Topics, v.OpaqueData)
 }
