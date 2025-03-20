@@ -91,6 +91,12 @@ func WithTo(to *common.Address) Option {
 	}
 }
 
+func WithData(data hexutil.Bytes) Option {
+	return func(tx *PlannedTx) {
+		tx.Data.Set(data)
+	}
+}
+
 func WithPrivateKey(priv *ecdsa.PrivateKey) Option {
 	return func(tx *PlannedTx) {
 		tx.Priv.Set(priv)

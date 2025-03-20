@@ -29,13 +29,29 @@ func (v *InitTrigger) To() (*common.Address, error) {
 }
 
 func (v *InitTrigger) Data() ([]byte, error) {
-	// TODO format call
-	// This OpaqueData was for using the EventLogger contract to test
-	// This is a temp bypass for setting calldata for basic testing
-	return v.OpaqueData, nil
+	data := []byte{}
+
+	return data, nil
 }
 
 func (v *InitTrigger) AccessList() (types.AccessList, error) {
+	return nil, nil
+}
+
+type SendTrigger struct {
+	Emitter    common.Address
+	OpaqueData []byte
+}
+
+func (v *SendTrigger) To() (*common.Address, error) {
+	return &v.Emitter, nil
+}
+
+func (v *SendTrigger) Data() ([]byte, error) {
+	return v.OpaqueData, nil
+}
+
+func (v *SendTrigger) AccessList() (types.AccessList, error) {
 	return nil, nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/txplan"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/lmittmann/w3"
@@ -37,13 +38,15 @@ func eventloggerdeploy(lowLevelSystemGetter validators.LowLevelSystemGetter, cha
 		require.NoError(t, err)
 
 		wallet := sourceWalletGetter(ctx)
+		walletV2, err := system.NewWalletV2FromWalletAndChain(ctx, sourceWalletGetter(ctx), chain)
+		require.NoError(t, err)
 
 		logger.Info("Deploying EventLogger", "chainID", chain.ID)
 
 		opts, err := bind.NewKeyedTransactorWithChainID(wallet.PrivateKey(), chain.ID())
 		require.NoError(t, err)
 
-		eventLoggerAddress, deployTx, eventLogger, err := bindings.DeployEventlogger(opts, client)
+		eventLoggerAddress, deployTx, _, err := bindings.DeployEventlogger(opts, client)
 		require.NoError(t, err)
 
 		_, err = wait.ForReceiptOK(ctx, client, deployTx.Hash())
@@ -55,20 +58,27 @@ func eventloggerdeploy(lowLevelSystemGetter validators.LowLevelSystemGetter, cha
 
 		cnt := 3
 		topics := [][32]byte{}
-		for idx := 0; idx < cnt; idx++ {
+
+		for idx := range cnt {
 			var topic [32]byte
 			copy(topic[:], testutils.RandomData(rng, 32))
 			topics = append(topics, topic)
-
 			log.Info("input", "idx", idx, "topic", hex.EncodeToString(topics[idx][:]))
 		}
 		data := []byte{0x12, 0x34}
 		log.Info("input", "data", hex.EncodeToString(data))
 
-		tx, err := eventLogger.EmitLog(opts, topics, data)
+		emitLog := w3.MustNewFunc("emitLog(bytes32[] topics, bytes data)", "")
+		emitLogCalldata, err := emitLog.EncodeArgs(topics, data)
 		require.NoError(t, err)
 
-		receipt, err := wait.ForReceiptOK(ctx, client, tx.Hash())
+		txplanOpts := txplan.CombineOptions(
+			txplan.WithTo(&eventLoggerAddress),
+			system.DefaultTxSubmitOptions(walletV2),
+			system.DefaultTxInclusionOptions(walletV2),
+		)
+		txSimple := txplan.NewPlannedTx(txplanOpts, txplan.WithData(hexutil.Bytes(emitLogCalldata)))
+		receipt, err := txSimple.Included.Eval(ctx)
 		require.NoError(t, err)
 
 		// we only emit single log
@@ -179,13 +189,12 @@ func interopTxUsingL2toL2CDMWalletV2(lowLevelSystemGetter validators.LowLevelSys
 		opaqueData, err := BuildSendMessageCalldata(destChainID, randomAddr, randomData)
 		require.NoError(t, err)
 
-		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](optsA)
+		txA := system.NewIntent[*system.SendTrigger, *system.InteropOutput](optsA)
 
 		// Topics field is only needed when we call EventLogger contract
 		// We are using L2toL2CDM so make it empty
-		txA.Content.Set(&system.InitTrigger{
+		txA.Content.Set(&system.SendTrigger{
 			Emitter:    eventLogger,
-			Topics:     []common.Hash{},
 			OpaqueData: opaqueData,
 		})
 
@@ -262,10 +271,9 @@ func messagePassingScenarioWalletV2(lowLevelSystemGetter validators.LowLevelSyst
 		opaqueData, err := BuildSendMessageCalldata(destChainID, sha256PrecompileAddr, dummyMessage)
 		require.NoError(t, err)
 
-		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](optsA)
-		txA.Content.Set(&system.InitTrigger{
+		txA := system.NewIntent[*system.SendTrigger, *system.InteropOutput](optsA)
+		txA.Content.Set(&system.SendTrigger{
 			Emitter:    eventLogger,
-			Topics:     []common.Hash{},
 			OpaqueData: opaqueData,
 		})
 
