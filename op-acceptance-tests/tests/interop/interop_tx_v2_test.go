@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func txInitAndExecMsg(
+// initAndExecMsg tests below scenario:
+// Transaction initiates, and then executes message
+func initAndExecMsg(
 	lowLevelSystemGetter validators.LowLevelSystemGetter,
 	l2ChainNums int,
 	chainIdxs []uint64,
@@ -45,7 +47,9 @@ func txInitAndExecMsg(
 	}
 }
 
-func txInitAndExecMultipleMsg(
+// initAndExecMultipleMsg tests below scenario:
+// Transaction initiates and executes multiple messages of self
+func initAndExecMultipleMsg(
 	lowLevelSystemGetter validators.LowLevelSystemGetter,
 	l2ChainNums int,
 	chainIdxs []uint64,
@@ -85,6 +89,44 @@ func txInitAndExecMultipleMsg(
 	}
 }
 
+// execSameMsgTwice tests below scenario:
+// Transaction that executes the same message twice.
+func execSameMsgTwice(
+	lowLevelSystemGetter validators.LowLevelSystemGetter,
+	l2ChainNums int,
+	chainIdxs []uint64,
+	walletGetters []validators.WalletGetter,
+) systest.InteropSystemTestFunc {
+	return func(t systest.T, sys system.InteropSystem) {
+		ctx, rng, logger, _, wallets, opts := DefaultSetup(t, lowLevelSystemGetter, l2ChainNums, chainIdxs, walletGetters)
+
+		eventLoggerAddress, err := DeployEventLogger(ctx, wallets[0], logger)
+		require.NoError(t, err)
+
+		// Intent to initiate message(or emit event) on chain A
+		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](opts[0])
+		randomInitTrigger := RandomInitTrigger(rng, eventLoggerAddress, 3, 10)
+		txA.Content.Set(randomInitTrigger)
+
+		// Trigger single event
+		receiptA, err := txA.PlannedTx.Included.Eval(ctx)
+		require.NoError(t, err)
+		logger.Info("initiate message included", "block", receiptA.BlockHash)
+
+		// Intent to validate same message two times on chain B
+		txB := system.NewIntent[*system.MultiTrigger, *system.InteropOutput](opts[1])
+		txB.Content.DependOn(&txA.Result)
+
+		// Single event in tx so index is 0
+		indexes := []int{0, 0}
+		txB.Content.Fn(system.ExecuteIndexeds(constants.MultiCall3, constants.CrossL2Inbox, &txA.Result, indexes))
+
+		receiptB, err := txB.PlannedTx.Included.Eval(ctx)
+		require.NoError(t, err)
+		logger.Info("validate messages included", "block", receiptB.BlockHash)
+	}
+}
+
 func TestInteropTxTest(t *testing.T) {
 	l2ChainNums := 2
 	chainIdxs, walletGetters, totalValidators, lowLevelSystemGetter := SetupDefaultInteropSystemTest(l2ChainNums)
@@ -93,8 +135,9 @@ func TestInteropTxTest(t *testing.T) {
 		name     string
 		testFunc systest.InteropSystemTestFunc
 	}{
-		{"txInitAndExecMsg", txInitAndExecMsg(lowLevelSystemGetter, l2ChainNums, chainIdxs, walletGetters)},
-		{"txInitAndExecMultipleMsg", txInitAndExecMultipleMsg(lowLevelSystemGetter, l2ChainNums, chainIdxs, walletGetters)},
+		{"initAndExecMsg", initAndExecMsg(lowLevelSystemGetter, l2ChainNums, chainIdxs, walletGetters)},
+		{"initAndExecMultipleMsg", initAndExecMultipleMsg(lowLevelSystemGetter, l2ChainNums, chainIdxs, walletGetters)},
+		{"execSameMsgTwice", execSameMsgTwice(lowLevelSystemGetter, l2ChainNums, chainIdxs, walletGetters)},
 	}
 
 	for _, test := range tests {
