@@ -948,14 +948,6 @@ func TestInvalidateAndReplaceNonFirst(t *testing.T) {
 		require.Equal(t, invalidated.Source.ID(), pair.Source.ID())
 		require.Equal(t, invalidated.Derived.ID(), pair.Derived.ID())
 
-		fmt.Println("--invalid--")
-		srcIndex, srcLink, err := db.sourceNumToFirstDerived(invalidated.Source.Number)
-		derIndex, derLink, err := db.derivedNumToFirstSource(invalidated.Derived.Number)
-		fmt.Println("srcLink", srcLink)
-		fmt.Println("srcIndex", srcIndex)
-		fmt.Println("derLink", derLink)
-		fmt.Println("derIndex", derIndex)
-
 		replacement := l2Ref3
 		replacement.Hash = common.Hash{0xff, 0xff, 0xff}
 		require.NotEqual(t, l2Ref3.Hash, replacement.Hash) // different L2 block as replacement
@@ -964,14 +956,7 @@ func TestInvalidateAndReplaceNonFirst(t *testing.T) {
 		require.Equal(t, replacement.ID(), result.Derived.ID())
 		require.Equal(t, l1Block2.ID(), result.Source.ID())
 
-		fmt.Println("--replace--")
-		srcIndex, srcLink, err = db.sourceNumToFirstDerived(result.Source.Number)
-		derIndex, derLink, err = db.derivedNumToFirstSource(result.Derived.Number)
-		fmt.Println("srcLink", srcLink)
-		fmt.Println("srcIndex", srcIndex)
-		fmt.Println("derLink", derLink)
-		fmt.Println("derIndex", derIndex)
-		require.NoError(t, db.Replacement(replacement.Number), "replacement is marked as a replacement block type")
+		require.NoError(t, db.Replacement(replacement.Number), "there is a replacement at this block height")
 
 		pair, err = db.Last()
 		require.NoError(t, err)

@@ -142,14 +142,24 @@ func (db *DB) Invalidated() (pair types.DerivedBlockSealPair, err error) {
 func (db *DB) Replacement(blockNum uint64) error {
 	db.rwLock.RLock()
 	defer db.rwLock.RUnlock()
-	_, link, err := db.derivedNumToFirstSource(blockNum)
+	_, firstLink, err := db.derivedNumToFirstSource(blockNum)
 	if err != nil {
 		return fmt.Errorf("failed to check if block %d is a replacement: %w", blockNum, err)
 	}
-	if !link.Replacement() {
-		return fmt.Errorf("entry %s is not a replacement: %w", link, types.ErrConflict)
+	if firstLink.Replacement() {
+		db.log.Debug("block %d is a replacement", blockNum)
+		return nil
 	}
-	return nil
+	// if the block at the given height changes hash over the course of the database,
+	// we know a replacement occurs at this height
+	_, lastLink, err := db.derivedNumToLastSource(blockNum)
+	if err != nil {
+		return fmt.Errorf("failed to check if block %d is a replacement: %w", blockNum, err)
+	}
+	if firstLink.derived.Hash != lastLink.derived.Hash {
+		return nil
+	}
+	return fmt.Errorf("block %d is not a replacement: %w", blockNum, types.ErrConflict)
 }
 
 // LastDerivedAt returns the last L2 block derived from the given L1 block.

@@ -175,10 +175,6 @@ func (m *mockBackend) CrossUnsafe(ctx context.Context, chainID eth.ChainID) (eth
 	return eth.BlockID{}, nil
 }
 
-func (m *mockBackend) IsReplacementAt(ctx context.Context, chainID eth.ChainID, blockNum uint64) error {
-	return nil
-}
-
 var _ backend = (*mockBackend)(nil)
 
 func sampleDepSet(t *testing.T) depset.DependencySet {
