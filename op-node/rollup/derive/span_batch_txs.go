@@ -14,8 +14,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type spanBatchTxsOption func(*SpanBatchTxs) *SpanBatchTxs
-
 type SpanBatchTxs struct {
 	// this field must be manually set
 	TotalBlockTxCount uint64
