@@ -57,6 +57,22 @@ func RandomTopicAndData(rng *rand.Rand, cnt, len int) ([][32]byte, []byte) {
 	return topics, data
 }
 
+func RandomInitTrigger(rng *rand.Rand, eventLoggerAddress common.Address, cnt, len int) *system.InitTrigger {
+	topics, data := RandomTopicAndData(rng, cnt, len)
+	return &system.InitTrigger{
+		Emitter:    eventLoggerAddress,
+		Topics:     topics,
+		OpaqueData: data,
+	}
+}
+
+func DefaultOpts(w system.WalletV2) txplan.Option {
+	return txplan.CombineOptions(
+		system.DefaultTxSubmitOptions(w),
+		system.DefaultTxInclusionOptions(w),
+	)
+}
+
 func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLevelSystemGetter, sourceChainIdx, destChainIdx uint64, sourceWalletGetter, destWalletGetter validators.WalletGetter) systest.InteropSystemTestFunc {
 	return func(t systest.T, sys system.InteropSystem) {
 		ctx := t.Context()
@@ -73,29 +89,19 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		walletB, err := system.NewWalletV2FromWalletAndChain(ctx, destWalletGetter(ctx), chainB)
 		require.NoError(t, err)
 
-		optsFunc := func(w system.WalletV2) txplan.Option {
-			opts := txplan.CombineOptions(
-				system.DefaultTxSubmitOptions(w),
-				system.DefaultTxInclusionOptions(w),
-			)
-			return opts
-		}
-		optsA := optsFunc(walletA)
-		optsB := optsFunc(walletB)
+		optsA := DefaultOpts(walletA)
+		optsB := DefaultOpts(walletB)
 
 		eventLoggerAddress, err := DeployEventLogger(ctx, walletA, logger)
 		require.NoError(t, err)
 
 		rng := rand.New(rand.NewSource(1234))
 
-		topics, data := RandomTopicAndData(rng, 3, 10)
 		optsA = txplan.CombineOptions(optsA, txplan.WithTo(&eventLoggerAddress))
 		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](optsA)
-		txA.Content.Set(&system.InitTrigger{
-			Emitter:    eventLoggerAddress,
-			Topics:     topics,
-			OpaqueData: data,
-		})
+		randomInitTrigger := RandomInitTrigger(rng, eventLoggerAddress, 3, 10)
+		txA.Content.Set(randomInitTrigger)
+
 		recA, err := txA.PlannedTx.Included.Eval(ctx)
 		logger.Info("included emitting message", "block", recA.BlockHash)
 		require.NoError(t, err)
@@ -104,9 +110,9 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		require.Equal(t, 1, len(recA.Logs))
 		log := recA.Logs[0]
 		for idx, topic := range log.Topics {
-			require.Equal(t, topics[idx][:], topic.Bytes())
+			require.Equal(t, randomInitTrigger.Topics[idx][:], topic.Bytes())
 		}
-		require.Equal(t, data, log.Data)
+		require.Equal(t, randomInitTrigger.OpaqueData, log.Data)
 
 		txB := system.NewIntent[*system.ExecTrigger, *system.InteropOutput](optsB)
 		txB.Content.DependOn(&txA.Result)
@@ -131,13 +137,13 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		logger.Info("included validating message twice", "block", recC.BlockHash)
 
 		// can we multicall inittrigger?
-		topicsE, dataE := RandomTopicAndData(rng, 1, 15)
-		topicsF, dataF := RandomTopicAndData(rng, 2, 13)
+		randomInitTriggerE := RandomInitTrigger(rng, eventLoggerAddress, 1, 15)
+		randomInitTriggerF := RandomInitTrigger(rng, eventLoggerAddress, 2, 13)
 
-		optsAA := optsFunc(walletA)
+		optsAA := DefaultOpts(walletA)
 		calls2 := make([]system.Call, 0)
-		calls2 = append(calls2, &system.InitTrigger{Emitter: eventLoggerAddress, Topics: topicsE, OpaqueData: dataE})
-		calls2 = append(calls2, &system.InitTrigger{Emitter: eventLoggerAddress, Topics: topicsF, OpaqueData: dataF})
+		calls2 = append(calls2, randomInitTriggerE)
+		calls2 = append(calls2, randomInitTriggerF)
 		txD := system.NewIntent[*system.MultiTrigger, *system.InteropOutput](optsAA)
 		txD.Content.Set(&system.MultiTrigger{Executor: multicall3, Calls: calls2})
 
@@ -224,16 +230,8 @@ func interopTxUsingL2toL2CDMWalletV2(lowLevelSystemGetter validators.LowLevelSys
 		walletB, err := system.NewWalletV2FromWalletAndChain(ctx, destWalletGetter(ctx), chainB)
 		require.NoError(t, err)
 
-		optsFunc := func(w system.WalletV2) txplan.Option {
-			opts := txplan.CombineOptions(
-				system.DefaultTxSubmitOptions(w),
-				system.DefaultTxInclusionOptions(w),
-			)
-			return opts
-		}
-
-		optsA := optsFunc(walletA)
-		optsB := optsFunc(walletB)
+		optsA := DefaultOpts(walletA)
+		optsB := DefaultOpts(walletB)
 
 		txB := system.NewIntent[*system.ExecTrigger, *system.InteropOutput](optsB)
 
@@ -307,16 +305,8 @@ func messagePassingScenarioWalletV2(lowLevelSystemGetter validators.LowLevelSyst
 		walletB, err := system.NewWalletV2FromWalletAndChain(ctx, destWalletGetter(ctx), chainB)
 		require.NoError(t, err)
 
-		optsFunc := func(w system.WalletV2) txplan.Option {
-			opts := txplan.CombineOptions(
-				system.DefaultTxSubmitOptions(w),
-				system.DefaultTxInclusionOptions(w),
-			)
-			return opts
-		}
-
-		optsA := optsFunc(walletA)
-		optsB := optsFunc(walletB)
+		optsA := DefaultOpts(walletA)
+		optsB := DefaultOpts(walletB)
 
 		eventLogger := common.HexToAddress(predeploys.L2toL2CrossDomainMessenger)
 		sha256PrecompileAddr := common.BytesToAddress([]byte{0x2})
