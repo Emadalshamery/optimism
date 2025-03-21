@@ -80,7 +80,7 @@ func DeployEventLogger(ctx context.Context, wallet system.WalletV2, logger log.L
 	}
 	eventLoggerAddress := res.ContractAddress
 	logger.Info("Deployed EventLogger", "address", eventLoggerAddress)
-	return eventLoggerAddress, err
+	return eventLoggerAddress, nil
 }
 
 func RandomTopicAndData(rng *rand.Rand, cnt, len int) ([][32]byte, []byte) {
