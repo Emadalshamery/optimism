@@ -22,8 +22,8 @@ type BatcherTestDriver interface {
 	SubmitNow(ctx context.Context) error
 	// PublishNow manually triggers the batch publishing process
 	PublishNow(ctx context.Context) error
-	// Cursors returns the current cursor positions (submitted L2 block)
-	Cursors(ctx context.Context) (map[string]uint64, error)
+	// BlockProgress returns information about the current batch processing progress
+	BlockProgress(ctx context.Context) (map[string]uint64, error)
 }
 
 // testAPI provides testing methods for the batcher
@@ -86,12 +86,12 @@ func (a *testAPI) PublishNow(ctx context.Context) error {
 	return err
 }
 
-// Cursors returns the current cursor positions (submitted L2 block)
-func (a *testAPI) Cursors(ctx context.Context) (map[string]uint64, error) {
-	a.m.RecordRPCServerRequest("batcher_cursors")
-	cursors, err := a.b.Cursors(ctx)
+// BlockProgress returns information about the current batch processing progress
+func (a *testAPI) BlockProgress(ctx context.Context) (map[string]uint64, error) {
+	a.m.RecordRPCServerRequest("batcher_blockProgress")
+	progress, err := a.b.BlockProgress(ctx)
 	if err != nil {
-		a.log.Error("Failed to get cursors", "err", err)
+		a.log.Error("Failed to get block progress", "err", err)
 	}
-	return cursors, err
+	return progress, err
 }
