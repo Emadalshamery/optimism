@@ -263,39 +263,17 @@ func runSetCodeTxTypeWithContractCreationBitSetTest(gt *testing.T, testCfg *help
 	sequencer := env.Sequencer
 	miner := env.Miner
 	batcher := env.Batcher
+	chainID := env.Sequencer.RollupCfg.L2ChainID
 
 	require.Equal(gt, env.Bob.Address(), bobAddr)
 	u1 := sequencer.L2Unsafe()
 
 	sequencer.ActL2EmptyBlock(t) // we'll inject the setcode tx in this block's batch
 
-	aliceSecret := env.Alice.L2.Secret()
-
-	chainID := env.Sequencer.RollupCfg.L2ChainID
-
-	// Sign authorization tuples.
-	// The way the auths are combined, it becomes
-	// 1. tx -> addr1 which is delegated to 0xaaaa
-	// 2. addr1:0xaaaa calls into addr2:0xbbbb
-	// 3. addr2:0xbbbb  writes to storage
-	auth1, err := types.SignSetCode(aliceSecret, types.SetCodeAuthorization{
-		ChainID: *uint256.MustFromBig(chainID),
-		Address: bb,
-		Nonce:   0,
-	})
-	require.NoError(gt, err, "failed to sign auth1")
-
-	txdata := &types.SetCodeTx{
-		ChainID:   uint256.MustFromBig(chainID),
-		Nonce:     0,
-		To:        env.Alice.Address(),
-		Gas:       500000,
-		GasFeeCap: uint256.NewInt(5000000000),
-		GasTipCap: uint256.NewInt(2),
-		AuthList:  []types.SetCodeAuthorization{auth1},
-	}
 	signer := types.NewIsthmusSigner(chainID)
-	tx := types.MustSignNewTx(aliceSecret, signer, txdata)
+
+	rng := rand.New(rand.NewSource(0))
+	tx := testutils.RandomSetCodeTx(rng, signer)
 
 	txdata2 := &types.DynamicFeeTx{
 		ChainID:   chainID,
@@ -305,7 +283,7 @@ func runSetCodeTxTypeWithContractCreationBitSetTest(gt *testing.T, testCfg *help
 		GasFeeCap: big.NewInt(5000000000),
 		GasTipCap: big.NewInt(2),
 	}
-	tx2 := types.MustSignNewTx(aliceSecret, signer, txdata2)
+	tx2 := types.MustSignNewTx(env.Alice.L2.Secret(), signer, txdata2)
 
 	batcher.ActL2BatchBuffer(t, func(block *types.Block) *types.Block {
 		// inject user tx into upgrade batch
