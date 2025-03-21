@@ -1,6 +1,7 @@
 package interop
 
 import (
+	"context"
 	"encoding/hex"
 	"math/big"
 	"math/rand"
@@ -22,6 +23,39 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/require"
 )
+
+func DeployEventLogger(ctx context.Context, wallet system.WalletV2, logger log.Logger) (common.Address, error) {
+	optsFunc := func(w system.WalletV2) txplan.Option {
+		opts := txplan.CombineOptions(
+			system.DefaultTxSubmitOptions(w),
+			system.DefaultTxInclusionOptions(w),
+		)
+		return opts
+	}
+	opts := optsFunc(wallet)
+	logger.Info("Deploying EventLogger")
+	deployCalldata := common.FromHex(bindings.EventloggerBin)
+	deployTx := txplan.NewPlannedTx(opts, txplan.WithData(deployCalldata))
+
+	res, err := deployTx.Included.Eval(ctx)
+	if err != nil {
+		return common.Address{}, err
+	}
+	eventLoggerAddress := res.ContractAddress
+	logger.Info("Deployed EventLogger", "address", eventLoggerAddress)
+	return eventLoggerAddress, err
+}
+
+func RandomTopicAndData(rng *rand.Rand, cnt, len int) ([][32]byte, []byte) {
+	topics := [][32]byte{}
+	for range cnt {
+		var topic [32]byte
+		copy(topic[:], testutils.RandomData(rng, 32))
+		topics = append(topics, topic)
+	}
+	data := testutils.RandomData(rng, len)
+	return topics, data
+}
 
 func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLevelSystemGetter, sourceChainIdx, destChainIdx uint64, sourceWalletGetter, destWalletGetter validators.WalletGetter) systest.InteropSystemTestFunc {
 	return func(t systest.T, sys system.InteropSystem) {
@@ -49,32 +83,12 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		optsA := optsFunc(walletA)
 		optsB := optsFunc(walletB)
 
-		logger.Info("Deploying EventLogger", "chainA", chainA.ID)
-		deployCalldata := common.FromHex(bindings.EventloggerBin)
-		deployTx := txplan.NewPlannedTx(optsA, txplan.WithData(deployCalldata))
-
-		res, err := deployTx.Included.Eval(ctx)
+		eventLoggerAddress, err := DeployEventLogger(ctx, walletA, logger)
 		require.NoError(t, err)
-
-		eventLoggerAddress := res.ContractAddress
-		logger.Info("Deployed EventLogger", "address", eventLoggerAddress)
 
 		rng := rand.New(rand.NewSource(1234))
 
-		randTopicAndData := func(cnt, len int) ([][32]byte, []byte) {
-			topics := [][32]byte{}
-			for _ = range cnt {
-				var topic [32]byte
-				copy(topic[:], testutils.RandomData(rng, 32))
-				topics = append(topics, topic)
-				// log.Info("input", "idx", idx, "topic", hex.EncodeToString(topics[idx][:]))
-			}
-			data := testutils.RandomData(rng, len)
-			// log.Info("input", "data", hex.EncodeToString(data))
-			return topics, data
-		}
-
-		topics, data := randTopicAndData(3, 10)
+		topics, data := RandomTopicAndData(rng, 3, 10)
 		optsA = txplan.CombineOptions(optsA, txplan.WithTo(&eventLoggerAddress))
 		txA := system.NewIntent[*system.InitTrigger, *system.InteropOutput](optsA)
 		txA.Content.Set(&system.InitTrigger{
@@ -117,8 +131,8 @@ func eventloggerdeployandEmitandValidate(lowLevelSystemGetter validators.LowLeve
 		logger.Info("included validating message twice", "block", recC.BlockHash)
 
 		// can we multicall inittrigger?
-		topicsE, dataE := randTopicAndData(1, 15)
-		topicsF, dataF := randTopicAndData(2, 13)
+		topicsE, dataE := RandomTopicAndData(rng, 1, 15)
+		topicsF, dataF := RandomTopicAndData(rng, 2, 13)
 
 		optsAA := optsFunc(walletA)
 		calls2 := make([]system.Call, 0)
