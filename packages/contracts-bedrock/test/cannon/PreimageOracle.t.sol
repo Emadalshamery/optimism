@@ -1476,12 +1476,13 @@ contract PreimageOracle_LargePreimageProposals_Test is Test {
             leaves[i] = _hashLeaf(_leaves[i]);
         }
 
-        string[] memory commands = new string[](5);
-        commands[0] = "scripts/go-ffi/go-ffi";
-        commands[1] = "merkle";
-        commands[2] = "gen_proof";
-        commands[3] = vm.toString(abi.encodePacked(leaves));
-        commands[4] = vm.toString(_leafIdx);
+        string[] memory commands = new string[](6);
+        commands[0] = "scripts/go-ffi/go-ffi.sh";
+        commands[1] = "go-ffi";
+        commands[2] = "merkle";
+        commands[3] = "gen_proof";
+        commands[4] = vm.toString(abi.encodePacked(leaves));
+        commands[5] = vm.toString(_leafIdx);
         (root_, proof_) = abi.decode(Process.run(commands), (bytes32, bytes32[]));
     }
 
