@@ -26,13 +26,14 @@ import (
 
 func Test_ProgramAction_SetCodeTx(gt *testing.T) {
 	matrix := helpers.NewMatrix[any]()
-	defer matrix.Run(gt)
 
 	matrix.AddDefaultTestCases(
 		nil,
 		helpers.LatestForkOnly,
 		runSetCodeTxTypeTest,
 	)
+
+	matrix.Run(gt)
 }
 
 func runSetCodeTxTypeTest(gt *testing.T, testCfg *helpers.TestCfg[any]) {
@@ -199,13 +200,14 @@ func testInvalidSetCodeTxBatch(gt *testing.T, testCfg *helpers.TestCfg[any]) {
 
 func Test_ProgramAction_SetCodeTxWithContractCreationBitSet(gt *testing.T) {
 	matrix := helpers.NewMatrix[any]()
-	defer matrix.Run(gt)
 
 	matrix.AddDefaultTestCases(
 		nil,
 		helpers.LatestForkOnly,
 		runSetCodeTxTypeWithContractCreationBitSetTest,
 	)
+
+	matrix.Run(gt)
 }
 
 type readerWithCurrPos struct {
