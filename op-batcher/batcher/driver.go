@@ -113,6 +113,9 @@ type BatchSubmitter struct {
 	channelMgrMutex sync.Mutex // guards channelMgr and prevCurrentL1
 	channelMgr      *channelManager
 	prevCurrentL1   eth.L1BlockRef // cached CurrentL1 from the last syncStatus
+
+	// Channel for signaling publishingLoop to publish
+	publishSignal chan struct{}
 }
 
 // NewBatchSubmitter initializes the BatchSubmitter driver from a preconfigured DriverSetup
@@ -161,7 +164,7 @@ func (l *BatchSubmitter) StartBatchSubmitting() error {
 
 	// Channels used to signal between the loops
 	pendingBytesUpdated := make(chan int64, 1)
-	publishSignal := make(chan struct{})
+	l.publishSignal = make(chan struct{})
 
 	// DA throttling loop should always be started except for testing (indicated by ThrottleThreshold == 0)
 	if l.Config.ThrottleThreshold > 0 {
@@ -172,13 +175,13 @@ func (l *BatchSubmitter) StartBatchSubmitting() error {
 	}
 
 	l.wg.Add(2)
-	go l.receiptsLoop(l.wg, receiptsCh)                             // ranges over receiptsCh channel
-	go l.publishingLoop(l.killCtx, l.wg, receiptsCh, publishSignal) // ranges over publishSignal, spawns routines which send on receiptsCh. Closes receiptsCh when done.
+	go l.receiptsLoop(l.wg, receiptsCh)                               // ranges over receiptsCh channel
+	go l.publishingLoop(l.killCtx, l.wg, receiptsCh, l.publishSignal) // ranges over publishSignal, spawns routines which send on receiptsCh. Closes receiptsCh when done.
 
 	// In test mode, we don't want to automatically load blocks, as we want full control over the process
 	if !l.Config.TestMode {
 		l.wg.Add(1)
-		go l.blockLoadingLoop(l.shutdownCtx, l.wg, pendingBytesUpdated, publishSignal) // sends on pendingBytesUpdated (if throttling enabled), and publishSignal. Closes them both when done
+		go l.blockLoadingLoop(l.shutdownCtx, l.wg, pendingBytesUpdated, l.publishSignal) // sends on pendingBytesUpdated (if throttling enabled), and publishSignal. Closes them both when done
 	} else {
 		l.Log.Info("Block loading loop is DISABLED in test mode. Blocks will only be loaded via the test API.")
 	}
@@ -474,6 +477,12 @@ func (l *BatchSubmitter) publishingLoop(ctx context.Context, wg *sync.WaitGroup,
 	txQueue := txmgr.NewQueue[txRef](ctx, l.Txmgr, l.Config.MaxPendingTransactions)
 
 	for range publishSignal {
+		// In test mode, only process signals from SubmitNow, don't automatically publish
+		if l.Config.TestMode {
+			l.Log.Info("Signal received in test mode, but auto-publishing is disabled")
+			continue
+		}
+
 		if !l.checkTxpool(txQueue, receiptsCh) {
 			continue
 		}
@@ -1047,20 +1056,19 @@ func (l *BatchSubmitter) SetL2Scope(ctx context.Context, start, end uint64) erro
 	return l.loadBlocksIntoState(ctx, start, end)
 }
 
-// SubmitNow forces the batcher to submit the current data, even if the buffer is not full
+// SubmitNow forces the batcher to submit current data. Only works in test mode.
 func (l *BatchSubmitter) SubmitNow(ctx context.Context) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
 	if !l.Config.TestMode {
-		return errors.New("batcher is not in test mode")
+		return errors.New("batcher not in test mode, cannot trigger submission")
 	}
+	l.Log.Info("Manual submission triggered")
 
-	l.Log.Info("Forcing batch submission")
-
-	// Signal the publishing loop to publish immediately
+	// Signal the publishing loop to process the submission
 	if l.running {
-		trySignal(l.ActiveSeqChanged)
+		trySignal(l.publishSignal)
 		return nil
 	}
 
@@ -1104,4 +1112,59 @@ func (l *BatchSubmitter) Cursors(ctx context.Context) (map[string]uint64, error)
 	cursors["pendingBlocks"] = uint64(l.channelMgr.pendingBlocks())
 
 	return cursors, nil
+}
+
+// PublishNow manually triggers the batch publishing process. Only works in test mode.
+func (l *BatchSubmitter) PublishNow(ctx context.Context) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	if !l.Config.TestMode {
+		return errors.New("batcher not in test mode, cannot trigger manual publishing")
+	}
+
+	if !l.running {
+		return ErrBatcherNotRunning
+	}
+
+	l.Log.Info("Manual publishing triggered")
+
+	// Create a new goroutine to handle the publishing
+	// This ensures we don't block the caller while publishing
+	go func() {
+		daGroup := &errgroup.Group{}
+		if l.Config.MaxConcurrentDARequests > 0 {
+			daGroup.SetLimit(int(l.Config.MaxConcurrentDARequests))
+		}
+
+		receiptsCh := make(chan txmgr.TxReceipt[txRef])
+		defer close(receiptsCh)
+
+		// Start a goroutine to handle receipts
+		go func() {
+			for r := range receiptsCh {
+				l.handleReceipt(r)
+			}
+		}()
+
+		publishCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		txQueue := txmgr.NewQueue[txRef](publishCtx, l.Txmgr, l.Config.MaxPendingTransactions)
+
+		if !l.checkTxpool(txQueue, receiptsCh) {
+			l.Log.Warn("txpool state is not good, aborting manual publishing")
+			return
+		}
+
+		l.publishStateToL1(publishCtx, txQueue, receiptsCh, daGroup)
+
+		if err := txQueue.Wait(); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				l.Log.Error("error waiting for transactions to complete during manual publishing", "err", err)
+			}
+		}
+	}()
+
+	return nil
 }
