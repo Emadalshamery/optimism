@@ -5,7 +5,7 @@ import { Script } from "forge-std/Script.sol";
 
 /// @notice Common functionality for all deploy scripts.
 /// This contract should be inherited by all deploy scripts.
-abstract contract DeployBase is Script {
+abstract contract BaseDeploy is Script {
     /// @notice Deploy scripts can use this event to communicate any deployments they have made.
     /// The encodedOutput represents a keccak encoded output struct
     event Deployed(bytes encodedOutput);

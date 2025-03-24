@@ -64,7 +64,7 @@ contract DeploySuperchain2_Test is Test {
         // Check that the Deployed event has been emitted
         //
         // Since we dont know the event payload until after the call,
-        // we can't call expectEmit directly. Instead, we rely on the DeployBase contract
+        // we can't call expectEmit directly. Instead, we rely on the BaseDeploy contract
         // to emit & store the event payload
         assertEq(deploySuperchain.numEmittedDeployOutputs(), 1, "0");
         assertEq(deploySuperchain.emittedDeployOutputs(0), abi.encode(dso), "0");

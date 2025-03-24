@@ -8,15 +8,15 @@ import { IProtocolVersions, ProtocolVersion } from "interfaces/L1/IProtocolVersi
 import { IProxyAdmin } from "interfaces/universal/IProxyAdmin.sol";
 import { IProxy } from "interfaces/universal/IProxy.sol";
 
+import { BaseDeploy } from "scripts/deploy/BaseDeploy.sol";
 import { DeployUtils } from "scripts/libraries/DeployUtils.sol";
 import { Solarray } from "scripts/libraries/Solarray.sol";
-import { DeployBase } from "scripts/deploy/DeployBase.sol";
 
 // For all broadcasts in this script we explicitly specify the deployer as `msg.sender` because for
 // testing we deploy this script from a test contract. If we provide no argument, the foundry
 // default sender would be the broadcaster during test, but the broadcaster needs to be the deployer
 // since they are set to the initial proxy admin owner.
-contract DeploySuperchain is DeployBase {
+contract DeploySuperchain is BaseDeploy {
     struct Input {
         // Role inputs.
         address guardian;

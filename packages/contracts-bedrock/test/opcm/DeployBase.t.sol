@@ -8,14 +8,14 @@ import { ProxyAdmin } from "src/universal/ProxyAdmin.sol";
 import { Proxy } from "src/universal/Proxy.sol";
 import { SuperchainConfig } from "src/L1/SuperchainConfig.sol";
 import { IProtocolVersions, ProtocolVersion } from "interfaces/L1/IProtocolVersions.sol";
-import { DeployBase } from "scripts/deploy/DeployBase.sol";
+import { BaseDeploy } from "scripts/deploy/BaseDeploy.sol";
 
 contract DeployBase_Test is Test {
     event Deployed(bytes encodedOutput);
 
     using stdStorage for StdStorage;
 
-    DeployBase deployBase;
+    BaseDeploy baseDeploy;
 
     // Define default input variables for testing.
     address defaultProxyAdminOwner = makeAddr("defaultProxyAdminOwner");
@@ -26,14 +26,14 @@ contract DeployBase_Test is Test {
     ProtocolVersion defaultRecommendedProtocolVersion = ProtocolVersion.wrap(2);
 
     function setUp() public {
-        deployBase = new MyDeployBase();
+        baseDeploy = new MyBaseDeploy();
     }
 
     function testFuzz_emit_event_payload(bytes memory _payload) public {
-        vm.expectEmit(address(deployBase));
+        vm.expectEmit(address(baseDeploy));
         emit Deployed(_payload);
 
-        deployBase.emitDeployed(_payload);
+        baseDeploy.emitDeployed(_payload);
     }
 
     function testFuzz_store_event_payload(bytes[] memory _payloads) public {
@@ -42,13 +42,14 @@ contract DeployBase_Test is Test {
         for (uint256 i = 0; i < _payloads.length; i++) {
             bytes memory _payload = _payloads[i];
 
-            deployBase.emitDeployed(_payload);
-            assertEq(deployBase.emittedDeployOutputs(i), _payload);
-            assertEq(deployBase.numEmittedDeployOutputs(), i + 1);
+            baseDeploy.emitDeployed(_payload);
+            assertEq(baseDeploy.emittedDeployOutputs(i), _payload);
+            assertEq(baseDeploy.numEmittedDeployOutputs(), i + 1);
         }
 
-        assertEq(deployBase.numEmittedDeployOutputs(), _payloads.length);
+        assertEq(baseDeploy.numEmittedDeployOutputs(), _payloads.length);
     }
 }
 
-contract MyDeployBase is DeployBase {}
+/// @notice We need to create a new contract to test the abstract BaseDeploy
+contract MyDeployBase is BaseDeploy {}
