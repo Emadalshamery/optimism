@@ -117,10 +117,8 @@ type CLIConfig struct {
 	// Should only be used for testing purposes.
 	TestUseMaxTxSizeForBlobs bool
 
-	// DAUpdateEndpoints is a list of endpoints to distribute DA configuration updates to.
-	// This can include sequencer nodes, builders, or any other node that needs to be updated.
-	// If not set, defaults to using the L2EthRpc client.
-	DAUpdateEndpoints []string
+	// ThrottlingEndpoints is a list of endpoints to throttle in addition to the active sequencer.
+	ThrottlingEndpoints []string
 
 	TxMgrConfig   txmgr.CLIConfig
 	LogConfig     oplog.CLIConfig
@@ -224,6 +222,6 @@ func NewConfig(ctx *cli.Context) *CLIConfig {
 		ThrottleBlockSize:            ctx.Uint64(flags.ThrottleBlockSizeFlag.Name),
 		ThrottleAlwaysBlockSize:      ctx.Uint64(flags.ThrottleAlwaysBlockSizeFlag.Name),
 		PreferLocalSafeL2:            ctx.Bool(flags.PreferLocalSafeL2Flag.Name),
-		DAUpdateEndpoints:            ctx.StringSlice(flags.DAUpdateEndpointsFlag.Name),
+		ThrottlingEndpoints:          ctx.StringSlice(flags.ThrottlingEndpointsFlag.Name),
 	}
 }

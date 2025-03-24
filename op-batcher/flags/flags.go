@@ -187,10 +187,10 @@ var (
 		EnvVars: prefixEnvVars("PREFER_LOCAL_SAFE_L2"),
 	}
 	// HA with rollup boost enabled flags
-	DAUpdateEndpointsFlag = &cli.StringSliceFlag{
-		Name:    "da-update-endpoints",
-		Usage:   "Comma-separated list of endpoints to distribute DA configuration updates to",
-		EnvVars: prefixEnvVars("DA_UPDATE_ENDPOINTS"),
+	ThrottlingEndpointsFlag = &cli.StringSliceFlag{
+		Name:    "throttling-endpoints",
+		Usage:   "Comma-separated list of endpoints to throttle in addition to the active sequencer",
+		EnvVars: prefixEnvVars("THROTTLING_ENDPOINTS"),
 	}
 	// Legacy Flags
 	SequencerHDPathFlag = txmgr.SequencerHDPathFlag

@@ -535,7 +535,7 @@ func (l *BatchSubmitter) receiptsLoop(wg *sync.WaitGroup, receiptsCh chan txmgr.
 	l.Log.Info("receiptsLoop returning")
 }
 
-func (l *BatchSubmitter) setMaxDASizeOnEndpoint(ctx context.Context, endpoint string, client *rpc.Client, maxTxSize, maxBlockSize uint64) (bool, error) {
+func (l *BatchSubmitter) setMaxDASizeOnEndpoint(ctx context.Context, endpoint string, client *rpc.Client, maxTxSize, maxBlockSize uint64) error {
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer timeoutCancel()
 
@@ -546,16 +546,58 @@ func (l *BatchSubmitter) setMaxDASizeOnEndpoint(ctx context.Context, endpoint st
 	if err != nil {
 		l.Log.Error("Failed to set max DA size on endpoint",
 			"endpoint", endpoint, "error", err)
-		return false, err
+		return err
 	} else if !result {
 		l.Log.Error("Endpoint returned false for SetMaxDASize",
 			"endpoint", endpoint)
-		return false, fmt.Errorf("endpoint returned false")
+		return fmt.Errorf("endpoint returned false")
 	}
 
 	l.Log.Info("Successfully set max DA size on endpoint",
 		"endpoint", endpoint)
-	return true, nil
+	return nil
+}
+
+func (l *BatchSubmitter) distributeThrottlingToEndpoints(ctx context.Context, maxTxSize, maxBlockSize uint64, daClients map[string]*rpc.Client, retryTimer *time.Timer, retryInterval time.Duration) bool {
+	l.Log.Info("Distributing throttling configuration",
+		"tx_size", maxTxSize,
+		"block_size", maxBlockSize,
+		"endpoints", len(daClients))
+
+	var wg sync.WaitGroup
+	results := make(chan error, len(daClients))
+
+	// Set throttling on all endpoints
+	for endpoint, client := range daClients {
+		wg.Add(1)
+		go func(endpoint string, client *rpc.Client) {
+			defer wg.Done()
+			results <- l.setMaxDASizeOnEndpoint(ctx, endpoint, client, maxTxSize, maxBlockSize)
+		}(endpoint, client)
+	}
+
+	// Wait for all operations to complete
+	wg.Wait()
+	close(results)
+
+	// Count successes vs. required endpoints
+	successCount := 0
+	for err := range results {
+		if err == nil {
+			successCount++
+		}
+	}
+
+	if successCount < len(daClients) {
+		l.Log.Error("Failed to distribute throttling configuration to all endpoints",
+			"success", successCount, "required", len(daClients))
+		retryTimer.Reset(retryInterval)
+		return false
+	}
+
+	l.Log.Info("Successfully distributed throttling configuration to all endpoints",
+		"tx_size", maxTxSize, "block_size", maxBlockSize)
+	return true
 }
 
 // throttlingLoop monitors the backlog in bytes we need to make available, and appropriately enables or disables
@@ -570,23 +612,23 @@ func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated 
 	retryTimer := time.NewTimer(retryInterval)
 	retryTimer.Stop()
 
-	// Initialize clients for DA update endpoints
-	daClients := make(map[string]*rpc.Client)
+	// Initialize clients for throttling endpoints
+	throttlingClients := make(map[string]*rpc.Client)
 
-	// Initialize clients using DAUpdateEndpoints if configured
-	if len(l.Config.DAUpdateEndpoints) > 0 {
-		l.Log.Info("Using DA update endpoints configuration", "count", len(l.Config.DAUpdateEndpoints))
-		for _, endpoint := range l.Config.DAUpdateEndpoints {
+	// Initialize clients using throttling endpoints if configured
+	if len(l.Config.ThrottlingEndpoints) > 0 {
+		l.Log.Info("Using throttling endpoints configuration", "count", len(l.Config.ThrottlingEndpoints))
+		for _, endpoint := range l.Config.ThrottlingEndpoints {
 			client, err := rpc.Dial(endpoint)
 			if err != nil {
-				l.Log.Warn("Failed to connect to DA endpoint", "endpoint", endpoint, "err", err)
+				l.Log.Warn("Failed to connect to throttling endpoint", "endpoint", endpoint, "err", err)
 				continue
 			}
-			daClients[endpoint] = client
-			l.Log.Info("Connected to endpoint for configuration distribution", "endpoint", endpoint)
+			throttlingClients[endpoint] = client
+			l.Log.Info("Connected to endpoint for throttling distribution", "endpoint", endpoint)
 		}
 	} else {
-		l.Log.Info("No DA update endpoints configured, will use default L2 endpoint")
+		l.Log.Info("No throttling endpoints configured, will use default L2 endpoint")
 	}
 
 	updateParams := func(pendingBytes int64) {
@@ -604,48 +646,11 @@ func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated 
 			}
 		}
 
-		// If we have configured DA update endpoints, distribute the configuration
-		if len(daClients) > 0 {
-			l.Log.Info("Distributing DA size configuration", "tx_size", maxTxSize, "block_size", maxBlockSize,
-				"endpoints", len(daClients))
-
-			var wg sync.WaitGroup
-			errors := make(chan error, len(daClients))
-			success := make(chan bool, len(daClients))
-
-			// Set DA size on all endpoints
-			for endpoint, client := range daClients {
-				wg.Add(1)
-				go func(endpoint string, client *rpc.Client) {
-					defer wg.Done()
-
-					succeeded, err := l.setMaxDASizeOnEndpoint(ctx, endpoint, client, maxTxSize, maxBlockSize)
-					if err != nil {
-						errors <- err
-					} else if succeeded {
-						success <- true
-					}
-				}(endpoint, client)
+		// If we have configured throttling endpoints, distribute the configuration
+		if len(throttlingClients) > 0 {
+			if !l.distributeThrottlingToEndpoints(ctx, maxTxSize, maxBlockSize, throttlingClients, retryTimer, retryInterval) {
+				return // Return after a failed attempt, as we've scheduled a retry
 			}
-
-			// Wait for all operations to complete
-			wg.Wait()
-			close(errors)
-			close(success)
-
-			// Count successes vs. required endpoints
-			successCount := len(success)
-			requiredCount := len(daClients)
-
-			if successCount < requiredCount {
-				l.Log.Error("Failed to distribute DA size configuration to all endpoints",
-					"success", successCount, "required", requiredCount)
-				retryTimer.Reset(retryInterval)
-				return
-			}
-
-			l.Log.Info("Successfully distributed DA size configuration to all endpoints",
-				"tx_size", maxTxSize, "block_size", maxBlockSize)
 		} else {
 			// Fall back to the original approach if no endpoints are configured
 			cl, err := l.EndpointProvider.EthClient(ctx)
@@ -654,7 +659,7 @@ func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated 
 				return
 			}
 
-			succeeded, err := l.setMaxDASizeOnEndpoint(ctx, "default-l2-endpoint", cl.Client(), maxTxSize, maxBlockSize)
+			err = l.setMaxDASizeOnEndpoint(ctx, "default-l2-endpoint", cl.Client(), maxTxSize, maxBlockSize)
 			if errors.Is(ctx.Err(), context.Canceled) {
 				// If the context was cancelled, our work is done and we expect an error here:
 				// So log it quietly and exit.
@@ -679,11 +684,6 @@ func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated 
 				l.Log.Error("SetMaxDASize rpc failed, retrying.", "err", err)
 				retryTimer.Reset(retryInterval)
 				return
-			}
-
-			if !succeeded {
-				l.Log.Error("Result of SetMaxDASize was false, retrying.")
-				retryTimer.Reset(retryInterval)
 			}
 		}
 	}
