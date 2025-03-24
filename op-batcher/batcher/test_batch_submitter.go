@@ -70,7 +70,7 @@ func (l *TestBatchSubmitter) PublishNow(ctx context.Context) error {
 	return l.BatchSubmitter.PublishNow(ctx)
 }
 
-// BlockProgress returns information about the current batch processing progress
-func (l *TestBatchSubmitter) BlockProgress(ctx context.Context) (map[string]uint64, error) {
-	return l.BatchSubmitter.BlockProgress(ctx)
+// Buffer returns information about the batcher buffer state
+func (l *TestBatchSubmitter) Buffer(ctx context.Context) (map[string]uint64, error) {
+	return l.BatchSubmitter.Buffer(ctx)
 }
