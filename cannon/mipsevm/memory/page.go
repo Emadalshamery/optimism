@@ -60,6 +60,10 @@ func (p *Page) UnmarshalText(dat []byte) error {
 	return err
 }
 
+// This is a compile time assertion to ensure that the PageSize is 4096
+// This is necessary because of the way we track intermediate nodes in CachedPage using OkLow and OkHigh
+var _ [0]struct{} = [PageSize - 4096]struct{}{}
+
 type CachedPage struct {
 	Data *Page
 	// intermediate nodes only
