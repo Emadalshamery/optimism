@@ -58,8 +58,8 @@ func HashData(out *[32]byte, data ...[]byte) {
 	PutHasher(h)
 }
 
-func HashPair(left, right [32]byte) [32]byte {
-	out := crypto.Keccak256Hash(left[:], right[:])
+func HashPair(left, right [32]byte) (out [32]byte) {
+	HashPairNodes(&out, &left, &right)
 	//fmt.Printf("0x%x 0x%x -> 0x%x\n", left, right, out)
 	return out
 }
