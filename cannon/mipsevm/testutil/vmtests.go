@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path"
@@ -140,4 +141,33 @@ func RunVMTest_Claim[T mipsevm.FPVMState](t *testing.T, initState program.Create
 
 	require.Equal(t, expectedStdOut, stdOutBuf.String(), "stdout")
 	require.Equal(t, expectedStdErr, stdErrBuf.String(), "stderr")
+}
+
+type VMData struct {
+	Name    string `json:"name"`
+	Version int    `json:"version"`
+}
+
+func RunVMTest_ProgramPatch[T mipsevm.FPVMState](t *testing.T, initState program.CreateInitialFPVMState[T], vmFactory VMFactory[T], doPatchGo bool) {
+	vmdata := VMData{Name: "cannon-load", Version: 2}
+	patch, err := json.Marshal(vmdata)
+	require.NoError(t, err)
+
+	state, meta := LoadELFProgram(t, ProgramPath("patched-program"), initState, doPatchGo, WithPatchVMData(patch))
+
+	var stdOutBuf, stdErrBuf bytes.Buffer
+	us := vmFactory(state, nil, io.MultiWriter(&stdOutBuf, os.Stdout), io.MultiWriter(&stdErrBuf, os.Stderr), CreateLogger(), meta)
+
+	maxSteps := 800_000
+	for i := 0; i < maxSteps; i++ {
+		if us.GetState().GetExited() {
+			break
+		}
+		_, err := us.Step(false)
+		require.NoError(t, err)
+	}
+
+	require.Truef(t, state.GetExited(), "must complete program. reached %d of max %d steps", state.GetStep(), maxSteps)
+	require.Equal(t, uint8(0), state.GetExitCode(), "exit with 0")
+	require.Equal(t, "", stdErrBuf.String(), "stderr silent")
 }

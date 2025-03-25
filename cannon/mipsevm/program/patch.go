@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm/arch"
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm/memory"
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm/register"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const WordSizeBytes = arch.WordSizeBytes
@@ -99,6 +100,50 @@ func PatchStack(st mipsevm.FPVMState) error {
 	storeMem(sp+WordSizeBytes*8, auxv3Offset) // auxv[3] = address of 16 bytes containing random value
 	storeMem(sp+WordSizeBytes*9, 0)           // auxv[term] = 0
 
+	return nil
+}
+
+const startMagicSize = 32
+
+var targetMagic = common.Hex2Bytes("0e24fd47916aa3ac16264a6c874371fcdcc348505dac3ec4bb13df04c8c6f2e5")
+
+func PatchVMData(st mipsevm.FPVMState, patch []byte) error {
+	if st.GetStep() != 0 {
+		return fmt.Errorf("invalid state")
+	}
+
+	mem := st.GetMemory()
+	var currentMagic [startMagicSize]byte
+
+	var addr Word
+	// we know the Go compiler will place go:embeds in low memory rodata. So search ends at heap start
+	for search := Word(0); search <= arch.HeapStart-startMagicSize; search += 8 {
+		// assume 8-byte word for now
+		v0 := mem.GetWord(search)
+		v1 := mem.GetWord(search + 8)
+		v2 := mem.GetWord(search + 16)
+		v3 := mem.GetWord(search + 24)
+
+		arch.ByteOrderWord.PutWord(currentMagic[0:8], v0)
+		arch.ByteOrderWord.PutWord(currentMagic[8:16], v1)
+		arch.ByteOrderWord.PutWord(currentMagic[16:24], v2)
+		arch.ByteOrderWord.PutWord(currentMagic[24:32], v3)
+
+		// Compare with target pattern
+		if bytes.Equal(currentMagic[:], targetMagic[:]) {
+			addr = search
+			break
+		}
+	}
+	if addr == Word(0) {
+		return fmt.Errorf("no magic")
+	}
+
+	mem.SetWord(addr, Word(len(patch)))
+	addr += 8
+	if err := mem.SetMemoryRange(addr, bytes.NewReader(patch)); err != nil {
+		return errors.New("failed to allocate memory for vm data")
+	}
 	return nil
 }
 

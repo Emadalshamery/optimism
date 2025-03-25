@@ -10,7 +10,19 @@ import (
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm/program"
 )
 
-func LoadELFProgram[T mipsevm.FPVMState](t require.TestingT, name string, initState program.CreateInitialFPVMState[T], doPatchGoGC bool) (T, *program.Metadata) {
+type LoadConfig struct {
+	PatchVMData []byte
+}
+
+type LoadOpts func(*LoadConfig)
+
+func WithPatchVMData(patch []byte) LoadOpts {
+	return func(c *LoadConfig) {
+		c.PatchVMData = patch
+	}
+}
+
+func LoadELFProgram[T mipsevm.FPVMState](t require.TestingT, name string, initState program.CreateInitialFPVMState[T], doPatchGoGC bool, opts ...LoadOpts) (T, *program.Metadata) {
 	elfProgram, err := elf.Open(name)
 	require.NoError(t, err, "open ELF file")
 	meta, err := program.MakeMetadata(elfProgram)
@@ -25,6 +37,15 @@ func LoadELFProgram[T mipsevm.FPVMState](t require.TestingT, name string, initSt
 	}
 
 	require.NoError(t, program.PatchStack(state), "add initial stack")
+
+	// patch the VM data last; after we've generated the base prestate
+	var cfg LoadConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if cfg.PatchVMData != nil {
+		require.NoError(t, program.PatchVMData(state, cfg.PatchVMData), "add vm data")
+	}
 	return state, meta
 }
 

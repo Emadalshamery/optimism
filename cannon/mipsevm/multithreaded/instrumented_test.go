@@ -34,6 +34,11 @@ func TestInstrumentedState_Claim(t *testing.T) {
 	testutil.RunVMTest_Claim(t, CreateInitialState, vmFactory, false)
 }
 
+func TestInstrumentedState_ProgramPatch(t *testing.T) {
+	t.Parallel()
+	testutil.RunVMTest_ProgramPatch(t, CreateInitialState, vmFactory, false)
+}
+
 func TestInstrumentedState_UtilsCheck(t *testing.T) {
 	// Sanity check that test running utilities will return a non-zero exit code on failure
 	t.Parallel()
