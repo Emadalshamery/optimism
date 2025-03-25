@@ -547,7 +547,7 @@ contract OPContractsManagerUpgrader is OPContractsManagerBase {
                 _opChainConfigs[i].proxyAdmin,
                 address(_opChainConfigs[i].systemConfigProxy),
                 impls.systemConfigImpl,
-                abi.encodeCall(ISystemConfig.upgrade, (l2ChainId))
+                abi.encodeCall(ISystemConfig.upgrade, (_opChainConfigs[i].feeVaultAdmin, l2ChainId))
             );
 
             // Grab chain addresses here. We need to do this after the SystemConfig upgrade or the
@@ -1268,6 +1268,7 @@ contract OPContractsManager is ISemver {
         ISystemConfig systemConfigProxy;
         IProxyAdmin proxyAdmin;
         Claim absolutePrestate;
+        address feeVaultAdmin;
     }
 
     struct AddGameInput {
@@ -1293,9 +1294,9 @@ contract OPContractsManager is ISemver {
 
     // -------- Constants and Variables --------
 
-    /// @custom:semver 1.12.2
+    /// @custom:semver 1.13.0
     function version() public pure virtual returns (string memory) {
-        return "1.12.2";
+        return "1.13.0";
     }
 
     OPContractsManagerGameTypeAdder public immutable opcmGameTypeAdder;
