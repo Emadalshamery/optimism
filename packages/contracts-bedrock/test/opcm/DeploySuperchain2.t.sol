@@ -37,7 +37,9 @@ contract DeploySuperchain2_Test is Test {
         bool _paused,
         ProtocolVersion _recommendedProtocolVersion,
         ProtocolVersion _requiredProtocolVersion
-    ) public {
+    )
+        public
+    {
         vm.assume(_superchainProxyAdminOwner != address(0));
         vm.assume(_protocolVersionsOwner != address(0));
         vm.assume(_guardian != address(0));

@@ -22,7 +22,6 @@ contract DeploySuperchain is BaseDeploy {
         address guardian;
         address protocolVersionsOwner;
         address superchainProxyAdminOwner;
-
         // Other inputs.
         bool paused;
         ProtocolVersion recommendedProtocolVersion;
@@ -201,8 +200,14 @@ contract DeploySuperchain is BaseDeploy {
 
     function assertValidProtocolInput(Input memory _input) internal pure {
         require(_input.protocolVersionsOwner != address(0), "DeploySuperchain: protocolVersionsOwner not set");
-        require(ProtocolVersion.unwrap(_input.requiredProtocolVersion) != 0, "DeploySuperchain: requiredProtocolVersion not set");
-        require(ProtocolVersion.unwrap(_input.recommendedProtocolVersion) != 0, "DeploySuperchain: recommendedProtocolVersion not set");
+        require(
+            ProtocolVersion.unwrap(_input.requiredProtocolVersion) != 0,
+            "DeploySuperchain: requiredProtocolVersion not set"
+        );
+        require(
+            ProtocolVersion.unwrap(_input.recommendedProtocolVersion) != 0,
+            "DeploySuperchain: recommendedProtocolVersion not set"
+        );
     }
 
     function assertValidProxyInput(Input memory _input) internal pure {
@@ -256,9 +261,12 @@ contract DeploySuperchain is BaseDeploy {
 
         vm.startPrank(address(0));
         require(
-            IProxy(payable(address(superchainConfig))).implementation() == address(_output.superchainConfigImpl), "SUPCON-30"
+            IProxy(payable(address(superchainConfig))).implementation() == address(_output.superchainConfigImpl),
+            "SUPCON-30"
         );
-        require(IProxy(payable(address(superchainConfig))).admin() == address(_output.superchainProxyAdmin), "SUPCON-40");
+        require(
+            IProxy(payable(address(superchainConfig))).admin() == address(_output.superchainProxyAdmin), "SUPCON-40"
+        );
         vm.stopPrank();
 
         // Implementation checks
