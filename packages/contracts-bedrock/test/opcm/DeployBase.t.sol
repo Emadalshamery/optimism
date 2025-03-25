@@ -52,4 +52,4 @@ contract DeployBase_Test is Test {
 }
 
 /// @notice We need to create a new contract to test the abstract BaseDeploy
-contract MyDeployBase is BaseDeploy {}
+contract MyBaseDeploy is BaseDeploy {}
