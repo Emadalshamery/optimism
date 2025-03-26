@@ -49,6 +49,8 @@ func Validate(ctx context.Context, lgr log.Logger, release string, cfg *Config) 
 		validator = validations.NewV180Validator(l1Client)
 	case validations.VersionV200:
 		validator = validations.NewV200Validator(l1Client)
+	case validations.VersionV300:
+		validator = validations.NewV300Validator(l1Client)
 	default:
 		return nil, fmt.Errorf("invalid release: %s", release)
 	}

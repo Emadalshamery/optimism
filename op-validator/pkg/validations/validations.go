@@ -88,3 +88,7 @@ func NewV180Validator(client *rpc.Client) *BaseValidator {
 func NewV200Validator(client *rpc.Client) *BaseValidator {
 	return newBaseValidator(client, VersionV200)
 }
+
+func NewV300Validator(client *rpc.Client) *BaseValidator {
+	return newBaseValidator(client, VersionV300)
+}
