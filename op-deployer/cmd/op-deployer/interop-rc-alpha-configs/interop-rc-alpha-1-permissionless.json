@@ -1,0 +1,33 @@
+{
+
+    "saltMixer": "interop-rc-alpha-1",
+    
+    "systemConfig": "0xce1da8571d67d139a8040eba35bef8cfd34a0f2f",
+    
+    "proxyAdmin": "0x6220fd818ea70803b65dfaba7deb8e72c8fb396e",
+    
+    "delayedWETH": "0x0000000000000000000000000000000000000000",
+    
+    "disputeGameType": 0,
+    
+    "disputeAbsolutePrestate": "0x0332a18e2e42f6ca2b452f70abeec643a0998779c00ee4005b9f85bb797a5a8a",
+    
+    "disputeMaxGameDepth": 73,
+    
+    "disputeSplitDepth": 30,
+    
+    "disputeClockExtension": 10800,
+    
+    "disputeMaxClockDuration": 302400,
+    
+    "initialBond": 80000000000000000,
+    
+    "vm": "0xf027f4a985560fb13324e943edf55ad6f1d15dc1",
+    
+    "permissioned": false,
+    
+    "prank": "0xe934Dc97E347C6aCef74364B50125bb8689c40ff",
+    
+    "opcm": "0xeb32e20ebde266a769a5683cc80976f05d9e6e7b"
+    
+    
