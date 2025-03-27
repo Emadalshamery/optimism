@@ -168,3 +168,9 @@ Potentially you'll also need to cleanup dangling docker networks:
 ```shell
 docker network rm -f $(docker network ls -qf "name=kt-*")
 ```
+
+### `just devnet *` kills an existing enclave
+
+By default, `jusfile` recipes derived from the `devnet` recipe will attempt to destroy an existing
+enclave with the same name. This can be disabled by setting the `SKIP_ENCL_CLEAN` envvar, and the
+existing enclave will be preserved.

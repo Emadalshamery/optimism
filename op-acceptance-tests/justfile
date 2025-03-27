@@ -39,7 +39,7 @@ acceptance-test devnet="simple" gate="holocene":
         # Run the appropriate devnet from the kurtosis-devnet directory if needed.
         # Note: For now, due to a known bug, we ignore failures here
         #       because if the devnet is already running then this command will fail.
-        just {{KURTOSIS_DIR}}/{{ devnet }}-devnet || true
+        SKIP_ENCL_CLEAN="${SKIP_ENCL_CLEAN:-true}" just {{KURTOSIS_DIR}}/{{ devnet }}-devnet || true
 
         # Print which binary is being used (for debugging)
         BINARY_PATH=$(mise which op-acceptor)

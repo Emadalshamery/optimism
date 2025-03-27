@@ -82,6 +82,13 @@ devnet TEMPLATE_FILE DATA_FILE="" NAME="" PACKAGE=KURTOSIS_PACKAGE:
         fi
     fi
     export ENCL_NAME="$DEVNET_NAME"-devnet
+
+    if [[ -z "$SKIP_ENCL_CLEAN" ]]; then
+        # clear out any existing enclaves with the same name.
+        # this can fail and it doesn't matter.
+        kurtosis enclave rm "$ENCL_NAME" --force 2&>/dev/null || true
+    fi
+
     go run cmd/main.go -kurtosis-package {{PACKAGE}} \
         -environment "tests/$ENCL_NAME.json" \
         -template "{{TEMPLATE_FILE}}" \
