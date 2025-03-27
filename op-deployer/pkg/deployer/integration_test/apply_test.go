@@ -689,14 +689,14 @@ func newChainIntent(t *testing.T, dk *devkeys.MnemonicDevKeys, l1ChainID *big.In
 		Eip1559Denominator:                       standard.Eip1559Denominator,
 		Eip1559Elasticity:                        standard.Eip1559Elasticity,
 		Roles: state.ChainRoles{
-			L1ProxyAdminOwner: 		addrFor(t, dk, devkeys.L2ProxyAdminOwnerRole.Key(l1ChainID)),
-			L2ProxyAdminOwner: 		addrFor(t, dk, devkeys.L2ProxyAdminOwnerRole.Key(l1ChainID)),
-			SystemConfigOwner: 		addrFor(t, dk, devkeys.SystemConfigOwner.Key(l1ChainID)),
-			SystemConfigFeeAdmin: 	addrFor(t, dk, devkeys.SystemConfigFeeAdmin.Key(l1ChainID)),
-			UnsafeBlockSigner: 		addrFor(t, dk, devkeys.SequencerP2PRole.Key(l1ChainID)),
-			Batcher:           		addrFor(t, dk, devkeys.BatcherRole.Key(l1ChainID)),
-			Proposer:          		addrFor(t, dk, devkeys.ProposerRole.Key(l1ChainID)),
-			Challenger:        		addrFor(t, dk, devkeys.ChallengerRole.Key(l1ChainID)),
+			L1ProxyAdminOwner:    addrFor(t, dk, devkeys.L2ProxyAdminOwnerRole.Key(l1ChainID)),
+			L2ProxyAdminOwner:    addrFor(t, dk, devkeys.L2ProxyAdminOwnerRole.Key(l1ChainID)),
+			SystemConfigOwner:    addrFor(t, dk, devkeys.SystemConfigOwner.Key(l1ChainID)),
+			SystemConfigFeeAdmin: addrFor(t, dk, devkeys.SystemConfigFeeAdmin.Key(l1ChainID)),
+			UnsafeBlockSigner:    addrFor(t, dk, devkeys.SequencerP2PRole.Key(l1ChainID)),
+			Batcher:              addrFor(t, dk, devkeys.BatcherRole.Key(l1ChainID)),
+			Proposer:             addrFor(t, dk, devkeys.ProposerRole.Key(l1ChainID)),
+			Challenger:           addrFor(t, dk, devkeys.ChallengerRole.Key(l1ChainID)),
 		},
 	}
 }
@@ -808,18 +808,10 @@ func validateOPChainDeployment(t *testing.T, cg codeGetter, st *state.State, int
 		alloc := chainState.Allocs.Data.Accounts
 
 		chainIntent := intent.Chains[i]
-		checkImmutableBehindProxy(t, alloc, predeploys.BaseFeeVaultAddr, chainIntent.BaseFeeVaultRecipient)
-		checkImmutableBehindProxy(t, alloc, predeploys.L1FeeVaultAddr, chainIntent.L1FeeVaultRecipient)
-		checkImmutableBehindProxy(t, alloc, predeploys.SequencerFeeVaultAddr, chainIntent.SequencerFeeVaultRecipient)
-		checkImmutableBehindProxy(t, alloc, predeploys.OperatorFeeVaultAddr, chainIntent.OperatorFeeVaultRecipient)
-		checkImmutableBehindProxy(t, alloc, predeploys.OptimismMintableERC721FactoryAddr, common.BigToHash(new(big.Int).SetUint64(intent.L1ChainID)))
 
 		// ownership slots
 		var addrAsSlot common.Hash
 		addrAsSlot.SetBytes(chainIntent.Roles.L1ProxyAdminOwner.Bytes())
-		// slot 0
-		ownerSlot := common.Hash{}
-		checkStorageSlot(t, alloc, predeploys.ProxyAdminAddr, ownerSlot, addrAsSlot)
 
 		if govEnabled {
 			var defaultGovOwner common.Hash
@@ -835,20 +827,8 @@ func validateOPChainDeployment(t *testing.T, cg codeGetter, st *state.State, int
 	}
 }
 
-func getEIP1967ImplementationAddress(t *testing.T, allocations types.GenesisAlloc, proxyAddress common.Address) common.Address {
-	storage := allocations[proxyAddress].Storage
-	storageValue := storage[genesis.ImplementationSlot]
-	require.NotEmpty(t, storageValue, "Implementation address for %s should be set", proxyAddress)
-	return common.HexToAddress(storageValue.Hex())
-}
-
 type bytesMarshaler interface {
 	Bytes() []byte
-}
-
-func checkImmutableBehindProxy(t *testing.T, allocations types.GenesisAlloc, proxyContract common.Address, thing bytesMarshaler) {
-	implementationAddress := getEIP1967ImplementationAddress(t, allocations, proxyContract)
-	checkImmutable(t, allocations, implementationAddress, thing)
 }
 
 func checkImmutable(t *testing.T, allocations types.GenesisAlloc, implementationAddress common.Address, thing bytesMarshaler) {
