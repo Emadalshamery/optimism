@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import { Script } from "forge-std/Script.sol";
-import { stdToml } from "forge-std/StdToml.sol";
 
 import { ISuperchainConfig } from "interfaces/L1/ISuperchainConfig.sol";
 import { IProtocolVersions, ProtocolVersion } from "interfaces/L1/IProtocolVersions.sol";
