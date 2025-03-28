@@ -84,27 +84,27 @@ contract DeploySuperchain2_Test is Test {
 
         input = defaultInput();
         input.superchainProxyAdminOwner = address(0);
-        vm.expectRevert("DeploySuperchainInput: superchainProxyAdminOwner not set");
+        vm.expectRevert("DeploySuperchain: superchainProxyAdminOwner not set");
         deploySuperchain.run(input);
 
         input = defaultInput();
         input.protocolVersionsOwner = address(0);
-        vm.expectRevert("DeploySuperchainInput: protocolVersionsOwner not set");
+        vm.expectRevert("DeploySuperchain: protocolVersionsOwner not set");
         deploySuperchain.run(input);
 
         input = defaultInput();
         input.guardian = address(0);
-        vm.expectRevert("DeploySuperchainInput: guardian not set");
+        vm.expectRevert("DeploySuperchain: guardian not set");
         deploySuperchain.run(input);
 
         input = defaultInput();
         input.requiredProtocolVersion = ProtocolVersion.wrap(0);
-        vm.expectRevert("DeploySuperchainInput: requiredProtocolVersion not set");
+        vm.expectRevert("DeploySuperchain: requiredProtocolVersion not set");
         deploySuperchain.run(input);
 
         input = defaultInput();
         input.recommendedProtocolVersion = ProtocolVersion.wrap(0);
-        vm.expectRevert("DeploySuperchainInput: recommendedProtocolVersion not set");
+        vm.expectRevert("DeploySuperchain: recommendedProtocolVersion not set");
         deploySuperchain.run(input);
     }
 
