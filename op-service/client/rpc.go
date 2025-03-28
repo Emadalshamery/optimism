@@ -231,7 +231,7 @@ func (b *BaseRPCClient) CallContext(ctx context.Context, result any, method stri
 	defer cancel()
 	err := b.c.CallContext(cCtx, result, method, args...)
 	if ed, ok := err.(ErrorDataProvider); ok && ed.ErrorData() != nil {
-		err = fmt.Errorf("%s: %v", err.Error(), ed.ErrorData())
+		err = fmt.Errorf("%w: %v", err, ed.ErrorData())
 	}
 	return err
 }
@@ -241,7 +241,7 @@ func (b *BaseRPCClient) BatchCallContext(ctx context.Context, batch []rpc.BatchE
 	defer cancel()
 	err := b.c.BatchCallContext(cCtx, batch)
 	if ed, ok := err.(ErrorDataProvider); ok && ed.ErrorData() != nil {
-		err = fmt.Errorf("%s: %v", err.Error(), ed.ErrorData())
+		err = fmt.Errorf("%w: %v", err, ed.ErrorData())
 	}
 	return err
 }
