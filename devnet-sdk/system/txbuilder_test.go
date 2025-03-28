@@ -6,9 +6,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum-optimism/optimism/devnet-sdk/descriptors"
+	"github.com/ethereum-optimism/optimism/devnet-sdk/contracts/bindings"
 	"github.com/ethereum-optimism/optimism/devnet-sdk/interfaces"
 	"github.com/ethereum-optimism/optimism/devnet-sdk/types"
+	"github.com/ethereum-optimism/optimism/op-service/eth"
+	"github.com/ethereum-optimism/optimism/op-service/sources"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -53,6 +55,16 @@ func (m *mockWallet) SendETH(to types.Address, amount types.Balance) types.Write
 	return args.Get(0).(types.WriteInvocation[any])
 }
 
+func (m *mockWallet) InitiateMessage(chainID types.ChainID, target common.Address, message []byte) types.WriteInvocation[any] {
+	args := m.Called(chainID, target, message)
+	return args.Get(0).(types.WriteInvocation[any])
+}
+
+func (m *mockWallet) ExecuteMessage(identifier bindings.Identifier, sentMessage []byte) types.WriteInvocation[any] {
+	args := m.Called(identifier, sentMessage)
+	return args.Get(0).(types.WriteInvocation[any])
+}
+
 func (m *mockWallet) Balance() types.Balance {
 	args := m.Called()
 	return args.Get(0).(types.Balance)
@@ -79,9 +91,9 @@ func newMockChain() *mockChain {
 	}
 }
 
-func (m *mockChain) Node() Node {
+func (m *mockChain) Nodes() []Node {
 	args := m.Called()
-	return args.Get(0).(Node)
+	return args.Get(0).([]Node)
 }
 
 func (m *mockChain) ID() types.ChainID {
@@ -104,22 +116,22 @@ func (m *mockChain) RPCURL() string {
 	return args.String(0)
 }
 
-func (m *mockChain) Client() (*ethclient.Client, error) {
+func (m *mockChain) Client() (*sources.EthClient, error) {
 	args := m.Called()
-	return args.Get(0).(*ethclient.Client), nil
+	return args.Get(0).(*sources.EthClient), nil
 }
 
-func (m *mockChain) Wallets(ctx context.Context) ([]Wallet, error) {
-	return nil, nil
+func (m *mockChain) Wallets() WalletMap {
+	return nil
 }
 
 func (m *mockChain) Config() (*params.ChainConfig, error) {
 	return nil, fmt.Errorf("not implemented for mock chain")
 }
 
-func (m *mockChain) Addresses() descriptors.AddressMap {
+func (m *mockChain) Addresses() AddressMap {
 	args := m.Called()
-	return args.Get(0).(descriptors.AddressMap)
+	return args.Get(0).(AddressMap)
 }
 
 type mockNode struct {
@@ -145,15 +157,41 @@ func (m *mockNode) PendingNonceAt(ctx context.Context, addr common.Address) (uin
 	return args.Get(0).(uint64), args.Error(1)
 }
 
-func (m *mockNode) BlockByNumber(ctx context.Context, number *big.Int) (*ethtypes.Block, error) {
+func (m *mockNode) BlockByNumber(ctx context.Context, number *big.Int) (eth.BlockInfo, error) {
 	args := m.Called(ctx, number)
-	return args.Get(0).(*ethtypes.Block), args.Error(1)
+	return args.Get(0).(eth.BlockInfo), args.Error(1)
+}
+
+func (m *mockNode) Client() (*sources.EthClient, error) {
+	args := m.Called()
+	return args.Get(0).(*sources.EthClient), args.Error(1)
+}
+
+func (m *mockNode) ContractsRegistry() interfaces.ContractsRegistry {
+	args := m.Called()
+	return args.Get(0).(interfaces.ContractsRegistry)
+}
+
+func (m *mockNode) GethClient() (*ethclient.Client, error) {
+	args := m.Called()
+	return args.Get(0).(*ethclient.Client), args.Error(1)
+}
+
+func (m *mockNode) RPCURL() string {
+	args := m.Called()
+	return args.Get(0).(string)
+}
+
+func (m *mockNode) SupportsEIP(ctx context.Context, eip uint64) bool {
+	args := m.Called(ctx, eip)
+	return args.Bool(0)
 }
 
 func TestNewTxBuilder(t *testing.T) {
 	ctx := context.Background()
-	chain := newMockChain()
 
+	var node *mockNode
+	var chain *mockChain
 	tests := []struct {
 		name           string
 		setupMock      func()
@@ -164,8 +202,11 @@ func TestNewTxBuilder(t *testing.T) {
 		{
 			name: "legacy only",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
+				chain = newMockChain()
+				node = newMockNode()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
 			},
 			opts:           nil,
 			expectedTypes:  []uint8{ethtypes.LegacyTxType},
@@ -174,8 +215,11 @@ func TestNewTxBuilder(t *testing.T) {
 		{
 			name: "with EIP-1559",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
+				chain = newMockChain()
+				node = newMockNode()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
 			},
 			opts:           nil,
 			expectedTypes:  []uint8{ethtypes.LegacyTxType, ethtypes.DynamicFeeTxType, ethtypes.AccessListTxType},
@@ -184,8 +228,11 @@ func TestNewTxBuilder(t *testing.T) {
 		{
 			name: "with EIP-4844",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(true).Once()
+				chain = newMockChain()
+				node = newMockNode()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(true).Once()
 			},
 			opts:           nil,
 			expectedTypes:  []uint8{ethtypes.LegacyTxType, ethtypes.DynamicFeeTxType, ethtypes.AccessListTxType, ethtypes.BlobTxType},
@@ -205,8 +252,11 @@ func TestNewTxBuilder(t *testing.T) {
 		{
 			name: "custom margin",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
+				chain = newMockChain()
+				node = newMockNode()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
 			},
 			opts: []TxBuilderOption{
 				WithGasLimitMargin(50),
@@ -248,13 +298,11 @@ func TestBuildTx(t *testing.T) {
 		{
 			name: "legacy tx",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
-				chain.On("Node").Return(node).Once()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
 				node.On("PendingNonceAt", ctx, addr).Return(nonce, nil).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasPrice", ctx).Return(gasPrice, nil).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasLimit", ctx, mock.Anything).Return(uint64(21000), nil).Once()
 			},
 			opts: []TxOption{
@@ -268,14 +316,12 @@ func TestBuildTx(t *testing.T) {
 		{
 			name: "dynamic fee tx",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
-				chain.On("Node").Return(node).Once()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
 				node.On("PendingNonceAt", ctx, addr).Return(nonce, nil).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasPrice", ctx).Return(gasPrice, nil).Once()
 				chain.On("ID").Return(chainID).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasLimit", ctx, mock.Anything).Return(uint64(21000), nil).Once()
 			},
 			opts: []TxOption{
@@ -289,14 +335,12 @@ func TestBuildTx(t *testing.T) {
 		{
 			name: "access list tx",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
-				chain.On("Node").Return(node).Once()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
 				node.On("PendingNonceAt", ctx, addr).Return(nonce, nil).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasPrice", ctx).Return(gasPrice, nil).Once()
 				chain.On("ID").Return(chainID).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasLimit", ctx, mock.Anything).Return(uint64(21000), nil).Once()
 			},
 			opts: []TxOption{
@@ -318,14 +362,12 @@ func TestBuildTx(t *testing.T) {
 		{
 			name: "blob tx",
 			setupMock: func() {
-				chain.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
-				chain.On("SupportsEIP", ctx, uint64(4844)).Return(true).Once()
-				chain.On("Node").Return(node).Once()
+				chain.On("Nodes").Return([]Node{node})
+				node.On("SupportsEIP", ctx, uint64(1559)).Return(true).Once()
+				node.On("SupportsEIP", ctx, uint64(4844)).Return(true).Once()
 				node.On("PendingNonceAt", ctx, addr).Return(nonce, nil).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasPrice", ctx).Return(gasPrice, nil).Once()
 				chain.On("ID").Return(chainID).Once()
-				chain.On("Node").Return(node).Once()
 				node.On("GasLimit", ctx, mock.Anything).Return(uint64(21000), nil).Once()
 			},
 			opts: []TxOption{
@@ -362,8 +404,6 @@ func TestBuildTx(t *testing.T) {
 
 func TestCalculateGasLimit(t *testing.T) {
 	ctx := context.Background()
-	chain := newMockChain()
-	node := newMockNode()
 	addr := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 	tests := []struct {
@@ -407,13 +447,12 @@ func TestCalculateGasLimit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set up EIP support expectations for NewTxBuilder
-			chain.On("SupportsEIP", ctx, uint64(1559)).Return(false).Once()
-			chain.On("SupportsEIP", ctx, uint64(4844)).Return(false).Once()
-
-			if tt.expectEstimate {
-				chain.On("Node").Return(node).Once()
-				node.On("GasLimit", ctx, tt.opts).Return(tt.estimatedGas, nil).Once()
-			}
+			chain := newMockChain()
+			node := newMockNode()
+			chain.On("Nodes").Return([]Node{node})
+			node.On("SupportsEIP", ctx, uint64(1559)).Return(false)
+			node.On("SupportsEIP", ctx, uint64(4844)).Return(false)
+			node.On("GasLimit", ctx, tt.opts).Return(tt.estimatedGas, nil).Once()
 
 			builder := NewTxBuilder(ctx, chain, WithGasLimitMargin(tt.margin))
 			limit, err := builder.calculateGasLimit(tt.opts)

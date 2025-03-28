@@ -189,6 +189,10 @@ contract L2Genesis is Deployer {
         if (writeForkGenesisAllocs(_fork, Fork.ISTHMUS, _mode)) {
             return;
         }
+
+        if (writeForkGenesisAllocs(_fork, Fork.JOVIAN, _mode)) {
+            return;
+        }
     }
 
     function writeForkGenesisAllocs(Fork _latest, Fork _current, OutputMode _mode) internal returns (bool isLatest_) {
@@ -395,16 +399,9 @@ contract L2Genesis is Deployer {
 
     /// @notice This predeploy is following the safety invariant #1.
     function setL1Block() public {
-        if (cfg.useInterop()) {
-            string memory cname = "L1BlockInterop";
-            address impl = Predeploys.predeployToCodeNamespace(Predeploys.L1_BLOCK_ATTRIBUTES);
-            console.log("Setting %s implementation at: %s", cname, impl);
-            vm.etch(impl, vm.getDeployedCode(string.concat(cname, ".sol:", cname)));
-        } else {
-            _setImplementationCode(Predeploys.L1_BLOCK_ATTRIBUTES);
-            // Note: L1 block attributes are set to 0.
-            // Before the first user-tx the state is overwritten with actual L1 attributes.
-        }
+        // Note: L1 block attributes are set to 0.
+        // Before the first user-tx the state is overwritten with actual L1 attributes.
+        _setImplementationCode(Predeploys.L1_BLOCK_ATTRIBUTES);
     }
 
     /// @notice This predeploy is following the safety invariant #1.
@@ -562,13 +559,13 @@ contract L2Genesis is Deployer {
         vm.resetNonce(address(eas));
     }
 
-    /// @notice This predeploy is following the safety invariant #2.
+    /// @notice This predeploy is following the safety invariant #1.
     ///         This contract has no initializer.
     function setCrossL2Inbox() internal {
         _setImplementationCode(Predeploys.CROSS_L2_INBOX);
     }
 
-    /// @notice This predeploy is following the safety invariant #2.
+    /// @notice This predeploy is following the safety invariant #1.
     ///         This contract has no initializer.
     function setL2ToL2CrossDomainMessenger() internal {
         _setImplementationCode(Predeploys.L2_TO_L2_CROSS_DOMAIN_MESSENGER);

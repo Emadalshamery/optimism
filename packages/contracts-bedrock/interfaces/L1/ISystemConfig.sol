@@ -17,17 +17,17 @@ interface ISystemConfig {
         address l1CrossDomainMessenger;
         address l1ERC721Bridge;
         address l1StandardBridge;
-        address disputeGameFactory;
         address optimismPortal;
         address optimismMintableERC20Factory;
     }
+
+    error ReinitializableBase_ZeroInitVersion();
 
     event ConfigUpdate(uint256 indexed version, UpdateType indexed updateType, bytes data);
     event Initialized(uint8 version);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     function BATCH_INBOX_SLOT() external view returns (bytes32);
-    function DISPUTE_GAME_FACTORY_SLOT() external view returns (bytes32);
     function L1_CROSS_DOMAIN_MESSENGER_SLOT() external view returns (bytes32);
     function L1_ERC_721_BRIDGE_SLOT() external view returns (bytes32);
     function L1_STANDARD_BRIDGE_SLOT() external view returns (bytes32);
@@ -54,12 +54,15 @@ interface ISystemConfig {
         address _unsafeBlockSigner,
         IResourceMetering.ResourceConfig memory _config,
         address _batchInbox,
-        Addresses memory _addresses
+        Addresses memory _addresses,
+        uint256 _l2ChainId
     )
         external;
+    function initVersion() external view returns (uint8);
     function l1CrossDomainMessenger() external view returns (address addr_);
     function l1ERC721Bridge() external view returns (address addr_);
     function l1StandardBridge() external view returns (address addr_);
+    function l2ChainId() external view returns (uint256);
     function maximumGasLimit() external pure returns (uint64);
     function minimumGasLimit() external view returns (uint64);
     function operatorFeeConstant() external view returns (uint64);
@@ -81,6 +84,7 @@ interface ISystemConfig {
     function startBlock() external view returns (uint256 startBlock_);
     function transferOwnership(address newOwner) external; // nosemgrep
     function unsafeBlockSigner() external view returns (address addr_);
+    function upgrade(uint256 _l2ChainId) external;
     function version() external pure returns (string memory);
 
     function __constructor__() external;
