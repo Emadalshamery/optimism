@@ -261,7 +261,7 @@ func (bs *BatcherService) initChannelConfig(cfg *CLIConfig) error {
 	}
 
 	if bs.UseAltDA && cc.UseBlobs {
-		return fmt.Errorf("cannot use blobs with Alt-DA")
+		return fmt.Errorf("cannot use data availability type blobs or auto with Alt-DA")
 	}
 
 	if bs.UseAltDA && cc.MaxFrameSize > altda.MaxInputSize {
