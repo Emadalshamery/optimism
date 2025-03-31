@@ -89,17 +89,17 @@ contract ProtocolVersions_Setters_Test is ProtocolVersions_Init {
         emit ConfigUpdate(0, IProtocolVersions.UpdateType.REQUIRED_PROTOCOL_VERSION, abi.encode(_version));
 
         vm.prank(protocolVersions.owner());
-        protocolVersions.setRequired(ProtocolVersion.wrap(_version));
-        assertEq(ProtocolVersion.unwrap(protocolVersions.required()), _version);
+        protocolVersions.setRequired(ProtocolVersion.wrap(bytes32(_version)));
+        assertEq(ProtocolVersion.unwrap(protocolVersions.required()), bytes32(_version));
     }
 
     /// @dev Tests that `setRecommended` updates the recommended protocol version successfully.
     function testFuzz_setRecommended_succeeds(uint256 _version) external {
         vm.expectEmit(true, true, true, true);
-        emit ConfigUpdate(0, IProtocolVersions.UpdateType.RECOMMENDED_PROTOCOL_VERSION, abi.encode(_version));
+        emit ConfigUpdate(0, IProtocolVersions.UpdateType.RECOMMENDED_PROTOCOL_VERSION, abi.encode(bytes32(_version)));
 
         vm.prank(protocolVersions.owner());
-        protocolVersions.setRecommended(ProtocolVersion.wrap(_version));
-        assertEq(ProtocolVersion.unwrap(protocolVersions.recommended()), _version);
+        protocolVersions.setRecommended(ProtocolVersion.wrap(bytes32(_version)));
+        assertEq(ProtocolVersion.unwrap(protocolVersions.recommended()), bytes32(_version));
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-type ProtocolVersion is uint256;
+type ProtocolVersion is bytes32;
 
 interface IProtocolVersions {
     enum UpdateType {

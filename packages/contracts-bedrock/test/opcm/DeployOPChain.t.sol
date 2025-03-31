@@ -300,8 +300,8 @@ contract DeployOPChain_TestBase is Test {
     address protocolVersionsOwner = makeAddr("defaultProtocolVersionsOwner");
     address guardian = makeAddr("defaultGuardian");
     bool paused = false;
-    ProtocolVersion requiredProtocolVersion = ProtocolVersion.wrap(1);
-    ProtocolVersion recommendedProtocolVersion = ProtocolVersion.wrap(2);
+    ProtocolVersion requiredProtocolVersion = ProtocolVersion.wrap(bytes32(uint256(1)));
+    ProtocolVersion recommendedProtocolVersion = ProtocolVersion.wrap(bytes32(uint256(2)));
 
     // Define default inputs for DeployImplementations.
     // `superchainConfigProxy` and `protocolVersionsProxy` are set during `setUp` since they are

@@ -17,8 +17,8 @@ contract DeploySuperchainInput_Test is Test {
     address protocolVersionsOwner = makeAddr("defaultProtocolVersionsOwner");
     address guardian = makeAddr("defaultGuardian");
     bool paused = false;
-    ProtocolVersion requiredProtocolVersion = ProtocolVersion.wrap(1);
-    ProtocolVersion recommendedProtocolVersion = ProtocolVersion.wrap(2);
+    ProtocolVersion requiredProtocolVersion = ProtocolVersion.wrap(bytes32(uint256(1)));
+    ProtocolVersion recommendedProtocolVersion = ProtocolVersion.wrap(bytes32(uint256(2)));
 
     function setUp() public {
         dsi = new DeploySuperchainInput();
@@ -131,15 +131,15 @@ contract DeploySuperchain_Test is Test {
     address defaultProtocolVersionsOwner = makeAddr("defaultProtocolVersionsOwner");
     address defaultGuardian = makeAddr("defaultGuardian");
     bool defaultPaused = false;
-    ProtocolVersion defaultRequiredProtocolVersion = ProtocolVersion.wrap(1);
-    ProtocolVersion defaultRecommendedProtocolVersion = ProtocolVersion.wrap(2);
+    ProtocolVersion defaultRequiredProtocolVersion = ProtocolVersion.wrap(bytes32(uint256(1)));
+    ProtocolVersion defaultRecommendedProtocolVersion = ProtocolVersion.wrap(bytes32(uint256(2)));
 
     function setUp() public {
         deploySuperchain = new DeploySuperchain();
         (dsi, dso) = deploySuperchain.etchIOContracts();
     }
 
-    function unwrap(ProtocolVersion _pv) internal pure returns (uint256) {
+    function unwrap(ProtocolVersion _pv) internal pure returns (bytes32) {
         return ProtocolVersion.unwrap(_pv);
     }
 
@@ -155,8 +155,8 @@ contract DeploySuperchain_Test is Test {
         address protocolVersionsOwner = address(uint160(uint256(hash(_seed, 1))));
         address guardian = address(uint160(uint256(hash(_seed, 2))));
         bool paused = bool(uint8(uint256(hash(_seed, 3))) % 2 == 0);
-        ProtocolVersion requiredProtocolVersion = ProtocolVersion.wrap(uint256(hash(_seed, 4)));
-        ProtocolVersion recommendedProtocolVersion = ProtocolVersion.wrap(uint256(hash(_seed, 5)));
+        ProtocolVersion requiredProtocolVersion = ProtocolVersion.wrap(hash(_seed, 4));
+        ProtocolVersion recommendedProtocolVersion = ProtocolVersion.wrap(hash(_seed, 5));
 
         // Set the input values on the input contract.
         dsi.set(dsi.superchainProxyAdminOwner.selector, superchainProxyAdminOwner);

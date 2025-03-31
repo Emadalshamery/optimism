@@ -215,7 +215,7 @@ contract Initializer_Test is CommonTest {
                 name: "ProtocolVersionsImpl",
                 target: EIP1967Helper.getImplementation(address(protocolVersions)),
                 initCalldata: abi.encodeCall(
-                    protocolVersions.initialize, (address(0), ProtocolVersion.wrap(1), ProtocolVersion.wrap(2))
+                    protocolVersions.initialize, (address(0), ProtocolVersion.wrap(bytes32(uint256(1))), ProtocolVersion.wrap(bytes32(uint256(2))))
                 )
             })
         );
@@ -225,7 +225,7 @@ contract Initializer_Test is CommonTest {
                 name: "ProtocolVersionsProxy",
                 target: address(protocolVersions),
                 initCalldata: abi.encodeCall(
-                    protocolVersions.initialize, (address(0), ProtocolVersion.wrap(1), ProtocolVersion.wrap(2))
+                    protocolVersions.initialize, (address(0), ProtocolVersion.wrap(bytes32(uint256(1))), ProtocolVersion.wrap(bytes32(uint256(2))))
                 )
             })
         );
