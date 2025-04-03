@@ -24,6 +24,7 @@ import { ISystemConfig } from "interfaces/L1/ISystemConfig.sol";
 import { IProxyAdmin } from "interfaces/universal/IProxyAdmin.sol";
 import { IOPContractsManager } from "interfaces/L1/IOPContractsManager.sol";
 import { IAnchorStateRegistry } from "interfaces/dispute/IAnchorStateRegistry.sol";
+import { ISuperchainConfig } from "interfaces/L1/ISuperchainConfig.sol";
 
 /// @title ForkLive
 /// @notice This script is called by Setup.sol as a preparation step for the foundry test suite, and is run as an
@@ -170,6 +171,20 @@ contract ForkLive is Deployer {
         address upgrader = proxyAdmin.owner();
         vm.label(upgrader, "ProxyAdmin Owner");
 
+        // The 2.0.0 OPCM requires that the SuperchainConfig and ProtocolVersions contracts
+        // have been upgraded before it will upgrade other contracts.
+        // Those contracts can only be upgrade by the OP Mainnet ProxyAdminOwner. So for chains which have a different
+        // ProxyAdminOwner, we first need to call opcm.upgrade from the OP Mainnet PAO.
+        ISuperchainConfig superchainConfig = ISuperchainConfig(artifacts.mustGetAddress("SuperchainConfigProxy"));
+        console.log("ForkLive: superchainConfig address:", address(superchainConfig));
+        address mainnetPAO = IProxyAdmin(EIP1967Helper.getAdmin(address(superchainConfig))).owner();
+
+        if (upgrader != mainnetPAO) {
+            // Upgrade the SuperchainConfig and ProtocolVersions contracts so that others can call opcm.upgrade
+            vm.store(0x95703e0982140D16f8ebA6d158FccEde42f04a4C, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc, 0x0000000000000000000000004da82a327773965b8d4d85fa3db8249b387458e7);
+            vm.store(0x8062AbC286f5e7D9428a0Ccb9AbD71e50d93b935, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc, 0x00000000000000000000000037e15e4d6dffa9e5e320ee1ec036922e563cb76c);
+        }
+
         IOPContractsManager.OpChainConfig[] memory opChains = new IOPContractsManager.OpChainConfig[](1);
         opChains[0] = IOPContractsManager.OpChainConfig({
             systemConfigProxy: systemConfig,
@@ -177,6 +192,7 @@ contract ForkLive is Deployer {
             absolutePrestate: Claim.wrap(bytes32(keccak256("absolutePrestate")))
         });
 
+        console.log("ForkLive: upgrader address:", upgrader);
         // Temporarily replace the upgrader with a DelegateCaller so we can test the upgrade,
         // then reset its code to the original code.
         bytes memory upgraderCode = address(upgrader).code;
