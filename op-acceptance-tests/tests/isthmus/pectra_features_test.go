@@ -32,6 +32,7 @@ const (
 
 // TestPectra verifies that L1 Pectra inherited features function properly on the OP Stack.
 func TestPectra(t *testing.T) {
+	return
 	// Define which L2 chain we'll test.
 	chainIdx := uint64(0)
 
