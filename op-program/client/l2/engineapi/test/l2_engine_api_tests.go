@@ -161,10 +161,47 @@ func RunEngineAPITests(t *testing.T, createBackend func(t *testing.T) engineapi.
 		envelope := api.getPayload(payloadID)
 
 		// note nil requests field:
+		// TODO need to make sure all other fields are valid to make this a good test.
 		r, err := api.engine.NewPayloadV4(api.ctx, envelope.ExecutionPayload, []common.Hash{}, envelope.ParentBeaconBlockRoot, nil)
 		api.assert.Error(err)
 		api.assert.ErrorContains(err, "Invalid parameters")
 		api.assert.Equal(eth.ExecutionInvalid, r.Status)
+	})
+
+	t.Run("RejectNewPayloadV4WithInvalidWithdrawals", func(t *testing.T) {
+		api := newTestHelper(t, createBackend)
+		genesis := api.backend.CurrentHeader()
+
+		arbitraryHash := genesis.Hash()
+
+		// Build a valid block
+		payloadID := api.startBlockBuilding(genesis, eth.Uint64Quantity(genesis.Time+2))
+		envelope := api.getPayload(payloadID)
+
+		// Set the withdrawals root as we would for an Isthmus block
+		envelope.ExecutionPayload.WithdrawalsRoot = &arbitraryHash
+		envelope.ExecutionPayload.Withdrawals = &types.Withdrawals{}
+
+		// TODO need to make sure all other fields are valid to make this a good test.
+		r, err := api.engine.NewPayloadV4(api.ctx, envelope.ExecutionPayload, []common.Hash{}, envelope.ParentBeaconBlockRoot, []hexutil.Bytes{})
+		api.assert.Error(err)
+		api.assert.ErrorContains(err, "Invalid parameters")
+		api.assert.Equal(eth.ExecutionInvalid, r.Status)
+
+		// set withdrawals list to nil
+		envelope.ExecutionPayload.Withdrawals = nil
+		r, err = api.engine.NewPayloadV4(api.ctx, envelope.ExecutionPayload, []common.Hash{}, envelope.ParentBeaconBlockRoot, []hexutil.Bytes{})
+		api.assert.Error(err)
+		api.assert.ErrorContains(err, "Invalid parameters")
+		api.assert.Equal(eth.ExecutionInvalid, r.Status)
+
+		// set withdrawals list to non-empty list
+		envelope.ExecutionPayload.Withdrawals = &types.Withdrawals{nil, nil}
+		r, err = api.engine.NewPayloadV4(api.ctx, envelope.ExecutionPayload, []common.Hash{}, envelope.ParentBeaconBlockRoot, []hexutil.Bytes{})
+		api.assert.Error(err)
+		api.assert.ErrorContains(err, "Invalid parameters")
+		api.assert.Equal(eth.ExecutionInvalid, r.Status)
+
 	})
 
 	t.Run("RejectBlockWithSameTimeAsParent", func(t *testing.T) {
