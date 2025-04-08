@@ -2,6 +2,7 @@ package kt
 
 import (
 	"context"
+	"strings"
 
 	"github.com/ethereum-optimism/optimism/devnet-sdk/controller/surface"
 	"github.com/ethereum-optimism/optimism/kurtosis-devnet/pkg/kurtosis/api/run"
@@ -26,7 +27,16 @@ func (s *KurtosisControllerSurface) StartService(ctx context.Context, serviceNam
 def run(plan):
 	plan.start_service(name="` + serviceName + `")
 `
-	return s.runner.RunScript(ctx, script)
+	// start_service is not idempotent, and doesn't return a typed error,
+	// so we need to check the error message
+	if err := s.runner.RunScript(ctx, script); err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "is already in use by container") {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *KurtosisControllerSurface) StopService(ctx context.Context, serviceName string) error {
@@ -34,6 +44,7 @@ func (s *KurtosisControllerSurface) StopService(ctx context.Context, serviceName
 def run(plan):
 	plan.stop_service(name="` + serviceName + `")
 `
+	// stop_service is idempotent
 	return s.runner.RunScript(ctx, script)
 }
 
