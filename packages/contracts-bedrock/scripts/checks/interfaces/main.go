@@ -34,6 +34,80 @@ var excludeContracts = []string{
 	"KontrolCheatsBase", "IResolvedDelegateProxy",
 }
 
+// Contracts that don't need an interface
+var excludeSourceContracts = []string{
+	// Libraries don't need interfaces
+	"Bytes", "Bytes32", "Encoding", "Hashing", "LibAddress", "LibBytesUtils", "LibMap", "LibMath", "LibSort", "LibString",
+
+	// Test helpers and mocks
+	"ERC20", "WETH9", "TestUtil", "TestERC20", "TestLib", "MockOVMCodeChecker", "MockERC20",
+	"MIPS", "MIPSMemory", "PreimageOracle", "PreimageKeyLib",
+
+	// Abstract contracts
+	"CrossDomainMessenger", "Semver", "FeeVault", "StandardBridge", "OptimismPortal",
+
+	// Special exclusions for specific reasons
+	"SafeCall", "ResourceMetering", "Transactor", "AddressManager", "AddressResolver",
+	"L1Block", "GasPriceOracle", "Burn", "WETH9",
+	"AutoRedeem", "Initializable", "Predeploys", "Proxy",
+	"SchemaRegistry", "AttestationStation", "EAS",
+
+	// These are purely implementation contracts without interfaces needed
+	"Ownable", "UUPSUpgradeable", "Clones", "Create2",
+	"ProxyAdmin", "L1ChugSplashProxy", "ERC721Bridge", "ERC721BridgeLegacy",
+	"CallContextHelper", "ImmutableProxy", "ResolvedDelegateProxy",
+
+	// L1 contracts
+	"DataAvailabilityChallenge", "ETHLockbox", "L1CrossDomainMessenger", "L1ERC721Bridge",
+	"L1StandardBridge", "OPContractsManagerContractsContainer", "OPContractsManagerBase",
+	"OPContractsManagerGameTypeAdder", "OPContractsManagerUpgrader", "OPContractsManagerDeployer",
+	"OPContractsManagerInteropMigrator", "OPContractsManager", "OptimismPortal2",
+	"ProtocolVersions", "ProxyAdminOwnedBase", "StandardValidatorBase", "StandardValidatorV180",
+	"StandardValidatorV200", "StandardValidatorV300", "SuperchainConfig", "SystemConfig",
+
+	// L2 contracts
+	"BaseFeeVault", "CrossDomainOwnable", "CrossDomainOwnable2", "CrossDomainOwnable3",
+	"CrossL2Inbox", "ETHLiquidity", "L1FeeVault", "L2CrossDomainMessenger", "L2ERC721Bridge",
+	"L2StandardBridge", "L2StandardBridgeInterop", "L2ToL1MessagePasser", "L2ToL2CrossDomainMessenger",
+	"OperatorFeeVault", "OptimismMintableERC721", "OptimismMintableERC721Factory",
+	"OptimismSuperchainERC20", "OptimismSuperchainERC20Beacon", "OptimismSuperchainERC20Factory",
+	"SequencerFeeVault", "SuperchainERC20", "SuperchainTokenBridge", "SuperchainWETH", "WETH",
+
+	// Cannon contracts
+	"MIPS2", "MIPS64",
+
+	// Dispute contracts
+	"AnchorStateRegistry", "DelayedWETH", "DisputeGameFactory", "FaultDisputeGame",
+	"PermissionedDisputeGame", "SuperFaultDisputeGame", "SuperPermissionedDisputeGame",
+
+	// Governance contracts
+	"GovernanceToken", "MintManager",
+
+	// Integration contracts
+	"EventLogger",
+
+	// Legacy contracts
+	"DeployerWhitelist", "L1BlockNumber", "LegacyMessagePasser", "LegacyMintableERC20",
+
+	// Library-related contracts
+	"Burner", "TransientReentrancyAware",
+
+	// Periphery contracts
+	"AssetReceiver", "TransferOnion", "Drippie", "CheckBalanceLow", "CheckSecrets",
+	"CheckTrue", "Faucet", "AdminFaucetAuthModule", "DisputeMonitorHelper",
+
+	// Safe contracts
+	"DeputyGuardianModule", "DeputyPauseModule", "LivenessGuard", "LivenessModule",
+
+	// Universal contracts
+	"CrossDomainMessengerLegacySpacer0", "CrossDomainMessengerLegacySpacer1",
+	"OptimismMintableERC20", "OptimismMintableERC20Factory", "ReinitializableBase",
+	"SafeSend", "StorageSetter", "WETH98",
+
+	// Vendor contracts
+	"RISCV", "EIP1271Verifier", "SchemaResolver",
+}
+
 type ContractDefinition struct {
 	ContractKind string `json:"contractKind"`
 	Name         string `json:"name"`
@@ -55,11 +129,18 @@ type Artifact struct {
 }
 
 func main() {
+	// Part 1: Check that all interfaces match their corresponding contracts
 	if _, err := common.ProcessFilesGlob(
 		[]string{"forge-artifacts/**/*.json"},
 		[]string{},
 		processFile,
 	); err != nil {
+		fmt.Printf("error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Part 2: Check that all contracts in src have a corresponding interface
+	if err := verifyAllContractsHaveInterfaces(); err != nil {
 		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
@@ -383,4 +464,104 @@ func getString(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// Check if a source contract is in the exclude list
+func isExcludedSourceContract(contractName string) bool {
+	for _, excluded := range excludeSourceContracts {
+		if excluded == contractName {
+			return true
+		}
+	}
+	return false
+}
+
+// Function to verify that all contracts in the src directory have corresponding interfaces
+func verifyAllContractsHaveInterfaces() error {
+	reporter := common.NewErrorReporter()
+
+	// Get the current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	srcDir := filepath.Join(cwd, "src")
+
+	var interfaceTracker = make(map[string]bool)
+	var contractTracker = make(map[string]bool)
+
+	// First, get all interface files to track which interfaces exist
+	interfaceFiles, err := common.FindFiles([]string{"forge-artifacts/**/*.json"}, []string{})
+	if err != nil {
+		return fmt.Errorf("failed to find interface files: %w", err)
+	}
+
+	for _, path := range interfaceFiles {
+		artifact, err := readArtifact(path)
+		if err != nil {
+			continue
+		}
+
+		contractName := strings.Split(filepath.Base(path), ".")[0]
+		contractDef := getContractDefinition(artifact, contractName)
+
+		if contractDef != nil && contractDef.ContractKind == "interface" && strings.HasPrefix(contractName, "I") {
+			// This is an interface, track the base name it corresponds to
+			baseName := contractName[1:] // Remove the "I" prefix
+			interfaceTracker[baseName] = true
+		}
+	}
+
+	// Now find all contract files in the src directory
+	err = filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Only process .sol files
+		if !info.IsDir() && strings.HasSuffix(path, ".sol") {
+			// Read the file to determine if it's a contract
+			file, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", path, err)
+			}
+
+			// Simple regex to find contract definitions
+			// This is a simplified approach - a proper parser would be better for production code
+			contractRegex := regexp.MustCompile(`(?m)^\s*(contract|abstract contract)\s+(\w+)`)
+			matches := contractRegex.FindAllStringSubmatch(string(file), -1)
+
+			for _, match := range matches {
+				if len(match) >= 3 {
+					contractName := match[2]
+					contractTracker[contractName] = true
+
+					// Skip contracts that are excluded
+					if isExcludedSourceContract(contractName) {
+						continue
+					}
+
+					// Check if interface exists
+					if !interfaceTracker[contractName] {
+						relativePath, _ := filepath.Rel(cwd, path)
+						reporter.Fail("Contract %s in %s does not have a corresponding interface I%s",
+							contractName, relativePath, contractName)
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error walking the src directory: %w", err)
+	}
+
+	if reporter.HasError() {
+		return fmt.Errorf("some contracts do not have corresponding interfaces")
+	}
+
+	return nil
 }
