@@ -139,7 +139,7 @@
     "initCodeHash": "0x1f4e7cfdbcf7a8ca0ebac69bc7fe74143286a0e51a06ee9cbd699d68efd26dba",
     "sourceCodeHash": "0x20256a2196daca39b56bfae1c90b8871349916dc47461b5ca078c2013c067571"
   },
-  "src/cannon/MIPS64.sol": {
+  "src/cannon/MIPS64.sol:MIPS64": {
     "initCodeHash": "0xb57a15cd4238a102dd87ff817aea1a22aa4dbf1c543c8e952691e2b08dd1af83",
     "sourceCodeHash": "0x53b27fbb84b42f52ff843585c21494a6480736d3a79659bba7d1b16ee95e53d2"
   },
