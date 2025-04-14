@@ -543,16 +543,18 @@ func jsonMarshalHolocene(sysCfg SystemConfig) ([]byte, error) {
 
 func jsonMarshalPreHolocene(sysCfg SystemConfig) ([]byte, error) {
 	type sysCfgMarshaling struct {
-		BatcherAddr common.Address `json:"batcherAddr"`
-		Overhead    Bytes32        `json:"overhead"`
-		Scalar      Bytes32        `json:"scalar"`
-		GasLimit    uint64         `json:"gasLimit"`
+		BatcherAddr    common.Address `json:"batcherAddr"`
+		BatchInboxAddr common.Address `json:"batchInboxAddr"`
+		Overhead       Bytes32        `json:"overhead"`
+		Scalar         Bytes32        `json:"scalar"`
+		GasLimit       uint64         `json:"gasLimit"`
 	}
 	sc := sysCfgMarshaling{
-		BatcherAddr: sysCfg.BatcherAddr,
-		Overhead:    sysCfg.Overhead,
-		Scalar:      sysCfg.Scalar,
-		GasLimit:    sysCfg.GasLimit,
+		BatcherAddr:    sysCfg.BatcherAddr,
+		BatchInboxAddr: sysCfg.BatchInboxAddr,
+		Overhead:       sysCfg.Overhead,
+		Scalar:         sysCfg.Scalar,
+		GasLimit:       sysCfg.GasLimit,
 	}
 	return json.Marshal(sc)
 }
