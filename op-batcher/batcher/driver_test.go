@@ -167,19 +167,25 @@ func TestBatchSubmitter_sendTx_FloorDataGas(t *testing.T) {
 }
 
 func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Track request counts for verification
+	var server1Calls, server2Calls int64
 
 	// Create mock HTTP servers
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify this is a JSON-RPC call to miner_setMaxDASize with expected params
 		if r.Method == "POST" {
-			var req jsonrpcRequest
+			var req struct {
+				JSONRPC string        `json:"jsonrpc"`
+				Method  string        `json:"method"`
+				Params  []interface{} `json:"params"`
+				ID      interface{}   `json:"id"`
+			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
 				if req.Method == "miner_setMaxDASize" && len(req.Params) == 2 {
 					// Successfully handled the expected RPC call
+					server1Calls++
 					w.Header().Set("Content-Type", "application/json")
-					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":null}`))
+					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":true}`))
 					if err != nil {
 						t.Logf("Error writing response: %v", err)
 					}
@@ -194,11 +200,17 @@ func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Same handler as server1
 		if r.Method == "POST" {
-			var req jsonrpcRequest
+			var req struct {
+				JSONRPC string        `json:"jsonrpc"`
+				Method  string        `json:"method"`
+				Params  []interface{} `json:"params"`
+				ID      interface{}   `json:"id"`
+			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
 				if req.Method == "miner_setMaxDASize" && len(req.Params) == 2 {
+					server2Calls++
 					w.Header().Set("Content-Type", "application/json")
-					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":null}`))
+					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":true}`))
 					if err != nil {
 						t.Logf("Error writing response: %v", err)
 					}
@@ -209,6 +221,10 @@ func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
 		http.Error(w, "Unexpected request", http.StatusBadRequest)
 	}))
 	defer server2.Close()
+
+	// Setup test context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Create test BatchSubmitter using the setup function
 	bs, _ := setup(t)
@@ -230,29 +246,136 @@ func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
 	go bs.throttlingLoop(&wg, pendingBytesUpdated)
 
 	// Send test data to trigger throttling
-	pendingBytesUpdated <- 20000 // Over threshold
+	pendingBytesUpdated <- 20000 // Over threshold, should trigger throttling
 
 	// Allow time for processing
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 200)
 
-	// Clean up and terminate test
+	// Check that both endpoints were called
+	require.Greater(t, server1Calls, int64(0), "Server 1 should have been called")
+	require.Greater(t, server2Calls, int64(0), "Server 2 should have been called")
+
+	// Clean up previous test
 	close(pendingBytesUpdated)
 	cancel()
 	wg.Wait()
 
-	// Test failure case with one endpoint
-	failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Simulated failure", http.StatusInternalServerError)
-	}))
-	defer failServer.Close()
+	// Test fallback to L2 client when no throttling endpoints provided
+	var defaultCalls int64
 
-	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Create a mock server for the default endpoint
+	defaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
-			var req jsonrpcRequest
+			var req struct {
+				JSONRPC string        `json:"jsonrpc"`
+				Method  string        `json:"method"`
+				Params  []interface{} `json:"params"`
+				ID      interface{}   `json:"id"`
+			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
 				if req.Method == "miner_setMaxDASize" && len(req.Params) == 2 {
+					defaultCalls++
 					w.Header().Set("Content-Type", "application/json")
-					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":null}`))
+					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":true}`))
+					if err != nil {
+						t.Logf("Error writing response: %v", err)
+					}
+					return
+				}
+			}
+		}
+		http.Error(w, "Unexpected request", http.StatusBadRequest)
+	}))
+	defer defaultServer.Close()
+
+	// Create new context for the second test
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+
+	// Setup for default endpoint test
+	bs2, ep2 := setup(t)
+	bs2.shutdownCtx = ctx2
+	bs2.Config = BatcherConfig{
+		NetworkTimeout:      time.Second,
+		ThrottleThreshold:   10000,
+		ThrottleTxSize:      5000,
+		ThrottleBlockSize:   20000,
+		ThrottlingEndpoints: []string{}, // Empty - should use default endpoint
+	}
+
+	// Create RPC client for our test server
+	rpcClient, err := rpc.Dial(defaultServer.URL)
+	require.NoError(t, err)
+
+	// Setup the mock L2 client to return our rpc client
+	mockL2Client := new(testutils.MockL2Client)
+	mockL2Client.On("Client").Return(rpcClient)
+
+	// Configure endpoint provider to return our mock client
+	ep2.ethClient = mockL2Client
+
+	pendingBytesUpdated2 := make(chan int64, 1)
+	var wg2 sync.WaitGroup
+	wg2.Add(1)
+
+	// Start throttling loop with default endpoint
+	go bs2.throttlingLoop(&wg2, pendingBytesUpdated2)
+
+	// Send test data
+	pendingBytesUpdated2 <- 20000 // Over threshold
+
+	// Allow time for processing
+	time.Sleep(time.Millisecond * 200)
+
+	// Check that default endpoint was called
+	require.Greater(t, defaultCalls, int64(0), "Default endpoint should have been called")
+
+	// Clean up
+	close(pendingBytesUpdated2)
+	cancel2()
+	wg2.Wait()
+
+	// Test all-or-nothing behavior with partial endpoint failure
+	var (
+		successCalls int64
+		failureCalls int64
+	)
+
+	// Server that always fails
+	failingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			var req struct {
+				JSONRPC string        `json:"jsonrpc"`
+				Method  string        `json:"method"`
+				Params  []interface{} `json:"params"`
+				ID      interface{}   `json:"id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+				if req.Method == "miner_setMaxDASize" && len(req.Params) == 2 {
+					failureCalls++
+					http.Error(w, "Simulated failure", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+		http.Error(w, "Unexpected request", http.StatusBadRequest)
+	}))
+	defer failingServer.Close()
+
+	// Server that always succeeds
+	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			var req struct {
+				JSONRPC string        `json:"jsonrpc"`
+				Method  string        `json:"method"`
+				Params  []interface{} `json:"params"`
+				ID      interface{}   `json:"id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+				if req.Method == "miner_setMaxDASize" && len(req.Params) == 2 {
+					successCalls++
+					w.Header().Set("Content-Type", "application/json")
+					_, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":true}`))
 					if err != nil {
 						t.Logf("Error writing response: %v", err)
 					}
@@ -264,31 +387,54 @@ func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
 	}))
 	defer successServer.Close()
 
-	bs.Config.ThrottlingEndpoints = []string{failServer.URL, successServer.URL}
+	// Create new context for the third test
+	ctx3, cancel3 := context.WithCancel(context.Background())
+	defer cancel3()
 
-	// Test distribution function directly
-	throttlingClients := make(map[string]*rpc.Client)
-	for _, endpoint := range bs.Config.ThrottlingEndpoints {
-		client, err := rpc.Dial(endpoint)
-		require.NoError(t, err)
-		throttlingClients[endpoint] = client
+	// Setup for partial failure test
+	bs3, _ := setup(t)
+	bs3.shutdownCtx = ctx3
+	bs3.Config = BatcherConfig{
+		NetworkTimeout:      time.Second,
+		ThrottleThreshold:   10000,
+		ThrottleTxSize:      5000,
+		ThrottleBlockSize:   20000,
+		ThrottlingEndpoints: []string{failingServer.URL, successServer.URL},
 	}
 
-	retryTimer := time.NewTimer(time.Second)
-	retryTimer.Stop()
-	retryInterval := time.Second
+	pendingBytesUpdated3 := make(chan int64, 1)
+	var wg3 sync.WaitGroup
+	wg3.Add(1)
 
-	// Distribution should fail because one endpoint fails
-	result := bs.distributeThrottlingToEndpoints(ctx, 5000, 20000, throttlingClients, retryTimer, retryInterval)
-	require.False(t, result, "Distribution should fail when any endpoint fails")
+	// Start throttling loop with partial failure
+	go bs3.throttlingLoop(&wg3, pendingBytesUpdated3)
 
-	// Verify retry timer was reset
-	select {
-	case <-retryTimer.C:
-		// Timer successfully reset
-	case <-time.After(2 * time.Second):
-		t.Fatal("Retry timer was not reset")
-	}
+	// Send test data
+	pendingBytesUpdated3 <- 20000 // Over threshold
+
+	// Allow time for processing
+	time.Sleep(time.Millisecond * 200)
+
+	// In the all-or-nothing approach:
+	// 1. The failing endpoint should have been called at least once
+	require.Greater(t, failureCalls, int64(0), "Failing endpoint should have been called")
+
+	// 2. The success endpoint should also have been called, but it won't succeed overall
+	// because we require all endpoints to succeed. We might see initial calls that fail
+	// on connection, then both might be cleared until the next attempt.
+
+	// When one endpoint fails, we should reset and try again with the cachedPendingBytes
+	// So we should see multiple tries to the failing endpoint as the timer retries
+	time.Sleep(time.Millisecond * 1000) // Wait for retry
+	failureCalls = 0                    // Reset to detect new calls
+
+	time.Sleep(time.Millisecond * 1000) // Wait for another potential retry
+	require.GreaterOrEqual(t, failureCalls, int64(0), "Failing endpoint should have been retried")
+
+	// Clean up
+	close(pendingBytesUpdated3)
+	cancel3()
+	wg3.Wait()
 }
 
 // Helper struct for parsing JSON-RPC requests

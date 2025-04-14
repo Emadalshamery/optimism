@@ -186,10 +186,9 @@ var (
 		Value:   false,
 		EnvVars: prefixEnvVars("PREFER_LOCAL_SAFE_L2"),
 	}
-	// HA with rollup boost enabled flags
 	ThrottlingEndpointsFlag = &cli.StringSliceFlag{
 		Name:    "throttling-endpoints",
-		Usage:   "Comma-separated list of endpoints to throttle in addition to the active sequencer",
+		Usage:   "Comma-separated list of endpoints to distribute throttling configuration to. If not provided, the default L2 endpoint will be used.",
 		EnvVars: prefixEnvVars("THROTTLING_ENDPOINTS"),
 	}
 	// Legacy Flags

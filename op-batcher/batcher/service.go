@@ -51,7 +51,7 @@ type BatcherConfig struct {
 
 	PreferLocalSafeL2 bool
 
-	DAUpdateEndpoints   []string
+	// List of endpoints to apply throttling to
 	ThrottlingEndpoints []string
 }
 
@@ -174,25 +174,6 @@ func (bs *BatcherService) initRPCClients(ctx context.Context, cfg *CLIConfig) (o
 			return nil, fmt.Errorf("failed to build active L2 endpoint provider: %w", err)
 		}
 		endpointProvider = provider
-
-		// If we use an active endpoint provider AND throttling is enabled,
-		// we need to set up the callback to notify the driver any time we
-		// get a new active sequencer
-		if cfg.ThrottleThreshold > 0 {
-			activeSeqChanged := make(chan struct{}, 1)
-			opts = []DriverSetupOption{func(setup *DriverSetup) {
-				setup.ActiveSeqChanged = activeSeqChanged
-			}}
-			// callback to notify the driver of a new active sequencer
-			cb := func() {
-				select {
-				case activeSeqChanged <- struct{}{}:
-				default:
-				}
-			}
-			provider.SetOnActiveProviderChanged(cb)
-
-		}
 	} else {
 		endpointProvider, err = dial.NewStaticL2EndpointProvider(ctx, bs.Log, cfg.L2EthRpc, cfg.RollupRpc)
 		if err != nil {
@@ -201,7 +182,7 @@ func (bs *BatcherService) initRPCClients(ctx context.Context, cfg *CLIConfig) (o
 	}
 	bs.EndpointProvider = endpointProvider
 
-	return opts, nil
+	return nil, nil
 }
 
 func (bs *BatcherService) initMetrics(cfg *CLIConfig) {
