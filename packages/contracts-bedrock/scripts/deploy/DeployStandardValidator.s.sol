@@ -10,7 +10,7 @@ import { DeployUtils } from "scripts/libraries/DeployUtils.sol";
 
 // Interfaces
 import { ISuperchainConfig } from "interfaces/L1/ISuperchainConfig.sol";
-import { IStandardValidatorBase, IStandardValidatorV300 } from "interfaces/L1/IStandardValidator.sol";
+import { IStandardValidator } from "interfaces/L1/IStandardValidator.sol";
 
 /// @title DeployStandardValidatorInput
 contract DeployStandardValidatorInput is BaseDeployIO {
@@ -226,9 +226,9 @@ contract DeployStandardValidator is Script {
     function getImplementations(DeployStandardValidatorInput _si)
         public
         view
-        returns (IStandardValidatorBase.ImplementationsBase memory)
+        returns (IStandardValidator.Implementations memory)
     {
-        return IStandardValidatorBase.ImplementationsBase({
+        return IStandardValidator.Implementations({
             l1ERC721BridgeImpl: _si.l1ERC721BridgeImpl(),
             optimismPortalImpl: _si.optimismPortalImpl(),
             systemConfigImpl: _si.systemConfigImpl(),
@@ -242,22 +242,12 @@ contract DeployStandardValidator is Script {
         });
     }
 
-    function deployValidator(DeployStandardValidatorInput _si, DeployStandardValidatorOutput _so) internal {
-        address validator;
-        if (keccak256(bytes(_si.release())) == keccak256(bytes("v3.0.0"))) {
-            validator = deployValidatorV300(_si);
-        } else {
-            revert("DeployStandardValidator: invalid release version");
-        }
-        _so.set(_so.validator.selector, validator);
-    }
-
-    function deployValidatorV300(DeployStandardValidatorInput _si) internal returns (address) {
+    function deployValidator(DeployStandardValidatorInput _si, DeployStandardValidatorOutput _so) internal returns (address) {
         address validator = DeployUtils.createDeterministic({
-            _name: "StandardValidator.sol:StandardValidatorV300",
+            _name: "StandardValidator.sol:StandardValidator",
             _args: DeployUtils.encodeConstructor(
                 abi.encodeCall(
-                    IStandardValidatorV300.__constructor__,
+                    IStandardValidator.__constructor__,
                     (
                         getImplementations(_si),
                         _si.superchainConfig(),
@@ -270,7 +260,8 @@ contract DeployStandardValidator is Script {
             _salt: DeployUtils.DEFAULT_SALT
         });
 
-        vm.label(validator, "StandardValidatorV300");
+        vm.label(validator, "StandardValidator");
+        _so.set(_so.validator.selector, validator);
         return validator;
     }
 
@@ -280,20 +271,10 @@ contract DeployStandardValidator is Script {
     }
 
     function assertValidValidator(DeployStandardValidatorInput _si, DeployStandardValidatorOutput _so) internal view {
-        address validator = _so.validator();
-
-        if (keccak256(bytes(_si.release())) == keccak256(bytes("v3.0.0"))) {
-            assertValidValidatorV300(_si, validator);
-        } else {
-            revert("DeployStandardValidator: invalid release version");
-        }
-    }
-
-    function assertValidValidatorV300(DeployStandardValidatorInput _si, address _validator) internal view {
-        IStandardValidatorV300 v300 = IStandardValidatorV300(_validator);
-        require(address(v300.superchainConfig()) == address(_si.superchainConfig()), "SV300-10");
-        require(v300.l1PAOMultisig() == _si.l1PAOMultisig(), "SV300-20");
-        require(v300.challenger() == _si.challenger(), "SV300-40");
-        require(v300.withdrawalDelaySeconds() == _si.withdrawalDelaySeconds(), "SV300-50");
+        IStandardValidator validator = IStandardValidator(_so.validator());
+        require(address(validator.superchainConfig()) == address(_si.superchainConfig()), "SV300-10");
+        require(validator.l1PAOMultisig() == _si.l1PAOMultisig(), "SV300-20");
+        require(validator.challenger() == _si.challenger(), "SV300-40");
+        require(validator.withdrawalDelaySeconds() == _si.withdrawalDelaySeconds(), "SV300-50");
     }
 }

@@ -42,7 +42,7 @@ contract StandardValidator {
     address public delayedWETHImpl;
     address public mipsImpl;
 
-    struct ImplementationsBase {
+    struct Implementations {
         address l1ERC721BridgeImpl;
         address optimismPortalImpl;
         address systemConfigImpl;
@@ -55,7 +55,7 @@ contract StandardValidator {
         address mipsImpl;
     }
 
-    struct InputV300 {
+    struct ValidationInput {
         IProxyAdmin proxyAdmin;
         ISystemConfig sysCfg;
         bytes32 absolutePrestate;
@@ -63,7 +63,7 @@ contract StandardValidator {
     }
 
     constructor(
-        ImplementationsBase memory _implementations,
+        Implementations memory _implementations,
         ISuperchainConfig _superchainConfig,
         address _l1PAOMultisig,
         address _challenger,
@@ -535,7 +535,7 @@ contract StandardValidator {
         return keccak256(bytes(_a)) == keccak256(bytes(_b));
     }
 
-    function validate(InputV300 memory _input, bool _allowFailure) public view returns (string memory) {
+    function validate(ValidationInput memory _input, bool _allowFailure) public view returns (string memory) {
         string memory _errors = "";
 
         _errors = assertValidSuperchainConfig(_errors);

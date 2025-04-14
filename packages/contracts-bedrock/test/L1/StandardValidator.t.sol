@@ -106,7 +106,7 @@ contract StandardValidatorTest is Test {
 
         // Deploy validator with all required constructor args
         validator = new StandardValidator(
-            StandardValidator.ImplementationsBase({
+            StandardValidator.Implementations({
                 systemConfigImpl: makeAddr("systemConfigImpl"),
                 optimismPortalImpl: makeAddr("optimismPortalImpl"),
                 l1CrossDomainMessengerImpl: makeAddr("l1CrossDomainMessengerImpl"),
@@ -965,7 +965,7 @@ contract StandardValidatorTest is Test {
     }
 
     function validate(bool _allowFailure) internal view returns (string memory) {
-        StandardValidator.InputV300 memory input = StandardValidator.InputV300({
+        StandardValidator.ValidationInput memory input = StandardValidator.ValidationInput({
             proxyAdmin: proxyAdmin,
             sysCfg: systemConfig,
             absolutePrestate: absolutePrestate,

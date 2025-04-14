@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 // Interfaces
 import { ISuperchainConfig } from "interfaces/L1/ISuperchainConfig.sol";
 
-interface IStandardValidatorBase {
-    struct ImplementationsBase {
+interface IStandardValidator {
+    struct Implementations {
         address l1ERC721BridgeImpl;
         address optimismPortalImpl;
         address systemConfigImpl;
@@ -16,6 +16,13 @@ interface IStandardValidatorBase {
         address anchorStateRegistryImpl;
         address delayedWETHImpl;
         address mipsImpl;
+    }
+
+    struct ValidationInput {
+        address proxyAdmin;
+        address sysCfg;
+        bytes32 absolutePrestate;
+        uint256 l2ChainID;
     }
 
     function anchorStateRegistryImpl() external view returns (address);
@@ -49,20 +56,11 @@ interface IStandardValidatorBase {
     function systemConfigImpl() external view returns (address);
     function systemConfigVersion() external pure returns (string memory);
     function withdrawalDelaySeconds() external view returns (uint256);
-}
 
-interface IStandardValidatorV300 is IStandardValidatorBase {
-    struct InputV300 {
-        address proxyAdmin;
-        address sysCfg;
-        bytes32 absolutePrestate;
-        uint256 l2ChainID;
-    }
-
-    function validate(InputV300 memory _input, bool _allowFailure) external view returns (string memory);
+    function validate(ValidationInput memory _input, bool _allowFailure) external view returns (string memory);
 
     function __constructor__(
-        IStandardValidatorBase.ImplementationsBase memory _implementations,
+        IStandardValidator.Implementations memory _implementations,
         ISuperchainConfig _superchainConfig,
         address _l1PAOMultisig,
         address _challenger,
