@@ -261,7 +261,7 @@ func TestEVM_SysClone_FlagHandling(t *testing.T) {
 
 			var err error
 			var stepWitness *mipsevm.StepWitness
-			goVm := multithreaded.NewInstrumentedState(state, nil, os.Stdout, os.Stderr, nil, nil)
+			goVm := multithreaded.NewInstrumentedState(state, nil, os.Stdout, os.Stderr, nil, nil, mipsevm.FeatureToggles{})
 			if !c.valid {
 				// The VM should exit
 				stepWitness, err = goVm.Step(true)

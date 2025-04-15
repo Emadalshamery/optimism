@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm/singlethreaded"
 	"github.com/ethereum-optimism/optimism/op-service/jsonutil"
 	"github.com/ethereum-optimism/optimism/op-service/serialize"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -64,6 +65,12 @@ func NewFromState(state mipsevm.FPVMState) (*VersionedState, error) {
 type VersionedState struct {
 	Version StateVersion
 	mipsevm.FPVMState
+}
+
+func (s *VersionedState) CreateVM(logger log.Logger, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, meta mipsevm.Metadata) mipsevm.FPVM {
+	features := mipsevm.FeatureToggles{}
+	// Set any required feature toggles based on the state version here.
+	return s.FPVMState.CreateVM(logger, po, stdOut, stdErr, meta, features)
 }
 
 func (s *VersionedState) Serialize(w io.Writer) error {

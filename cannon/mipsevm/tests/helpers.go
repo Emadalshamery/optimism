@@ -32,7 +32,7 @@ func multiThreadedVmFactory(po mipsevm.PreimageOracle, stdOut, stdErr io.Writer,
 	for _, opt := range opts {
 		opt(mutator)
 	}
-	return multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, nil)
+	return multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, nil, mipsevm.FeatureToggles{})
 }
 
 type ElfVMFactory func(t require.TestingT, elfFile string, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger) mipsevm.FPVM
@@ -46,7 +46,7 @@ func singleThreadElfVmFactory(t require.TestingT, elfFile string, po mipsevm.Pre
 
 func multiThreadElfVmFactory(t require.TestingT, elfFile string, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger) mipsevm.FPVM {
 	state, meta := testutil.LoadELFProgram(t, elfFile, multithreaded.CreateInitialState, false)
-	fpvm := multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, meta)
+	fpvm := multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, meta, mipsevm.FeatureToggles{})
 	require.NoError(t, fpvm.InitDebug())
 	return fpvm
 }
