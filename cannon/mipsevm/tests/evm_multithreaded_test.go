@@ -253,35 +253,45 @@ func TestEVM_SysClone_FlagHandling(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			state := multithreaded.CreateEmptyState()
-			testutil.StoreInstruction(state.Memory, state.GetPC(), syscallInsn)
-			state.GetRegistersRef()[2] = arch.SysClone // Set syscall number
-			state.GetRegistersRef()[4] = c.flags       // Set first argument
-			curStep := state.Step
-
-			var err error
-			var stepWitness *mipsevm.StepWitness
-			goVm := multithreaded.NewInstrumentedState(state, nil, os.Stdout, os.Stderr, nil, nil, mipsevm.FeatureToggles{})
-			if !c.valid {
-				// The VM should exit
-				stepWitness, err = goVm.Step(true)
-				require.NoError(t, err)
-				require.Equal(t, curStep+1, state.GetStep())
-				require.Equal(t, true, goVm.GetState().GetExited())
-				require.Equal(t, uint8(mipsevm.VMStatusPanic), goVm.GetState().GetExitCode())
-				require.Equal(t, 1, state.ThreadCount())
-			} else {
-				stepWitness, err = goVm.Step(true)
-				require.NoError(t, err)
-				require.Equal(t, curStep+1, state.GetStep())
-				require.Equal(t, false, goVm.GetState().GetExited())
-				require.Equal(t, uint8(0), goVm.GetState().GetExitCode())
-				require.Equal(t, 2, state.ThreadCount())
+		c := c
+		for _, version := range versions.StateVersionTypes {
+			version := version
+			if arch.IsMips32 && !versions.IsSupportedMultiThreaded(version) {
+				continue
 			}
+			if !arch.IsMips32 && !versions.IsSupportedMultiThreaded64(version) {
+				continue
+			}
+			t.Run(fmt.Sprintf("%v-%v", version.String(), c.name), func(t *testing.T) {
+				state := multithreaded.CreateEmptyState()
+				testutil.StoreInstruction(state.Memory, state.GetPC(), syscallInsn)
+				state.GetRegistersRef()[2] = arch.SysClone // Set syscall number
+				state.GetRegistersRef()[4] = c.flags       // Set first argument
+				curStep := state.Step
 
-			testutil.ValidateEVM(t, stepWitness, curStep, goVm, multithreaded.GetStateHashFn(), contracts)
-		})
+				var err error
+				var stepWitness *mipsevm.StepWitness
+				goVm := multithreaded.NewInstrumentedState(state, nil, os.Stdout, os.Stderr, nil, nil, versions.FeaturesForVersion(version))
+				if !c.valid {
+					// The VM should exit
+					stepWitness, err = goVm.Step(true)
+					require.NoError(t, err)
+					require.Equal(t, curStep+1, state.GetStep())
+					require.Equal(t, true, goVm.GetState().GetExited())
+					require.Equal(t, uint8(mipsevm.VMStatusPanic), goVm.GetState().GetExitCode())
+					require.Equal(t, 1, state.ThreadCount())
+				} else {
+					stepWitness, err = goVm.Step(true)
+					require.NoError(t, err)
+					require.Equal(t, curStep+1, state.GetStep())
+					require.Equal(t, false, goVm.GetState().GetExited())
+					require.Equal(t, uint8(0), goVm.GetState().GetExitCode())
+					require.Equal(t, 2, state.ThreadCount())
+				}
+
+				testutil.ValidateEVM(t, stepWitness, curStep, goVm, multithreaded.GetStateHashFn(), contracts)
+			})
+		}
 	}
 }
 
