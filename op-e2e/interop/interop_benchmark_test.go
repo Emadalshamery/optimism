@@ -154,61 +154,31 @@ func BenchmarkCheckMessages(b *testing.B) {
 	}
 
 	super := s2.SupervisorClient()
-
 	executingDescriptor := types.ExecutingDescriptor{Timestamp: uint64(time.Now().Unix() + 1000)}
-	// Run the actual benchmark as a sub-benchmark
-	b.Run("CheckAccessList", func(b *testing.B) {
-		// Reset the timer before the benchmark loop to exclude setup time
-		b.ResetTimer()
 
-		// Run the benchmark loop
-		for i := 0; i < b.N; i++ {
-			// select a random access list
-			randomAccessList := allAccessLists[rand.Intn(len(allAccessLists))]
-			err := super.CheckAccessList(context.Background(), randomAccessList, types.CrossUnsafe, executingDescriptor)
-			require.NoError(b, err)
-		}
-	})
+	runParallel := func(b *testing.B, num int) {
+		b.Run(fmt.Sprintf("CheckAccessListParallel%d", num), func(b *testing.B) {
+			b.ResetTimer()
 
-	// Run a benchmark with 10 parallel CheckAccessList calls
-	b.Run("CheckAccessListParallel10", func(b *testing.B) {
-		b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				var wg sync.WaitGroup
+				wg.Add(num)
 
-		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			wg.Add(10)
+				for j := 0; j < num; j++ {
+					go func() {
+						defer wg.Done()
+						randomAccessList := allAccessLists[rand.Intn(len(allAccessLists))]
+						err := super.CheckAccessList(context.Background(), randomAccessList, types.CrossUnsafe, executingDescriptor)
+						require.NoError(b, err)
+					}()
+				}
 
-			for j := 0; j < 10; j++ {
-				go func() {
-					defer wg.Done()
-					randomAccessList := allAccessLists[rand.Intn(len(allAccessLists))]
-					err := super.CheckAccessList(context.Background(), randomAccessList, types.CrossUnsafe, executingDescriptor)
-					require.NoError(b, err)
-				}()
+				wg.Wait()
 			}
+		})
+	}
 
-			wg.Wait()
-		}
-	})
-
-	// Run a benchmark with 100 parallel CheckAccessList calls
-	b.Run("CheckAccessListParallel100", func(b *testing.B) {
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			wg.Add(100)
-
-			for j := 0; j < 100; j++ {
-				go func() {
-					defer wg.Done()
-					randomAccessList := allAccessLists[rand.Intn(len(allAccessLists))]
-					err := super.CheckAccessList(context.Background(), randomAccessList, types.CrossUnsafe, executingDescriptor)
-					require.NoError(b, err)
-				}()
-			}
-
-			wg.Wait()
-		}
-	})
+	runParallel(b, 1)
+	runParallel(b, 10)
+	runParallel(b, 100)
 }
