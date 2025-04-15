@@ -31,7 +31,7 @@ func smokeTestScenario(chainIdx uint64, walletGetter validators.WalletGetter) sy
 		funds := sdktypes.NewBalance(big.NewInt(0.5 * constants.ETH))
 		user := walletGetter(ctx)
 
-		scw0Addr := constants.SuperchainWETH
+		scw0Addr := common.HexToAddress("0x4200000000000000000000000000000000000024")
 		scw0, err := chain.Nodes()[0].ContractsRegistry().SuperchainWETH(scw0Addr)
 		require.NoError(t, err)
 		logger.Info("using SuperchainWETH", "contract", scw0Addr)
