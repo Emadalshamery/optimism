@@ -28,30 +28,30 @@ func LoadStateFromFile(path string) (*VersionedState, error) {
 		if err != nil {
 			return nil, err
 		}
-		return NewFromState(state)
+		return NewFromState(VersionSingleThreaded, state)
 	}
 	return serialize.LoadSerializedBinary[VersionedState](path)
 }
 
-func NewFromState(state mipsevm.FPVMState) (*VersionedState, error) {
+func NewFromState(vers StateVersion, state mipsevm.FPVMState) (*VersionedState, error) {
 	switch state := state.(type) {
 	case *singlethreaded.State:
 		if !arch.IsMips32 {
 			return nil, ErrUnsupportedMipsArch
 		}
 		return &VersionedState{
-			Version:   GetCurrentSingleThreaded(),
+			Version:   vers,
 			FPVMState: state,
 		}, nil
 	case *multithreaded.State:
 		if arch.IsMips32 {
 			return &VersionedState{
-				Version:   GetCurrentMultiThreaded(),
+				Version:   vers,
 				FPVMState: state,
 			}, nil
 		} else {
 			return &VersionedState{
-				Version:   GetCurrentMultiThreaded64(),
+				Version:   vers,
 				FPVMState: state,
 			}, nil
 		}
@@ -70,6 +70,9 @@ type VersionedState struct {
 func (s *VersionedState) CreateVM(logger log.Logger, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, meta mipsevm.Metadata) mipsevm.FPVM {
 	features := mipsevm.FeatureToggles{}
 	// Set any required feature toggles based on the state version here.
+	if s.Version >= VersionMultiThreaded64_v4 {
+		features.SupportSysEventFd2 = true
+	}
 	return s.FPVMState.CreateVM(logger, po, stdOut, stdErr, meta, features)
 }
 
@@ -87,8 +90,7 @@ func (s *VersionedState) Deserialize(in io.Reader) error {
 		return err
 	}
 
-	switch s.Version {
-	case GetCurrentSingleThreaded():
+	if IsSupportedSingleThreaded(s.Version) {
 		if !arch.IsMips32 {
 			return ErrUnsupportedMipsArch
 		}
@@ -98,7 +100,7 @@ func (s *VersionedState) Deserialize(in io.Reader) error {
 		}
 		s.FPVMState = state
 		return nil
-	case GetCurrentMultiThreaded():
+	} else if IsSupportedMultiThreaded(s.Version) {
 		if !arch.IsMips32 {
 			return ErrUnsupportedMipsArch
 		}
@@ -108,7 +110,7 @@ func (s *VersionedState) Deserialize(in io.Reader) error {
 		}
 		s.FPVMState = state
 		return nil
-	case GetCurrentMultiThreaded64():
+	} else if IsSupportedMultiThreaded64(s.Version) {
 		if arch.IsMips32 {
 			return ErrUnsupportedMipsArch
 		}
@@ -118,7 +120,7 @@ func (s *VersionedState) Deserialize(in io.Reader) error {
 		}
 		s.FPVMState = state
 		return nil
-	default:
+	} else {
 		return fmt.Errorf("%w: %d", ErrUnknownVersion, s.Version)
 	}
 }

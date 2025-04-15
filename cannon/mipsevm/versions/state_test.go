@@ -15,56 +15,59 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/serialize"
 )
 
-func TestNewFromState(t *testing.T) {
-	t.Run("singlethreaded-latestVersion", func(t *testing.T) {
-		actual, err := NewFromState(singlethreaded.CreateEmptyState())
-		require.NoError(t, err)
-		require.IsType(t, &singlethreaded.State{}, actual.FPVMState)
-		require.Equal(t, GetCurrentSingleThreaded(), actual.Version)
-	})
+func TestLoadStateFromFile(t *testing.T) {
+	for _, version := range StateVersionTypes {
+		if IsSupportedSingleThreaded(version) {
+			t.Run(version.String(), func(t *testing.T) {
+				expected, err := NewFromState(version, singlethreaded.CreateEmptyState())
+				require.NoError(t, err)
 
-	t.Run("multithreaded-latestVersion", func(t *testing.T) {
-		actual, err := NewFromState(multithreaded.CreateEmptyState())
-		require.NoError(t, err)
-		require.IsType(t, &multithreaded.State{}, actual.FPVMState)
-		require.Equal(t, GetCurrentMultiThreaded(), actual.Version)
-	})
+				path := writeToFile(t, "state.bin.gz", expected)
+				actual, err := LoadStateFromFile(path)
+				require.NoError(t, err)
+				require.Equal(t, expected, actual)
+			})
+		}
+		if IsSupportedMultiThreaded(version) {
+			t.Run(version.String(), func(t *testing.T) {
+				expected, err := NewFromState(version, multithreaded.CreateEmptyState())
+				require.NoError(t, err)
+
+				path := writeToFile(t, "state.bin.gz", expected)
+				actual, err := LoadStateFromFile(path)
+				require.NoError(t, err)
+				require.Equal(t, expected, actual)
+			})
+		}
+	}
 }
 
-func TestLoadStateFromFile(t *testing.T) {
-	t.Run("SinglethreadedFromBinary", func(t *testing.T) {
-		expected, err := NewFromState(singlethreaded.CreateEmptyState())
-		require.NoError(t, err)
-
-		path := writeToFile(t, "state.bin.gz", expected)
-		actual, err := LoadStateFromFile(path)
-		require.NoError(t, err)
-		require.Equal(t, expected, actual)
-	})
-
-	t.Run("MultithreadedFromBinary", func(t *testing.T) {
-		expected, err := NewFromState(multithreaded.CreateEmptyState())
-		require.NoError(t, err)
-
-		path := writeToFile(t, "state.bin.gz", expected)
-		actual, err := LoadStateFromFile(path)
-		require.NoError(t, err)
-		require.Equal(t, expected, actual)
-	})
+type versionAndStateCreator struct {
+	version     StateVersion
+	createState func() mipsevm.FPVMState
 }
 
 func TestVersionsOtherThanZeroDoNotSupportJSON(t *testing.T) {
-	tests := []struct {
+	var tests []struct {
 		version     StateVersion
 		createState func() mipsevm.FPVMState
-	}{
-		{GetCurrentSingleThreaded(), func() mipsevm.FPVMState { return singlethreaded.CreateEmptyState() }},
-		{GetCurrentMultiThreaded(), func() mipsevm.FPVMState { return multithreaded.CreateEmptyState() }},
+	}
+	for _, version := range StateVersionTypes {
+		if !IsSupportedSingleThreaded(version) {
+			continue
+		}
+		tests = append(tests, versionAndStateCreator{version: version, createState: func() mipsevm.FPVMState { return singlethreaded.CreateEmptyState() }})
+	}
+	for _, version := range StateVersionTypes {
+		if !IsSupportedMultiThreaded(version) {
+			continue
+		}
+		tests = append(tests, versionAndStateCreator{version: version, createState: func() mipsevm.FPVMState { return multithreaded.CreateEmptyState() }})
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.version.String(), func(t *testing.T) {
-			state, err := NewFromState(test.createState())
+			state, err := NewFromState(test.version, test.createState())
 			require.NoError(t, err)
 
 			dir := t.TempDir()
