@@ -68,12 +68,17 @@ type VersionedState struct {
 }
 
 func (s *VersionedState) CreateVM(logger log.Logger, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, meta mipsevm.Metadata) mipsevm.FPVM {
+	features := FeaturesForVersion(s.Version)
+	return s.FPVMState.CreateVM(logger, po, stdOut, stdErr, meta, features)
+}
+
+func FeaturesForVersion(version StateVersion) mipsevm.FeatureToggles {
 	features := mipsevm.FeatureToggles{}
 	// Set any required feature toggles based on the state version here.
-	if s.Version >= VersionMultiThreaded64_v4 {
+	if version >= VersionMultiThreaded64_v4 {
 		features.SupportSysEventFd2 = true
 	}
-	return s.FPVMState.CreateVM(logger, po, stdOut, stdErr, meta, features)
+	return features
 }
 
 func (s *VersionedState) Serialize(w io.Writer) error {

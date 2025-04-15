@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ethereum-optimism/optimism/cannon/mipsevm/versions"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
@@ -1096,7 +1097,22 @@ func TestEVM_SchedQuantumThreshold(t *testing.T) {
 }
 
 func setup(t require.TestingT, randomSeed int, preimageOracle mipsevm.PreimageOracle, opts ...testutil.StateOption) (mipsevm.FPVM, *multithreaded.State, *testutil.ContractMetadata) {
-	v := GetMultiThreadedTestCase(t)
+	// Find the most recent supported multithreaded version
+	for i := len(versions.StateVersionTypes) - 1; i >= 0; i-- {
+		version := versions.StateVersionTypes[i]
+		if arch.IsMips32 && versions.IsSupportedMultiThreaded(version) {
+			return setupWithVersion(t, version, randomSeed, preimageOracle, opts...)
+		}
+		if !arch.IsMips32 && versions.IsSupportedMultiThreaded64(version) {
+			return setupWithVersion(t, version, randomSeed, preimageOracle, opts...)
+		}
+	}
+	require.Fail(t, "no supported version available")
+	return nil, nil, nil
+}
+
+func setupWithVersion(t require.TestingT, version versions.StateVersion, randomSeed int, preimageOracle mipsevm.PreimageOracle, opts ...testutil.StateOption) (mipsevm.FPVM, *multithreaded.State, *testutil.ContractMetadata) {
+	v := GetMultiThreadedTestCase(t, version)
 	allOpts := append([]testutil.StateOption{testutil.WithRandomization(int64(randomSeed))}, opts...)
 	vm := v.VMFactory(preimageOracle, os.Stdout, os.Stderr, testutil.CreateLogger(), allOpts...)
 	state := mttestutil.GetMtState(t, vm)

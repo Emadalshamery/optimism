@@ -3,6 +3,7 @@ package tests
 import (
 	"io"
 
+	"github.com/ethereum-optimism/optimism/cannon/mipsevm/versions"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/require"
 
@@ -26,13 +27,13 @@ func singleThreadedVmFactory(po mipsevm.PreimageOracle, stdOut, stdErr io.Writer
 	return singlethreaded.NewInstrumentedState(state, po, stdOut, stdErr, nil)
 }
 
-func multiThreadedVmFactory(po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger, opts ...testutil.StateOption) mipsevm.FPVM {
+func multiThreadedVmFactory(po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger, features mipsevm.FeatureToggles, opts ...testutil.StateOption) mipsevm.FPVM {
 	state := multithreaded.CreateEmptyState()
 	mutator := mttestutil.NewStateMutatorMultiThreaded(state)
 	for _, opt := range opts {
 		opt(mutator)
 	}
-	return multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, nil, mipsevm.FeatureToggles{})
+	return multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, nil, features)
 }
 
 type ElfVMFactory func(t require.TestingT, elfFile string, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger) mipsevm.FPVM
@@ -44,9 +45,9 @@ func singleThreadElfVmFactory(t require.TestingT, elfFile string, po mipsevm.Pre
 	return fpvm
 }
 
-func multiThreadElfVmFactory(t require.TestingT, elfFile string, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger) mipsevm.FPVM {
+func multiThreadElfVmFactory(t require.TestingT, elfFile string, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger, features mipsevm.FeatureToggles) mipsevm.FPVM {
 	state, meta := testutil.LoadELFProgram(t, elfFile, multithreaded.CreateInitialState, false)
-	fpvm := multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, meta, mipsevm.FeatureToggles{})
+	fpvm := multithreaded.NewInstrumentedState(state, po, stdOut, stdErr, log, meta, features)
 	require.NoError(t, fpvm.InitDebug())
 	return fpvm
 }
@@ -105,29 +106,41 @@ func GetSingleThreadedTestCase(t require.TestingT) VersionedVMTestCase {
 	}
 }
 
-func GetMultiThreadedTestCase(t require.TestingT) VersionedVMTestCase {
+func GetMultiThreadedTestCase(t require.TestingT, version versions.StateVersion) VersionedVMTestCase {
+	features := versions.FeaturesForVersion(version)
 	return VersionedVMTestCase{
-		Name:           "multi-threaded",
-		Contracts:      testutil.TestContractsSetup(t, testutil.MipsMultithreaded),
-		StateHashFn:    multithreaded.GetStateHashFn(),
-		VMFactory:      multiThreadedVmFactory,
-		ElfVMFactory:   multiThreadElfVmFactory,
+		Name:        version.String(),
+		Contracts:   testutil.TestContractsSetup(t, testutil.MipsMultithreaded),
+		StateHashFn: multithreaded.GetStateHashFn(),
+		VMFactory: func(po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger, opts ...testutil.StateOption) mipsevm.FPVM {
+			return multiThreadedVmFactory(po, stdOut, stdErr, log, features, opts...)
+		},
+		ElfVMFactory: func(t require.TestingT, elfFile string, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer, log log.Logger) mipsevm.FPVM {
+			return multiThreadElfVmFactory(t, elfFile, po, stdOut, stdErr, log, features)
+		},
 		ProofGenerator: multiThreadedProofGenerator,
 	}
 }
 
-func GetMipsVersionTestCases(t require.TestingT) []VersionedVMTestCase {
-	if arch.IsMips32 {
-		return []VersionedVMTestCase{
-			GetSingleThreadedTestCase(t),
-			GetMultiThreadedTestCase(t),
+func GetMultiThreadedTestCases(t require.TestingT) []VersionedVMTestCase {
+	var cases []VersionedVMTestCase
+	for _, version := range versions.StateVersionTypes {
+		if arch.IsMips32 && versions.IsSupportedMultiThreaded(version) {
+			cases = append(cases, GetMultiThreadedTestCase(t, version))
 		}
-	} else {
-		// 64-bit only supports MTCannon
-		return []VersionedVMTestCase{
-			GetMultiThreadedTestCase(t),
+		if !arch.IsMips32 && versions.IsSupportedMultiThreaded64(version) {
+			cases = append(cases, GetMultiThreadedTestCase(t, version))
 		}
 	}
+	return cases
+}
+
+func GetMipsVersionTestCases(t require.TestingT) []VersionedVMTestCase {
+	cases := GetMultiThreadedTestCases(t)
+	if arch.IsMips32 {
+		cases = append(cases, GetSingleThreadedTestCase(t))
+	}
+	return cases
 }
 
 type threadProofTestcase struct {
