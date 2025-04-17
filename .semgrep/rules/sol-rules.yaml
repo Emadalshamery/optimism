@@ -350,3 +350,12 @@ rules:
         - packages/contracts-bedrock/src/safe/LivenessModule.sol
         - packages/contracts-bedrock/src/universal/OptimismMintableERC20.sol
         - packages/contracts-bedrock/src/universal/ReinitializableBase.sol
+
+  - id: sol-style-no-testFail-usage
+    languages: [solidity]
+    severity: ERROR
+    message: testFail should not be used
+    pattern-regex: function\s+testFail\w*\s*\(
+    paths:
+      include:
+        - packages/contracts-bedrock/test
