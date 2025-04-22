@@ -1016,7 +1016,6 @@ var NoopSyscalls = map[string]uint32{
 	"SysTimerCreate":   4257,
 	"SysTimerSetTime":  4258,
 	"SysTimerDelete":   4261,
-	"SysEventFd2":      4325,
 }
 
 func TestEVM_NoopSyscall32(t *testing.T) {
