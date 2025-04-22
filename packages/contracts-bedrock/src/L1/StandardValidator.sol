@@ -547,8 +547,12 @@ contract StandardValidator {
         _errors = assertValidL1ERC721Bridge(_errors, _input.sysCfg, _input.proxyAdmin);
         _errors = assertValidOptimismPortal(_errors, _input.sysCfg, _input.proxyAdmin);
         _errors = assertValidDisputeGameFactory(_errors, _input.sysCfg, _input.proxyAdmin);
-        _errors = assertValidPermissionedDisputeGame(_errors, _input.sysCfg, _input.absolutePrestate, _input.l2ChainID, _input.proxyAdmin);
-        _errors = assertValidPermissionlessDisputeGame(_errors, _input.sysCfg, _input.absolutePrestate, _input.l2ChainID, _input.proxyAdmin);
+        _errors = assertValidPermissionedDisputeGame(
+            _errors, _input.sysCfg, _input.absolutePrestate, _input.l2ChainID, _input.proxyAdmin
+        );
+        _errors = assertValidPermissionlessDisputeGame(
+            _errors, _input.sysCfg, _input.absolutePrestate, _input.l2ChainID, _input.proxyAdmin
+        );
 
         if (bytes(_errors).length > 0 && !_allowFailure) {
             revert(string.concat("StandardValidator: ", _errors));

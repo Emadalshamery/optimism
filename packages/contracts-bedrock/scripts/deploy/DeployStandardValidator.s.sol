@@ -242,7 +242,13 @@ contract DeployStandardValidator is Script {
         });
     }
 
-    function deployValidator(DeployStandardValidatorInput _si, DeployStandardValidatorOutput _so) internal returns (address) {
+    function deployValidator(
+        DeployStandardValidatorInput _si,
+        DeployStandardValidatorOutput _so
+    )
+        internal
+        returns (address)
+    {
         address validator = DeployUtils.createDeterministic({
             _name: "StandardValidator.sol:StandardValidator",
             _args: DeployUtils.encodeConstructor(
