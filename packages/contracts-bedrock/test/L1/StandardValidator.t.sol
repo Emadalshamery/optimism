@@ -29,6 +29,7 @@ import { IL1ERC721Bridge } from "interfaces/L1/IL1ERC721Bridge.sol";
 import { IERC721Bridge } from "interfaces/universal/IERC721Bridge.sol";
 import { IPermissionedDisputeGame } from "interfaces/dispute/IPermissionedDisputeGame.sol";
 import { IProxyAdmin } from "interfaces/universal/IProxyAdmin.sol";
+import { IProxy } from "interfaces/universal/IProxy.sol";
 import { IDelayedWETH } from "interfaces/dispute/IDelayedWETH.sol";
 import { IPreimageOracle } from "interfaces/cannon/IPreimageOracle.sol";
 import { ISemver } from "interfaces/universal/ISemver.sol";
@@ -38,6 +39,9 @@ import { IDisputeGame } from "interfaces/dispute/IDisputeGame.sol";
 import { IMIPS } from "interfaces/cannon/IMIPS.sol";
 import { IL1StandardBridge } from "interfaces/L1/IL1StandardBridge.sol";
 import { IStandardBridge } from "interfaces/universal/IStandardBridge.sol";
+import { IFaultDisputeGame } from "interfaces/dispute/IFaultDisputeGame.sol";
+import { IPermissionedDisputeGame } from "interfaces/dispute/IPermissionedDisputeGame.sol";
+import { IBigStepper } from "interfaces/dispute/IBigStepper.sol";
 
 contract StandardValidatorTest is Test {
     CommonTest commonTest;
@@ -59,8 +63,7 @@ contract StandardValidatorTest is Test {
     address disputeGameFactory;
     address permissionedDisputeGame;
     address permissionlessDisputeGame;
-    address permissionedASR;
-    address permissionlessASR;
+    address anchorStateRegistry;
     address optimismPortal;
     address l1CrossDomainMessenger;
     address l1StandardBridge;
@@ -77,7 +80,6 @@ contract StandardValidatorTest is Test {
         // Setup test addresses
         superchainConfig = ISuperchainConfig(makeAddr("superchainConfig"));
         l1PAOMultisig = makeAddr("l1PAOMultisig");
-        mips = makeAddr("mips");
         guardian = makeAddr("guardian");
         challenger = makeAddr("challenger");
 
@@ -88,25 +90,27 @@ contract StandardValidatorTest is Test {
         );
 
         // Setup mock contracts for validation
-        proxyAdmin = IProxyAdmin(makeAddr("proxyAdmin"));
-        systemConfig = ISystemConfig(makeAddr("systemConfig"));
+        systemConfig = commonTest.systemConfig();
+        vm.prank(address(0));
+        proxyAdmin = IProxyAdmin(IProxy(payable(address(systemConfig))).admin());
+
         absolutePrestate = bytes32(uint256(0xdead));
         l2ChainID = 10;
 
         // Setup mock dependency addresses
-        disputeGameFactory = makeAddr("disputeGameFactory");
-        permissionedDisputeGame = makeAddr("permissionedDisputeGame");
-        permissionlessDisputeGame = makeAddr("permissionlessDisputeGame");
-        permissionedASR = makeAddr("anchorStateRegistry");
-        permissionlessASR = makeAddr("permissionlessAnchorStateRegistry");
+        disputeGameFactory = address(commonTest.disputeGameFactory());
+        permissionedDisputeGame = address(IDisputeGameFactory(disputeGameFactory).gameImpls(GameTypes.PERMISSIONED_CANNON));
+        permissionlessDisputeGame = address(IDisputeGameFactory(disputeGameFactory).gameImpls(GameTypes.CANNON));
+        anchorStateRegistry = address(commonTest.anchorStateRegistry());
         optimismPortal = makeAddr("optimismPortal");
         l1CrossDomainMessenger = makeAddr("l1CrossDomainMessenger");
         l1StandardBridge = makeAddr("l1StandardBridge");
         l1ERC721Bridge = makeAddr("l1ERC721Bridge");
         optimismMintableERC20Factory = makeAddr("optimismMintableERC20Factory");
-        permissionedDelayedWETH = makeAddr("delayedWETH");
-        permissionlessDelayedWETH = makeAddr("permissionlessDelayedWETH");
-        preimageOracle = makeAddr("preimageOracle");
+        permissionedDelayedWETH = address(IDelayedWETH(IFaultDisputeGame(permissionedDisputeGame).weth()));
+        permissionlessDelayedWETH = address(IDelayedWETH(IFaultDisputeGame(permissionlessDisputeGame).weth()));
+        mips = address(IFaultDisputeGame(permissionedDisputeGame).vm());
+        preimageOracle = address(IBigStepper(mips).oracle());
 
         // Mock proxyAdmin owner
         vm.mockCall(address(proxyAdmin), abi.encodeCall(IProxyAdmin.owner, ()), abi.encode(l1PAOMultisig));
@@ -404,13 +408,13 @@ contract StandardValidatorTest is Test {
     /// validated for each PDG and so are included here.
     function test_validate_permissionedDisputeGame_succeeds() public {
         _testDisputeGame(
-            "PDDG", permissionedDisputeGame, permissionedASR, permissionedDelayedWETH, GameTypes.PERMISSIONED_CANNON
+            "PDDG", permissionedDisputeGame, anchorStateRegistry, permissionedDelayedWETH, GameTypes.PERMISSIONED_CANNON
         );
     }
 
     function test_validate_permissionlessDisputeGame_succeeds() public {
         _testDisputeGame(
-            "PLDG", permissionlessDisputeGame, permissionlessASR, permissionlessDelayedWETH, GameTypes.CANNON
+            "PLDG", permissionlessDisputeGame, anchorStateRegistry, permissionlessDelayedWETH, GameTypes.CANNON
         );
     }
 
