@@ -7,7 +7,6 @@ import (
 	"io"
 	"math/big"
 	_ "net/http/pprof"
-	"strings"
 	"sync"
 	"time"
 
@@ -535,19 +534,41 @@ func (l *BatchSubmitter) receiptsLoop(wg *sync.WaitGroup, receiptsCh chan txmgr.
 	l.Log.Info("receiptsLoop returning")
 }
 
-func (l *BatchSubmitter) setMaxDASizeOnEndpoint(ctx context.Context, endpoint string, client *rpc.Client, maxTxSize, maxBlockSize uint64) error {
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer timeoutCancel()
+// singleEndpointThrottler handles throttling for a specific endpoint
+// This is almost identical to the original throttlingLoop but operates on a specific endpoint
+func (l *BatchSubmitter) singleEndpointThrottler(wg *sync.WaitGroup, endpointUpdates chan int64, endpoint string, client *rpc.Client) {
+	defer wg.Done()
+	l.Log.Info("Starting endpoint throttling loop", "endpoint", endpoint)
 
-	var result bool
-	err := client.CallContext(timeoutCtx, &result, SetMaxDASizeMethod,
-		hexutil.Uint64(maxTxSize), hexutil.Uint64(maxBlockSize))
+	retryInterval := 10 * time.Second
+	retryTimer := time.NewTimer(retryInterval)
+	retryTimer.Stop()
 
-	if err != nil {
+	updateParams := func(pendingBytes int64) {
+		retryTimer.Stop()
+
+		ctx, cancel := context.WithTimeout(l.shutdownCtx, l.Config.NetworkTimeout)
+		defer cancel()
+
+		maxTxSize := uint64(0)
+		maxBlockSize := l.Config.ThrottleAlwaysBlockSize
+		if pendingBytes > int64(l.Config.ThrottleThreshold) {
+			l.Log.Warn("Pending bytes over limit, throttling DA", "endpoint", endpoint, "bytes", pendingBytes, "limit", l.Config.ThrottleThreshold)
+			maxTxSize = l.Config.ThrottleTxSize
+			if maxBlockSize == 0 || (l.Config.ThrottleBlockSize != 0 && l.Config.ThrottleBlockSize < maxBlockSize) {
+				maxBlockSize = l.Config.ThrottleBlockSize
+			}
+		}
+
+		var success bool
+		err := client.CallContext(
+			ctx, &success, SetMaxDASizeMethod, hexutil.Uint64(maxTxSize), hexutil.Uint64(maxBlockSize),
+		)
+
 		if errors.Is(ctx.Err(), context.Canceled) {
 			// If the context was cancelled, our work is done and we expect an error here
 			l.Log.Debug("DA throttling context cancelled for endpoint", "endpoint", endpoint)
-			return ctx.Err()
+			return
 		}
 
 		var rpcErr rpc.Error
@@ -562,179 +583,179 @@ func (l *BatchSubmitter) setMaxDASizeOnEndpoint(ctx context.Context, endpoint st
 			go func() {
 				_ = l.StopBatchSubmitting(ctx)
 			}()
-		} else {
-			l.Log.Error("Failed to set max DA size on endpoint",
-				"endpoint", endpoint, "error", err)
-		}
-		return err
-	} else if !result {
-		l.Log.Error("Endpoint returned false for SetMaxDASize",
-			"endpoint", endpoint)
-		return fmt.Errorf("endpoint returned false")
-	}
-
-	l.Log.Info("Successfully set max DA size on endpoint",
-		"endpoint", endpoint,
-		"max_tx_size", maxTxSize,
-		"max_block_size", maxBlockSize)
-	return nil
-}
-
-// throttlingLoop monitors the backlog in bytes we need to make available, and appropriately enables or disables
-// throttling of incoming data prevent the backlog from growing too large. By looping & calling the miner API setter
-// continuously, we ensure the engine currently in use is always going to be reset to the proper throttling settings
-// even in the event of sequencer failover.
-func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated chan int64) {
-	defer wg.Done()
-	l.Log.Info("Starting DA throttling loop")
-
-	retryInterval := 10 * time.Second
-	retryTimer := time.NewTimer(retryInterval)
-	retryTimer.Stop()
-
-	// Initialize map to store all throttling client connections
-	throttlingClients := make(map[string]*rpc.Client)
-
-	// Function to connect to all configured endpoints or fallback to default
-	connectToEndpoints := func() bool {
-		endpoints := l.Config.ThrottlingEndpoints
-
-		// Clear existing connections to ensure we have a fresh set
-		for endpoint := range throttlingClients {
-			delete(throttlingClients, endpoint)
-		}
-
-		// If no throttling endpoints are configured, use the default L2 endpoint
-		if len(endpoints) == 0 {
-			ctx, cancel := context.WithTimeout(l.shutdownCtx, l.Config.NetworkTimeout)
-			cl, err := l.EndpointProvider.EthClient(ctx)
-			cancel()
-
-			if err != nil {
-				l.Log.Warn("Failed to get default L2 endpoint", "err", err)
-				return false
-			}
-
-			// Add default endpoint to our map
-			defaultEndpoint := "default-l2-endpoint"
-			throttlingClients[defaultEndpoint] = cl.Client()
-			l.Log.Info("Using default L2 endpoint for throttling", "endpoint", defaultEndpoint)
-			return true
-		}
-
-		// Process configured throttling endpoints
-		allConnected := true
-		for _, endpoint := range endpoints {
-			client, err := rpc.Dial(endpoint)
-			if err != nil {
-				l.Log.Warn("Failed to connect to throttling endpoint", "endpoint", endpoint, "err", err)
-				allConnected = false
-				continue
-			}
-			throttlingClients[endpoint] = client
-			l.Log.Info("Connected to endpoint for throttling distribution", "endpoint", endpoint)
-		}
-
-		// Only return true if we connected to all endpoints
-		if !allConnected {
-			// Clean up any connections we did make
-			for endpoint := range throttlingClients {
-				delete(throttlingClients, endpoint)
-			}
-			return false
-		}
-
-		return len(throttlingClients) > 0
-	}
-
-	// Initial connection to endpoints
-	endpointsConnected := connectToEndpoints()
-	if !endpointsConnected {
-		l.Log.Warn("Could not connect to all throttling endpoints, will retry periodically")
-		retryTimer.Reset(retryInterval)
-	}
-
-	updateParams := func(pendingBytes int64) {
-		retryTimer.Stop()
-
-		// If we have no endpoint connections, try to connect again
-		if len(throttlingClients) == 0 {
-			l.Log.Warn("No throttling endpoints available, attempting to reconnect")
-			endpointsConnected = connectToEndpoints()
-			if !endpointsConnected {
-				l.Log.Warn("Still could not connect to all throttling endpoints, will retry")
-				retryTimer.Reset(retryInterval)
-				return
-			}
-		}
-
-		ctx, cancel := context.WithTimeout(l.shutdownCtx, l.Config.NetworkTimeout)
-		defer cancel()
-
-		// Determine throttling parameters based on pending bytes
-		maxTxSize := uint64(0)
-		maxBlockSize := l.Config.ThrottleAlwaysBlockSize
-		if pendingBytes > int64(l.Config.ThrottleThreshold) {
-			l.Log.Warn("Pending bytes over limit, throttling DA", "bytes", pendingBytes, "limit", l.Config.ThrottleThreshold)
-			maxTxSize = l.Config.ThrottleTxSize
-			if maxBlockSize == 0 || (l.Config.ThrottleBlockSize != 0 && l.Config.ThrottleBlockSize < maxBlockSize) {
-				maxBlockSize = l.Config.ThrottleBlockSize
-			}
-		}
-
-		// Apply throttling to all connected endpoints - all must succeed
-		success := true
-		failedEndpoints := make([]string, 0)
-
-		for endpoint, client := range throttlingClients {
-			err := l.setMaxDASizeOnEndpoint(ctx, endpoint, client, maxTxSize, maxBlockSize)
-			if err != nil {
-				if errors.Is(ctx.Err(), context.Canceled) {
-					// If context is canceled, we're shutting down, so just exit
-					l.Log.Debug("Context canceled while setting max DA size", "endpoint", endpoint)
-					return
-				}
-				success = false
-				failedEndpoints = append(failedEndpoints, endpoint)
-				l.Log.Error("Failed to set throttling on endpoint", "endpoint", endpoint, "error", err)
-			}
-		}
-
-		// Handle results - any failure means we need to reconnect and retry
-		if !success {
-			l.Log.Error("Failed to set throttling on all endpoints",
-				"failed_endpoints", strings.Join(failedEndpoints, ", "))
-
-			// Clear all connections to ensure consistency on retry
-			for endpoint := range throttlingClients {
-				delete(throttlingClients, endpoint)
-			}
-
+			return
+		} else if err != nil {
+			l.Log.Error("SetMaxDASize RPC failed for endpoint, retrying.", "endpoint", endpoint, "err", err)
 			retryTimer.Reset(retryInterval)
 			return
 		}
 
-		l.Log.Info("Successfully applied throttling configuration to all endpoints",
-			"tx_size", maxTxSize,
-			"block_size", maxBlockSize,
-			"endpoint_count", len(throttlingClients))
+		if !success {
+			l.Log.Error("Result of SetMaxDASize was false for endpoint, retrying.", "endpoint", endpoint)
+			retryTimer.Reset(retryInterval)
+			return
+		}
+
+		l.Log.Info("Successfully set max DA size on endpoint",
+			"endpoint", endpoint,
+			"max_tx_size", maxTxSize,
+			"max_block_size", maxBlockSize)
 	}
 
-	// Track the last known pending bytes to use when retrying
 	cachedPendingBytes := int64(0)
-
 	for {
 		select {
-		case pendingBytes, ok := <-pendingBytesUpdated:
+		case pendingBytes, ok := <-endpointUpdates:
 			if !ok {
 				// If the channel was closed, this is our signal to exit
-				l.Log.Info("Throttling loop shutting down")
+				l.Log.Info("Endpoint throttling loop shutting down", "endpoint", endpoint)
 				return
 			}
 			updateParams(pendingBytes)
 			cachedPendingBytes = pendingBytes
 		case <-retryTimer.C:
 			updateParams(cachedPendingBytes)
+		}
+	}
+}
+
+// throttlingLoop acts as a distributor that manages individual throttling loops for each endpoint
+func (l *BatchSubmitter) throttlingLoop(wg *sync.WaitGroup, pendingBytesUpdated chan int64) {
+	defer wg.Done()
+	l.Log.Info("Starting DA throttling loop")
+
+	// Map to track individual endpoint channels
+	type endpointState struct {
+		client     *rpc.Client
+		updateChan chan int64
+	}
+	endpointStates := make(map[string]endpointState)
+
+	// Function to connect to endpoints and start throttling loops
+	connectToEndpoints := func() {
+		// Get configured endpoints
+		configuredEndpoints := l.Config.ThrottlingEndpoints
+
+		// If no throttling endpoints are configured, try to use the default L2 endpoint
+		if len(configuredEndpoints) == 0 {
+			ctx, cancel := context.WithTimeout(l.shutdownCtx, l.Config.NetworkTimeout)
+			cl, err := l.EndpointProvider.EthClient(ctx)
+			cancel()
+
+			if err != nil {
+				l.Log.Warn("Failed to get default L2 endpoint", "err", err)
+			} else {
+				// If we're not already connected to the default endpoint
+				if _, exists := endpointStates["default"]; !exists {
+					// Create channel for this endpoint
+					updateChan := make(chan int64, 1)
+
+					// Store client and channel
+					endpointStates["default"] = endpointState{
+						client:     cl.Client(),
+						updateChan: updateChan,
+					}
+
+					// Start throttling loop for this endpoint
+					wg.Add(1)
+					go l.singleEndpointThrottler(wg, updateChan, "default L2 endpoint", cl.Client())
+					l.Log.Info("Started throttling loop for default L2 endpoint")
+				}
+			}
+		}
+
+		// For each configured endpoint
+		for _, endpoint := range configuredEndpoints {
+			// Skip if already connected
+			if _, exists := endpointStates[endpoint]; exists {
+				continue
+			}
+
+			// Connect to endpoint
+			client, err := rpc.Dial(endpoint)
+			if err != nil {
+				l.Log.Warn("Failed to connect to throttling endpoint", "endpoint", endpoint, "err", err)
+				continue
+			}
+
+			// Create channel for this endpoint
+			updateChan := make(chan int64, 1)
+
+			// Store client and channel
+			endpointStates[endpoint] = endpointState{
+				client:     client,
+				updateChan: updateChan,
+			}
+
+			// Start throttling loop for this endpoint
+			wg.Add(1)
+			go l.singleEndpointThrottler(wg, updateChan, endpoint, client)
+			l.Log.Info("Started throttling loop for endpoint", "endpoint", endpoint)
+		}
+	}
+
+	// Try initial connection
+	connectToEndpoints()
+
+	// Set up reconnection timer
+	reconnectInterval := 30 * time.Second
+	reconnectTimer := time.NewTimer(reconnectInterval)
+	defer reconnectTimer.Stop()
+
+	// Track last pending bytes update
+	var lastPendingBytes int64
+
+	// Main loop
+	for {
+		select {
+		case pendingBytes, ok := <-pendingBytesUpdated:
+			if !ok {
+				// Channel closed, shut down all endpoint loops
+				l.Log.Info("Throttling distributor shutting down")
+				for endpoint, state := range endpointStates {
+					close(state.updateChan)
+					l.Log.Debug("Closed channel for endpoint", "endpoint", endpoint)
+				}
+				return
+			}
+
+			// If we have no endpoints, try to connect
+			if len(endpointStates) == 0 {
+				connectToEndpoints()
+			}
+
+			// Distribute update to all endpoints
+			for endpoint, state := range endpointStates {
+				select {
+				case state.updateChan <- pendingBytes:
+					// Update sent successfully
+				default:
+					// Channel is full, endpoint throttling loop is backed up
+					l.Log.Warn("Endpoint throttling loop is backed up, skipping update", "endpoint", endpoint)
+				}
+			}
+
+			lastPendingBytes = pendingBytes
+
+		case <-reconnectTimer.C:
+			// Periodically try to connect to any configured endpoints we're not connected to
+			connectToEndpoints()
+
+			// Send latest update to any newly connected endpoints
+			if lastPendingBytes > 0 {
+				for endpoint, state := range endpointStates {
+					select {
+					case state.updateChan <- lastPendingBytes:
+						// Update sent successfully
+					default:
+						// Channel is full, skip
+						l.Log.Warn("Endpoint throttling loop is backed up during reconnect", "endpoint", endpoint)
+					}
+				}
+			}
+
+			// Reset timer
+			reconnectTimer.Reset(reconnectInterval)
 		}
 	}
 }

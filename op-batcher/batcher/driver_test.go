@@ -335,7 +335,7 @@ func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
 	cancel2()
 	wg2.Wait()
 
-	// Test all-or-nothing behavior with partial endpoint failure
+	// Test independent endpoint behavior with partial endpoint failure
 	var (
 		successCalls int64
 		failureCalls int64
@@ -415,24 +415,69 @@ func TestBatchSubmitter_ThrottlingEndpoints(t *testing.T) {
 	// Allow time for processing
 	time.Sleep(time.Millisecond * 200)
 
-	// In the all-or-nothing approach:
+	// With independent endpoint throttling:
 	// 1. The failing endpoint should have been called at least once
 	require.Greater(t, failureCalls, int64(0), "Failing endpoint should have been called")
 
-	// 2. The success endpoint should also have been called, but it won't succeed overall
-	// because we require all endpoints to succeed. We might see initial calls that fail
-	// on connection, then both might be cleared until the next attempt.
-
-	// When one endpoint fails, we should reset and try again with the cachedPendingBytes
-	// So we should see multiple tries to the failing endpoint as the timer retries
-	time.Sleep(time.Millisecond * 1000) // Wait for retry
-	failureCalls = 0                    // Reset to detect new calls
-
-	time.Sleep(time.Millisecond * 1000) // Wait for another potential retry
-	require.GreaterOrEqual(t, failureCalls, int64(0), "Failing endpoint should have been retried")
+	// 2. The success endpoint should also have been called and should succeed independently
+	require.Greater(t, successCalls, int64(0), "Success endpoint should have been called")
 
 	// Clean up
 	close(pendingBytesUpdated3)
 	cancel3()
 	wg3.Wait()
+
+	// Test direct singleEndpointThrottler function
+	t.Run("TestSingleEndpointThrottler", func(t *testing.T) {
+		// Reset counters
+		successCalls = 0
+		failureCalls = 0
+
+		// Create a new BatchSubmitter with specific throttling config and a valid shutdown context
+		testBS, _ := setup(t)
+		testCtx, testCancel := context.WithCancel(context.Background())
+		defer testCancel()
+
+		testBS.shutdownCtx = testCtx
+		testBS.Config = BatcherConfig{
+			NetworkTimeout:    time.Second,
+			ThrottleThreshold: 10000,
+			ThrottleTxSize:    5000,
+			ThrottleBlockSize: 20000,
+		}
+
+		// Create clients for the servers
+		successClient, err := rpc.Dial(successServer.URL)
+		require.NoError(t, err)
+
+		failClient, err := rpc.Dial(failingServer.URL)
+		require.NoError(t, err)
+
+		// Create channels for endpoint updates
+		successUpdates := make(chan int64, 1)
+		failureUpdates := make(chan int64, 1)
+
+		var wg sync.WaitGroup
+
+		// Start the throttlers
+		wg.Add(2)
+		go testBS.singleEndpointThrottler(&wg, successUpdates, successServer.URL, successClient)
+		go testBS.singleEndpointThrottler(&wg, failureUpdates, failingServer.URL, failClient)
+
+		// Send updates to trigger throttling
+		successUpdates <- 20000 // Over threshold
+		failureUpdates <- 20000 // Over threshold
+
+		// Allow time for processing
+		time.Sleep(time.Millisecond * 300)
+
+		// Verify the endpoints were called
+		require.Greater(t, successCalls, int64(0), "Success endpoint should have been called at least once")
+		require.Greater(t, failureCalls, int64(0), "Failing endpoint should have been called at least once")
+
+		// Clean up
+		close(successUpdates)
+		close(failureUpdates)
+		wg.Wait()
+	})
 }

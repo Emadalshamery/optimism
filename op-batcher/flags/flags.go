@@ -188,7 +188,7 @@ var (
 	}
 	ThrottlingEndpointsFlag = &cli.StringSliceFlag{
 		Name:    "throttling-endpoints",
-		Usage:   "Comma-separated list of endpoints to distribute throttling configuration to. If not provided, the default L2 endpoint will be used.",
+		Usage:   "Comma-separated list of endpoints to distribute throttling configuration to. If provided, ONLY these endpoints will be throttled. If not provided, the L2 endpoints specified with --l2-eth-rpc will be throttled.",
 		EnvVars: prefixEnvVars("THROTTLING_ENDPOINTS"),
 	}
 	// Legacy Flags
