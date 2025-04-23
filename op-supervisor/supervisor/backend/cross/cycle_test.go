@@ -354,6 +354,18 @@ func TestHazardCycleChecksNoCycle(t *testing.T) {
 			msg: "expected no cycle found first log is exec",
 		},
 		{
+			name: "temp",
+			chainBlocks: map[string]chainBlockDef{
+				"1": {
+					logCount: 2,
+					messages: map[uint32]*types.ExecutingMessage{
+						0: execMsg("1", 1),
+					},
+				},
+			},
+			msg: "temp",
+		},
+		{
 			name: "cycle through older timestamp",
 			chainBlocks: map[string]chainBlockDef{
 				"1": {
