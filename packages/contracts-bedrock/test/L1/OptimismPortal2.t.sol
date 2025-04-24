@@ -34,6 +34,8 @@ import { IProxy } from "interfaces/universal/IProxy.sol";
 import { IAnchorStateRegistry } from "interfaces/dispute/IAnchorStateRegistry.sol";
 import { IETHLockbox } from "interfaces/L1/IETHLockbox.sol";
 
+/// @title TestInit
+/// @notice A test contract that initializes the test environment.
 contract TestInit is CommonTest {
     address depositor;
 
@@ -43,6 +45,8 @@ contract TestInit is CommonTest {
     }
 }
 
+/// @title WithdrawalTestInit
+/// @notice A test contract that initializes the test environment for withdrawal tests.
 contract WithdrawalTestInit is CommonTest {
     // Reusable default values for a test withdrawal
     Types.WithdrawalTransaction _defaultTx;
@@ -82,7 +86,7 @@ contract WithdrawalTestInit is CommonTest {
         });
     }
 
-    /// @dev Setup the system for a ready-to-use state.
+    /// @notice Setup the system for a ready-to-use state.
     function setUp() public virtual override {
         if (isForkTest()) {
             // Set the proposed block number to be the next block number on the forked network
@@ -90,8 +94,10 @@ contract WithdrawalTestInit is CommonTest {
             _proposedBlockNumber += 1;
 
             // Set the init bond of anchor game type 0 to be 0.
-            // It is a mapping so the storage slot is calculated as keccak256(abi.encode(key, slot)).
-            // The storage slot for the initBond mapping is 102, see `snapshots/storageLayout/DisputeGameFactory.json`.
+            // It is a mapping so the storage slot is calculated as
+            // keccak256(abi.encode(key, slot)).
+            // The storage slot for the initBond mapping is 102, see
+            // `snapshots/storageLayout/DisputeGameFactory.json`.
             vm.store(
                 address(disputeGameFactory), keccak256(abi.encode(GameType.wrap(0), uint256(102))), bytes32(uint256(0))
             );
@@ -153,6 +159,8 @@ contract WithdrawalTestInit is CommonTest {
     }
 }
 
+/// @title OptimismPortal2_Version_Test
+/// @notice A test contract that tests the version function.
 contract OptimismPortal2_Version_Test is TestInit {
     /// @notice Tests that the version function returns a valid string. We avoid testing the
     ///         specific value of the string as it changes frequently.
@@ -161,10 +169,12 @@ contract OptimismPortal2_Version_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_Constructor_Test
+/// @notice A test contract that tests the constructor function.
 contract OptimismPortal2_Constructor_Test is TestInit {
-    /// @dev Tests that the constructor sets the correct values.
-    /// @notice Marked virtual to be overridden in
-    ///         test/kontrol/deployment/DeploymentSummary.t.sol
+    /// @notice Tests that the constructor sets the correct values.
+    /// @dev Marked virtual to be overridden in
+    ///      test/kontrol/deployment/DeploymentSummary.t.sol
     function test_constructor_succeeds() external virtual {
         IOptimismPortal opImpl = IOptimismPortal(payable(EIP1967Helper.getImplementation(address(optimismPortal2))));
         assertEq(address(opImpl.anchorStateRegistry()), address(0));
@@ -176,10 +186,12 @@ contract OptimismPortal2_Constructor_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_Initialize_Test
+/// @notice A test contract that tests the initialize function.
 contract OptimismPortal2_Initialize_Test is TestInit {
-    /// @dev Tests that the initializer sets the correct values.
-    /// @notice Marked virtual to be overridden in
-    ///         test/kontrol/deployment/DeploymentSummary.t.sol
+    /// @notice Tests that the initializer sets the correct values.
+    /// @dev Marked virtual to be overridden in
+    ///      test/kontrol/deployment/DeploymentSummary.t.sol
     function test_initialize_succeeds() external virtual {
         assertEq(address(optimismPortal2.anchorStateRegistry()), address(anchorStateRegistry));
         assertEq(address(optimismPortal2.disputeGameFactory()), address(disputeGameFactory));
@@ -201,37 +213,10 @@ contract OptimismPortal2_Initialize_Test is TestInit {
     }
 }
 
-contract OptimismPortal2_Upgrade_Test is TestInit {
-    /// @dev Tests that the upgrade function succeeds.
-    function testFuzz_upgrade_succeeds(address _newAnchorStateRegistry, uint256 _balance) external {
-        // Prevent overflow on an upgrade context
-        _balance = bound(_balance, 0, type(uint256).max - address(ethLockbox).balance);
-
-        // Set the initialize state of the portal to false.
-        vm.store(address(optimismPortal2), bytes32(uint256(0)), bytes32(uint256(0)));
-
-        // Set the balance of the portal and get the lockbox balance before the upgrade.
-        deal(address(optimismPortal2), _balance);
-        uint256 lockboxBalanceBefore = address(ethLockbox).balance;
-
-        // Expect the ETH to be migrated to the lockbox.
-        vm.expectCall(address(ethLockbox), _balance, abi.encodeCall(ethLockbox.lockETH, ()));
-
-        // Call the upgrade function.
-        vm.prank(Predeploys.PROXY_ADMIN);
-        optimismPortal2.upgrade(IAnchorStateRegistry(_newAnchorStateRegistry), IETHLockbox(ethLockbox));
-
-        // Assert the portal is properly upgraded.
-        assertEq(address(optimismPortal2.ethLockbox()), address(ethLockbox));
-        assertEq(address(optimismPortal2.anchorStateRegistry()), _newAnchorStateRegistry);
-        assertEq(address(optimismPortal2).balance, 0);
-        assertEq(address(ethLockbox).balance, lockboxBalanceBefore + _balance);
-    }
-}
-
+/// @title OptimismPortal2_Pause_Test
+/// @notice A test contract that tests the pause function.
 contract OptimismPortal2_Pause_Test is TestInit {
-    /// @dev Tests that `pause` successfully pauses
-    ///      when called by the GUARDIAN.
+    /// @notice Tests that `pause` successfully pauses when called by the GUARDIAN.
     function test_pause_succeeds() external {
         address guardian = optimismPortal2.guardian();
 
@@ -246,7 +231,7 @@ contract OptimismPortal2_Pause_Test is TestInit {
         assertEq(optimismPortal2.paused(), true);
     }
 
-    /// @dev Tests that `pause` reverts when called by a non-GUARDIAN.
+    /// @notice Tests that `pause` reverts when called by a non-GUARDIAN.
     function test_pause_onlyGuardian_reverts() external {
         assertEq(optimismPortal2.paused(), false);
 
@@ -258,8 +243,7 @@ contract OptimismPortal2_Pause_Test is TestInit {
         assertEq(optimismPortal2.paused(), false);
     }
 
-    /// @dev Tests that `unpause` successfully unpauses
-    ///      when called by the GUARDIAN.
+    /// @notice Tests that `unpause` successfully unpauses when called by the GUARDIAN.
     function test_unpause_succeeds() external {
         address guardian = optimismPortal2.guardian();
 
@@ -275,7 +259,7 @@ contract OptimismPortal2_Pause_Test is TestInit {
         assertEq(optimismPortal2.paused(), false);
     }
 
-    /// @dev Tests that `unpause` reverts when called by a non-GUARDIAN.
+    /// @notice Tests that `unpause` reverts when called by a non-GUARDIAN.
     function test_unpause_onlyGuardian_reverts() external {
         address guardian = optimismPortal2.guardian();
 
@@ -292,8 +276,10 @@ contract OptimismPortal2_Pause_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_Receive_Test
+/// @notice A test contract that tests the receive function.
 contract OptimismPortal2_Receive_Test is TestInit {
-    /// @dev Tests that `receive` successdully deposits ETH.
+    /// @notice Tests that `receive` successdully deposits ETH.
     function testFuzz_receive_succeeds(uint256 _value) external {
         // Prevent overflow on an upgrade context
         _value = bound(_value, 0, type(uint256).max - address(ethLockbox).balance);
@@ -326,17 +312,19 @@ contract OptimismPortal2_Receive_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_DepositTransaction_Test
+/// @notice A test contract that tests the depositTransaction function.
 contract OptimismPortal2_DepositTransaction_Test is TestInit {
-    /// @dev Tests that `depositTransaction` reverts when the destination address is non-zero
-    ///      for a contract creation deposit.
+    /// @notice Tests that `depositTransaction` reverts when the destination address is non-zero
+    ///         for a contract creation deposit.
     function test_depositTransaction_contractCreation_reverts() external {
         // contract creation must have a target of address(0)
         vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);
         optimismPortal2.depositTransaction(address(1), 1, 0, true, hex"");
     }
 
-    /// @dev Tests that `depositTransaction` reverts when the data is too large.
-    ///      This places an upper bound on unsafe blocks sent over p2p.
+    /// @notice Tests that `depositTransaction` reverts when the data is too large.
+    ///         This places an upper bound on unsafe blocks sent over p2p.
     function test_depositTransaction_largeData_reverts() external {
         uint256 size = 120_001;
         uint64 gasLimit = optimismPortal2.minimumGasLimit(uint64(size));
@@ -350,14 +338,13 @@ contract OptimismPortal2_DepositTransaction_Test is TestInit {
         });
     }
 
-    /// @dev Tests that `depositTransaction` reverts when the gas limit is too small.
+    /// @notice Tests that `depositTransaction` reverts when the gas limit is too small.
     function test_depositTransaction_smallGasLimit_reverts() external {
         vm.expectRevert(IOptimismPortal.OptimismPortal_GasLimitTooLow.selector);
         optimismPortal2.depositTransaction({ _to: address(1), _value: 0, _gasLimit: 0, _isCreation: false, _data: hex"" });
     }
 
-    /// @dev Tests that `depositTransaction` succeeds for small,
-    ///      but sufficient, gas limits.
+    /// @notice Tests that `depositTransaction` succeeds for small, but sufficient, gas limits.
     function testFuzz_depositTransaction_smallGasLimit_succeeds(bytes memory _data, bool _shouldFail) external {
         uint64 gasLimit = optimismPortal2.minimumGasLimit(uint64(_data.length));
         if (_shouldFail) {
@@ -374,7 +361,7 @@ contract OptimismPortal2_DepositTransaction_Test is TestInit {
         });
     }
 
-    /// @dev Tests that `depositTransaction` succeeds for an EOA.
+    /// @notice Tests that `depositTransaction` succeeds for an EOA.
     function testFuzz_depositTransaction_eoa_succeeds(
         address _to,
         uint64 _gasLimit,
@@ -429,7 +416,7 @@ contract OptimismPortal2_DepositTransaction_Test is TestInit {
         assertEq(address(ethLockbox).balance, lockboxBalanceBefore + _mint);
     }
 
-    /// @dev Tests that `depositTransaction` succeeds for an EOA using 7702 delegation.
+    /// @notice Tests that `depositTransaction` succeeds for an EOA using 7702 delegation.
     function testFuzz_depositTransaction_eoa7702_succeeds(
         address _to,
         uint64 _gasLimit,
@@ -486,7 +473,7 @@ contract OptimismPortal2_DepositTransaction_Test is TestInit {
         assertEq(address(ethLockbox).balance, lockboxBalanceBefore + _mint);
     }
 
-    /// @dev Tests that `depositTransaction` succeeds for a contract.
+    /// @notice Tests that `depositTransaction` succeeds for a contract.
     function testFuzz_depositTransaction_contract_succeeds(
         address _to,
         uint64 _gasLimit,
@@ -540,10 +527,12 @@ contract OptimismPortal2_DepositTransaction_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_MinimumGasLimit_Test
+/// @notice A test contract that tests the minimumGasLimit function.
 contract OptimismPortal2_MinimumGasLimit_Test is TestInit {
-    /// @dev Tests that `minimumGasLimit` succeeds for small calldata sizes.
-    ///      The gas limit should be 21k for 0 calldata and increase linearly
-    ///      for larger calldata sizes.
+    /// @notice Tests that `minimumGasLimit` succeeds for small calldata sizes.
+    ///         The gas limit should be 21k for 0 calldata and increase linearly for larger
+    ///         calldata sizes.
     function test_minimumGasLimit_succeeds() external view {
         assertEq(optimismPortal2.minimumGasLimit(0), 21_000);
         assertTrue(optimismPortal2.minimumGasLimit(2) > optimismPortal2.minimumGasLimit(1));
@@ -551,8 +540,10 @@ contract OptimismPortal2_MinimumGasLimit_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_DonateETH_Test
+/// @notice A test contract that tests the donateETH function.
 contract OptimismPortal2_DonateETH_Test is TestInit {
-    /// @dev Tests that the donateETH function donates ETH and does no state read/write
+    /// @notice Tests that the donateETH function donates ETH and does no state read/write.
     function test_donateETH_succeeds(uint256 _amount) external {
         vm.startPrank(alice);
         vm.deal(alice, _amount);
@@ -598,8 +589,11 @@ contract OptimismPortal2_DonateETH_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_MigrateToSuperRoots_Test
+/// @notice A test contract that tests the migrateToSuperRoots function.
 contract OptimismPortal2_MigrateToSuperRoots_Test is TestInit {
-    /// @dev Tests that `migrateToSuperRoots` reverts if the caller is not the proxy admin owner.
+    /// @notice Tests that `migrateToSuperRoots` reverts if the caller is not the proxy admin
+    ///         owner.
     function testFuzz_migrateToSuperRoots_notProxyAdminOwner_reverts(address _caller) external {
         vm.assume(_caller != optimismPortal2.proxyAdminOwner());
         vm.expectRevert(IOptimismPortal.OptimismPortal_Unauthorized.selector);
@@ -608,8 +602,8 @@ contract OptimismPortal2_MigrateToSuperRoots_Test is TestInit {
         optimismPortal2.migrateToSuperRoots(IETHLockbox(address(1)), IAnchorStateRegistry(address(1)));
     }
 
-    /// @dev Tests that `migrateToSuperRoots` reverts if the new registry is the same as the
-    ///      current one.
+    /// @notice Tests that `migrateToSuperRoots` reverts if the new registry is the same as the
+    ///         current one.
     /// @param _newLockbox The new ETHLockbox to migrate to.
     function testFuzz_migrateToSuperRoots_usingSameRegistry_reverts(address _newLockbox) external {
         vm.assume(_newLockbox != address(optimismPortal2.ethLockbox()));
@@ -626,8 +620,8 @@ contract OptimismPortal2_MigrateToSuperRoots_Test is TestInit {
         optimismPortal2.migrateToSuperRoots(IETHLockbox(_newLockbox), newAnchorStateRegistry);
     }
 
-    /// @dev Tests that `migrateToSuperRoots` updates the ETHLockbox contract, updates the
-    ///      AnchorStateRegistry, and sets the superRootsActive flag to true.
+    /// @notice Tests that `migrateToSuperRoots` updates the ETHLockbox contract, updates the
+    ///         AnchorStateRegistry, and sets the superRootsActive flag to true.
     /// @param _newLockbox The new ETHLockbox to migrate to.
     /// @param _newAnchorStateRegistry The new AnchorStateRegistry to migrate to.
     function testFuzz_migrateToSuperRoots_succeeds(address _newLockbox, address _newAnchorStateRegistry) external {
@@ -648,9 +642,11 @@ contract OptimismPortal2_MigrateToSuperRoots_Test is TestInit {
     }
 }
 
+/// @title OptimismPortal2_FinalizeWithdrawalsTransaction_Test
+/// @notice A test contract that tests the finalizeWithdrawalTransaction function.
 contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestInit {
-
-        /// @dev Tests that `finalizeWithdrawalTransaction` reverts when the target is the portal contract or the lockbox.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts when the target is the portal
+    ///         contract or the lockbox.
         function test_finalizeWithdrawalTransaction_badTarget_reverts() external {
             _defaultTx.target = address(optimismPortal2);
             vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);
@@ -659,10 +655,10 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
             _defaultTx.target = address(ethLockbox);
             vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);
             optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
-    }
+        }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts when attempting to replay using a secondary proof
-    ///      submitter.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts when attempting to replay using
+    ///         a secondary proof submitter.
     function test_finalizeWithdrawalTransaction_secondProofReplay_reverts() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -706,8 +702,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore + 100);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the target reverts and caller is the
-    /// ESTIMATION_ADDRESS.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the target reverts and caller
+    ///         is the ESTIMATION_ADDRESS.
     function test_finalizeWithdrawalTransaction_targetFailsAndCallerIsEstimationAddress_reverts() external {
         vm.etch(bob, hex"fe"); // Contract with just the invalid opcode.
 
@@ -726,7 +722,7 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` succeeds when _tx.data is empty.
+    /// @notice Tests that `finalizeWithdrawalTransaction` succeeds when _tx.data is empty.
     function test_finalizeWithdrawalTransaction_noTxData_succeeds() external {
         Types.WithdrawalTransaction memory _defaultTx_noData = Types.WithdrawalTransaction({
             nonce: 0,
@@ -794,7 +790,7 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(bob.balance == bobBalanceBefore + 100);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` succeeds.
+    /// @notice Tests that `finalizeWithdrawalTransaction` succeeds.
     function test_finalizeWithdrawalTransaction_provenWithdrawalHashEther_succeeds() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -821,8 +817,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore + 100);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` succeeds using a different proof than an earlier one by another
-    ///      party.
+    /// @notice Tests that `finalizeWithdrawalTransaction` succeeds using a different proof than an
+    ///         earlier one by another party.
     function test_finalizeWithdrawalTransaction_secondaryProof_succeeds() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -831,7 +827,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
             optimismPortal2.respectedGameType(), Claim.wrap(_outputRoot), abi.encode(_proposedBlockNumber + 1)
         );
 
-        // Warp 1 second into the future so that the proof is submitted after the timestamp of game creation.
+        // Warp 1 second into the future so that the proof is submitted after the timestamp of game
+        // creation.
         vm.warp(block.timestamp + 1);
 
         // Prove the withdrawal transaction against the invalid dispute game, as 0xb0b.
@@ -850,8 +847,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         // Mock the status of the dispute game 0xb0b proves against to be CHALLENGER_WINS.
         vm.mockCall(address(secondGame), abi.encodeCall(game.status, ()), abi.encode(GameStatus.CHALLENGER_WINS));
 
-        // Prove the withdrawal transaction against the invalid dispute game, as the test contract, against the original
-        // game.
+        // Prove the withdrawal transaction against the invalid dispute game, as the test contract,
+        // against the original game.
         vm.expectEmit(true, true, true, true);
         emit WithdrawalProven(_withdrawalHash, alice, bob);
         vm.expectEmit(true, true, true, true);
@@ -882,7 +879,7 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore + 100);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the contract is paused.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the contract is paused.
     function test_finalizeWithdrawalTransaction_paused_reverts() external {
         vm.prank(optimismPortal2.guardian());
         superchainConfig.pause("identifier");
@@ -891,7 +888,7 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal has not been
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal has not been
     function test_finalizeWithdrawalTransaction_ifWithdrawalNotProven_reverts() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -901,8 +898,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal has not been
-    ///      proven long enough ago.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal has not been
+    ///         proven long enough ago.
     function test_finalizeWithdrawalTransaction_ifWithdrawalProofNotOldEnough_reverts() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -923,8 +920,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the provenWithdrawal's timestamp
-    ///      is less than the dispute game's creation timestamp.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the provenWithdrawal's
+    ///         timestamp is less than the dispute game's creation timestamp.
     function test_finalizeWithdrawalTransaction_timestampLessThanGameCreation_reverts() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -954,8 +951,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assertEq(bobBalanceBefore, address(bob).balance);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the dispute game has not resolved in favor of the
-    ///      root claim.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the dispute game has not
+    ///         resolved in favor of the root claim.
     function test_finalizeWithdrawalTransaction_ifDisputeGameNotResolved_reverts() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -982,7 +979,7 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assertEq(bobBalanceBefore, address(bob).balance);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the target reverts.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the target reverts.
     function test_finalizeWithdrawalTransaction_targetFails_fails() external {
         uint256 bobBalanceBefore = address(bob).balance;
         vm.etch(bob, hex"fe"); // Contract with just the invalid opcode.
@@ -1010,8 +1007,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal has already been
-    ///      finalized.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal has already
+    ///         been finalized.
     function test_finalizeWithdrawalTransaction_onReplay_reverts() external {
         vm.expectEmit(true, true, true, true);
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1037,8 +1034,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal transaction
-    ///      does not have enough gas to execute.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal transaction
+    ///         does not have enough gas to execute.
     function test_finalizeWithdrawalTransaction_onInsufficientGas_reverts() external {
         // This number was identified through trial and error.
         uint256 gasLimit = 150_000;
@@ -1081,8 +1078,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction{ gas: gasLimit }(insufficientGasTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if a sub-call attempts to finalize
-    ///      another withdrawal.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if a sub-call attempts to
+    ///         finalize another withdrawal.
     function test_finalizeWithdrawalTransaction_onReentrancy_reverts() external {
         uint256 bobBalanceBefore = address(bob).balance;
 
@@ -1130,7 +1127,7 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assert(address(bob).balance == bobBalanceBefore);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` succeeds.
+    /// @notice Tests that `finalizeWithdrawalTransaction` succeeds.
     function testDiff_finalizeWithdrawalTransaction_succeeds(
         address _sender,
         address _target,
@@ -1206,7 +1203,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assertTrue(optimismPortal2.finalizedWithdrawals(withdrawalHash));
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` succeeds even if the respected game type is changed.
+    /// @notice Tests that `finalizeWithdrawalTransaction` succeeds even if the respected game type
+    ///         is changed.
     function test_finalizeWithdrawalTransaction_wasRespectedGameType_succeeds(
         address _sender,
         address _target,
@@ -1290,7 +1288,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assertTrue(optimismPortal2.finalizedWithdrawals(withdrawalHash));
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal's dispute game has been blacklisted.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal's dispute game
+    ///         has been blacklisted.
     function test_finalizeWithdrawalTransaction_blacklisted_reverts() external {
         vm.expectEmit(true, true, true, true);
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1316,8 +1315,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal's dispute game is still in the air
-    ///      gap.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the withdrawal's dispute game
+    ///         is still in the air gap.
     function test_finalizeWithdrawalTransaction_gameInAirGap_reverts() external {
         vm.expectEmit(true, true, true, true);
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1347,8 +1346,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         assertTrue(optimismPortal2.finalizedWithdrawals(_withdrawalHash));
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the respected game type was updated after the
-    ///      dispute game was created.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the respected game type was
+    ///         updated after the dispute game was created.
     function test_finalizeWithdrawalTransaction_gameOlderThanRespectedGameTypeUpdate_reverts() external {
         vm.expectEmit(address(optimismPortal2));
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1380,8 +1379,9 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the game was not the respected game type when it was
-    /// created. `proveWithdrawalTransaction` should already prevent this, but we remove that assumption here.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the game was not the
+    ///         respected game type when it was created. `proveWithdrawalTransaction` should
+    ///         already prevent this, but we remove that assumption here.
     function test_finalizeWithdrawalTransaction_gameWasNotRespectedGameType_reverts() external {
         vm.expectEmit(address(optimismPortal2));
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1410,9 +1410,10 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests that `finalizeWithdrawalTransaction` reverts if the game is a legacy game that does not implement
-    ///      `wasRespectedGameTypeWhenCreated`.  `proveWithdrawalTransaction` should already prevent this, but we remove
-    ///      that assumption here.
+    /// @notice Tests that `finalizeWithdrawalTransaction` reverts if the game is a legacy game
+    ///         that does not implement `wasRespectedGameTypeWhenCreated`.
+    ///         `proveWithdrawalTransaction` should already prevent this, but we remove that
+    ///         assumption here.
     function test_finalizeWithdrawalTransaction_legacyGame_reverts() external {
         vm.expectEmit(address(optimismPortal2));
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1443,7 +1444,8 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
     }
 
-    /// @dev Tests an e2e prove -> finalize path, checking the edges of each delay for correctness.
+    /// @notice Tests an e2e prove -> finalize path, checking the edges of each delay for
+    ///         correctness.
     function test_finalizeWithdrawalTransaction_delayEdges_succeeds() external {
         // Prove the withdrawal transaction.
         vm.expectEmit(true, true, true, true);
@@ -1457,35 +1459,39 @@ contract OptimismPortal2_FinalizeWithdrawalsTransaction_Test is WithdrawalTestIn
             _withdrawalProof: _withdrawalProof
         });
 
-        // Attempt to finalize the withdrawal transaction 1 second before the proof has matured. This should fail.
+        // Attempt to finalize the withdrawal transaction 1 second before the proof has matured.
+        // This should fail.
         vm.warp(block.timestamp + optimismPortal2.proofMaturityDelaySeconds());
         vm.expectRevert(IOptimismPortal.OptimismPortal_ProofNotOldEnough.selector);
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
 
-        // Warp 1 second in the future, past the proof maturity delay, and attempt to finalize the withdrawal.
-        // This should also fail, since the dispute game has not resolved yet.
+        // Warp 1 second in the future, past the proof maturity delay, and attempt to finalize the
+        // withdrawal. This should also fail, since the dispute game has not resolved yet.
         vm.warp(block.timestamp + 1 seconds);
         vm.expectRevert(IOptimismPortal.OptimismPortal_InvalidRootClaim.selector);
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
 
-        // Finalize the dispute game and attempt to finalize the withdrawal again. This should also fail, since the
-        // air gap dispute game delay has not elapsed.
+        // Finalize the dispute game and attempt to finalize the withdrawal again. This should
+        // also fail, since the air gap dispute game delay has not elapsed.
         game.resolveClaim(0, 0);
         game.resolve();
         vm.warp(block.timestamp + optimismPortal2.disputeGameFinalityDelaySeconds());
         vm.expectRevert(IOptimismPortal.OptimismPortal_InvalidRootClaim.selector);
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
 
-        // Warp 1 second in the future, past the air gap dispute game delay, and attempt to finalize the withdrawal.
-        // This should succeed.
+        // Warp 1 second in the future, past the air gap dispute game delay, and attempt to
+        // finalize the withdrawal. This should succeed.
         vm.warp(block.timestamp + 1 seconds);
         optimismPortal2.finalizeWithdrawalTransaction(_defaultTx);
         assertTrue(optimismPortal2.finalizedWithdrawals(_withdrawalHash));
     }
 }
 
+/// @title OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test
+/// @notice A test contract that tests the proveWithdrawalTransaction function with an output root
+///         proof.
 contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is WithdrawalTestInit {
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when paused.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when paused.
     function test_proveWithdrawalTransaction_outputRoot_paused_reverts() external {
         vm.prank(optimismPortal2.guardian());
         superchainConfig.pause("identifier");
@@ -1499,7 +1505,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when the target is the portal contract.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when the target is the portal
+    ///         contract.
     function test_proveWithdrawalTransaction_outputRoot_onSelfCall_reverts() external {
         _defaultTx.target = address(optimismPortal2);
         vm.expectRevert(IOptimismPortal.OptimismPortal_BadTarget.selector);
@@ -1520,9 +1527,11 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when the current timestamp is less
-    ///      than or equal to the creation timestamp of the dispute game.
-    function testFuzz_proveWithdrawalTransaction_outputRoot_timestampLessThanOrEqualToCreation_reverts(uint64 _timestamp)
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when the current timestamp is less
+    ///         than or equal to the creation timestamp of the dispute game.
+    function testFuzz_proveWithdrawalTransaction_outputRoot_timestampLessThanOrEqualToCreation_reverts(
+        uint64 _timestamp
+    )
         external
     {
         // Set the timestamp to be less than or equal to the creation timestamp of the dispute game.
@@ -1539,7 +1548,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when the outputRootProof does not match the output root
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when the outputRootProof does not
+    ///         match the output root.
     function test_proveWithdrawalTransaction_outputRoot_onInvalidOutputRootProof_reverts() external {
         // Modify the version to invalidate the withdrawal proof.
         _outputRootProof.version = bytes32(uint256(1));
@@ -1552,7 +1562,7 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when the withdrawal is missing.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when the withdrawal is missing.
     function test_proveWithdrawalTransaction_outputRoot_onInvalidWithdrawalProof_reverts() external {
         // modify the default test values to invalidate the proof.
         _defaultTx.data = hex"abcd";
@@ -1565,8 +1575,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when the withdrawal has already been proven, and the new
-    ///      game has the `CHALLENGER_WINS` status.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when the withdrawal has already
+    ///         been proven, and the new game has the `CHALLENGER_WINS` status.
     function test_proveWithdrawalTransaction_outputRoot_replayProveDifferentGameChallengerWins_reverts() external {
         vm.expectEmit(address(optimismPortal2));
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1596,7 +1606,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts if the game was not the respected game type when created.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts if the game was not the respected
+    ///         game type when created.
     function test_proveWithdrawalTransaction_outputRoot_wasNotRespectedGameTypeWhenCreated_reverts() external {
         vm.mockCall(address(game), abi.encodeCall(game.wasRespectedGameTypeWhenCreated, ()), abi.encode(false));
         vm.expectRevert(IOptimismPortal.OptimismPortal_InvalidDisputeGame.selector);
@@ -1608,8 +1619,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts if the game is a legacy game that does not implement
-    ///      `wasRespectedGameTypeWhenCreated`.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts if the game is a legacy game that
+    ///         does not implement `wasRespectedGameTypeWhenCreated`.
     function test_proveWithdrawalTransaction_outputRoot_legacyGame_reverts() external {
         vm.mockCallRevert(address(game), abi.encodeCall(game.wasRespectedGameTypeWhenCreated, ()), "");
         vm.expectRevert(); // nosemgrep: sol-safety-expectrevert-no-args
@@ -1621,9 +1632,11 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` succeeds if the game was created after the
-    ///      game retirement timestamp.
-    function testFuzz_proveWithdrawalTransaction_outputRoot_createdAfterRetirementTimestamp_succeeds(uint64 _createdAt) external {
+    /// @notice Tests that `proveWithdrawalTransaction` succeeds if the game was created after
+    ///         the game retirement timestamp.
+    function testFuzz_proveWithdrawalTransaction_outputRoot_createdAfterRetirementTimestamp_succeeds(uint64 _createdAt)
+        external
+    {
         _createdAt = uint64(bound(_createdAt, optimismPortal2.respectedGameTypeUpdatedAt() + 1, type(uint64).max - 1));
         vm.warp(_createdAt + 1);
         vm.mockCall(address(game), abi.encodeCall(game.createdAt, ()), abi.encode(uint64(_createdAt)));
@@ -1635,9 +1648,11 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts if the game was created before or at
-    ///      the game retirement timestamp.
-    function testFuzz_proveWithdrawalTransaction_outputRoot_createdBeforeOrAtRetirementTimestamp_reverts(uint64 _createdAt)
+    /// @notice Tests that `proveWithdrawalTransaction` reverts if the game was created before or
+    ///         at the game retirement timestamp.
+    function testFuzz_proveWithdrawalTransaction_outputRoot_createdBeforeOrAtRetirementTimestamp_reverts(
+        uint64 _createdAt
+    )
         external
     {
         _createdAt = uint64(bound(_createdAt, 0, optimismPortal2.respectedGameTypeUpdatedAt()));
@@ -1651,8 +1666,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` can be re-executed if the dispute game proven against has resolved
-    ///      against the favor of the root claim.
+    /// @notice Tests that `proveWithdrawalTransaction` can be re-executed if the dispute game
+    ///         proven against has resolved against the favor of the root claim.
     function test_proveWithdrawalTransaction_outputRoot_replayProveBadProposal_succeeds() external {
         vm.expectEmit(true, true, true, true);
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1689,8 +1704,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` can be re-executed if the dispute game proven against is no longer
-    ///      of the respected game type.
+    /// @notice Tests that `proveWithdrawalTransaction` can be re-executed if the dispute game
+    ///         proven against is no longer of the respected game type.
     function test_proveWithdrawalTransaction_outputRoot_replayRespectedGameTypeChanged_succeeds() external {
         // Prove the withdrawal against a game with the current respected game type.
         vm.expectEmit(true, true, true, true);
@@ -1735,8 +1750,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when using the Output Roots version of
-    ///      `proveWithdrawalTransaction` when `superRootsActive` is true.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when using the Output Roots
+    ///         version of `proveWithdrawalTransaction` when `superRootsActive` is true.
     function test_proveWithdrawalTransaction_outputRoot_whenSuperRootsActive_reverts() external {
         // Set superRootsActive to true.
         setSuperRootsActive(true);
@@ -1751,7 +1766,7 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` succeeds.
+    /// @notice Tests that `proveWithdrawalTransaction` succeeds.
     function test_proveWithdrawalTransaction_outputRoot_validWithdrawalProof_succeeds() external {
         vm.expectEmit(true, true, true, true);
         emit WithdrawalProven(_withdrawalHash, alice, bob);
@@ -1766,9 +1781,12 @@ contract OptimismPortal2_ProveWithdrawalTransaction_OutputRoot_Test is Withdrawa
     }
 }
 
+/// @title OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test
+/// @notice A test contract that tests the proveWithdrawalTransaction function with a super roots
+///         proof.
 contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is WithdrawalTestInit {
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when using the Super Roots version of
-    ///      `proveWithdrawalTransaction` when `superRootsActive` is false.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when using the Super Roots
+    ///         version of `proveWithdrawalTransaction` when `superRootsActive` is false.
     function test_proveWithdrawalTransaction_superRoots_whenSuperRootsInactive_reverts() external {
         // Set up a dummy super root proof.
         Types.OutputRootWithChainId[] memory outputRootWithChainIdArr = new Types.OutputRootWithChainId[](1);
@@ -1792,8 +1810,8 @@ contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when using the Super Roots version of
-    ///      `proveWithdrawalTransaction` when the provided proof is invalid.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when using the Super Roots
+    ///         version of `proveWithdrawalTransaction` when the provided proof is invalid.
     function test_proveWithdrawalTransaction_superRoots_badProof_reverts() external {
         // Enable super roots.
         setSuperRootsActive(true);
@@ -1820,9 +1838,9 @@ contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when using the Super Roots version of
-    ///      `proveWithdrawalTransaction` when the provided proof is valid but the index is out of
-    ///      bounds.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when using the Super Roots
+    ///         version of `proveWithdrawalTransaction` when the provided proof is valid but the
+    ///         index is out of bounds.
     function test_proveWithdrawalTransaction_superRoots_badIndex_reverts() external {
         // Enable super roots.
         setSuperRootsActive(true);
@@ -1855,9 +1873,9 @@ contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when using the Super Roots version of
-    ///      `proveWithdrawalTransaction` when the provided proof is valid, index is correct, but
-    ///      the output root has the wrong chain id.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when using the Super Roots
+    ///         version of `proveWithdrawalTransaction` when the provided proof is valid, index
+    ///         is correct, but the output root has the wrong chain id.
     function test_proveWithdrawalTransaction_superRoots_badChainId_reverts() external {
         // Enable super roots.
         setSuperRootsActive(true);
@@ -1892,9 +1910,9 @@ contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` reverts when using the Super Roots version of
-    ///      `proveWithdrawalTransaction` when the provided proof is valid, index is correct, chain
-    ///      id is correct, but the output root proof is invalid.
+    /// @notice Tests that `proveWithdrawalTransaction` reverts when using the Super Roots
+    ///         version of `proveWithdrawalTransaction` when the provided proof is valid, index
+    ///         is correct, chain id is correct, but the output root proof is invalid.
     function test_proveWithdrawalTransaction_superRoots_badOutputRootProof_reverts() external {
         // Enable super roots.
         setSuperRootsActive(true);
@@ -1929,7 +1947,7 @@ contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is Withdrawa
         });
     }
 
-    /// @dev Tests that `proveWithdrawalTransaction` succeeds when all parameters are valid.
+    /// @notice Tests that `proveWithdrawalTransaction` succeeds when all parameters are valid.
     function test_proveWithdrawalTransaction_superRoots_allValid_succeeds() external {
         // Enable super roots.
         setSuperRootsActive(true);
@@ -1962,9 +1980,11 @@ contract OptimismPortal2_ProveWithdrawalTransaction_SuperRoots_Test is Withdrawa
     }
 }
 
+/// @title OptimismPortal2_CheckWithdrawal_Test
+/// @notice A test contract that tests the checkWithdrawal function.
 contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
-    /// @notice Tests that checkWithdrawal succeeds if the withdrawal has been proven, the dispute
-    /// game has been finalized, and the root claim is valid.
+    /// @notice Tests that `checkWithdrawal` succeeds if the withdrawal has been proven, the
+    ///         dispute game has been finalized, and the root claim is valid.
     function test_checkWithdrawal_succeeds() external {
         // Prove the withdrawal transaction.
         vm.expectEmit(true, true, true, true);
@@ -1993,7 +2013,7 @@ contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
         optimismPortal2.checkWithdrawal(_withdrawalHash, address(this));
     }
 
-    /// @notice Tests that checkWithdrawal reverts if the withdrawal has already been finalized.
+    /// @notice Tests that `checkWithdrawal` reverts if the withdrawal has already been finalized.
     function test_checkWithdrawal_ifAlreadyFinalized_reverts() external {
         // Prove the withdrawal transaction.
         vm.expectEmit(true, true, true, true);
@@ -2020,7 +2040,7 @@ contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
         optimismPortal2.checkWithdrawal(_withdrawalHash, address(this));
     }
 
-    /// @notice Tests that checkWithdrawal reverts if the withdrawal has not been proven.
+    /// @notice Tests that `checkWithdrawal` reverts if the withdrawal has not been proven.
     function test_checkWithdrawal_ifUnproven_reverts() external {
         // Don't prove the withdrawal transaction.
         // Should revert.
@@ -2028,8 +2048,8 @@ contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
         optimismPortal2.checkWithdrawal(_withdrawalHash, address(this));
     }
 
-    /// @notice Tests that checkWithdrawal reverts if the proof timestamp is greater than the game
-    /// creation timestamp.
+    /// @notice Tests that `checkWithdrawal` reverts if the proof timestamp is greater than the
+    ///         game creation timestamp.
     function testFuzz_checkWithdrawal_ifInvalidProofTimestamp_reverts(uint64 _createdAt) external {
         // Prove the withdrawal transaction.
         optimismPortal2.proveWithdrawalTransaction({
@@ -2059,8 +2079,8 @@ contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
         optimismPortal2.checkWithdrawal(_withdrawalHash, address(this));
     }
 
-    /// @notice Tests that checkWithdrawal reverts if the proof timestamp is less than the proof
-    /// maturity delay.
+    /// @notice Tests that `checkWithdrawal` reverts if the proof timestamp is less than the proof
+    ///         maturity delay.
     function test_checkWithdrawal_ifProofNotOldEnough_reverts() external {
         // Prove but don't warp ahead past the proof maturity delay.
         optimismPortal2.proveWithdrawalTransaction({
@@ -2076,7 +2096,7 @@ contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
         optimismPortal2.checkWithdrawal(_withdrawalHash, address(this));
     }
 
-    /// @notice Tests that checkWithdrawal reverts if the root claim is invalid.
+    /// @notice Tests that `checkWithdrawal` reverts if the root claim is invalid.
     function test_checkWithdrawal_ifInvalidRootClaim_reverts() external {
         // Prove the withdrawal.
         optimismPortal2.proveWithdrawalTransaction({
@@ -2098,10 +2118,11 @@ contract OptimismPortal2_CheckWithdrawal_Test is WithdrawalTestInit {
     }
 }
 
+/// @title OptimismPortal2_MigrationLiquidity_Test
+/// @notice A test contract that tests the migrationLiquidity function.
 contract OptimismPortal2_MigrationLiquidity_Test is TestInit {
-
-    /// @notice Tests the liquidity migration from the portal to the lockbox reverts if not called by the admin
-    /// owner.
+    /// @notice Tests the liquidity migration from the portal to the lockbox reverts if not
+    ///         called by the admin owner.
     function testFuzz_migrateLiquidity_notProxyAdminOwner_reverts(address _caller) external {
         vm.assume(_caller != optimismPortal2.proxyAdminOwner());
         vm.expectRevert(IOptimismPortal.OptimismPortal_Unauthorized.selector);
@@ -2130,15 +2151,14 @@ contract OptimismPortal2_MigrationLiquidity_Test is TestInit {
     }
 }
 
-/// @title OptimismPortal2_upgrade_Test
+/// @title OptimismPortal2_Upgrade_Test
 /// @notice Reusable test for the current upgrade() function in the OptimismPortal2 contract. If
 ///         the upgrade() function is changed, tests inside of this contract should be updated to
 ///         reflect the new function. If the upgrade() function is removed, remove the
 ///         corresponding tests but leave this contract in place so it's easy to add tests back
 ///         in the future.
-contract OptimismPortal2_upgrade_Test is CommonTest {
-
-    /// @notice Tests that the upgrade() function succeeds.
+contract OptimismPortal2_Upgrade_Test is TestInit {
+    /// @notice Tests that `upgrade` succeeds.
     function test_upgrade_succeeds() external {
         // Get the slot for _initialized.
         StorageSlot memory slot = ForgeArtifacts.getSlot("OptimismPortal2", "_initialized");
@@ -2157,7 +2177,7 @@ contract OptimismPortal2_upgrade_Test is CommonTest {
         assertEq(address(optimismPortal2.anchorStateRegistry()), address(0xdeadbeef));
     }
 
-    /// @notice Tests that the upgrade() function reverts if called a second time.
+    /// @notice Tests that `upgrade` reverts if called a second time.
     function test_upgrade_upgradeTwice_reverts() external {
         // Get the slot for _initialized.
         StorageSlot memory slot = ForgeArtifacts.getSlot("OptimismPortal2", "_initialized");
@@ -2173,7 +2193,7 @@ contract OptimismPortal2_upgrade_Test is CommonTest {
         optimismPortal2.upgrade(IAnchorStateRegistry(address(0xdeadbeef)), IETHLockbox(ethLockbox));
     }
 
-    /// @notice Tests that the upgrade() function reverts if called after initialization.
+    /// @notice Tests that `upgrade` reverts if called after initialization.
     function test_upgrade_afterInitialization_reverts() external {
         // Get the slot for _initialized.
         StorageSlot memory slot = ForgeArtifacts.getSlot("OptimismPortal2", "_initialized");
@@ -2189,11 +2209,39 @@ contract OptimismPortal2_upgrade_Test is CommonTest {
         vm.expectRevert("Initializable: contract is already initialized");
         optimismPortal2.upgrade(IAnchorStateRegistry(address(0xdeadbeef)), IETHLockbox(ethLockbox));
     }
+
+    /// @notice Tests that `upgrade` succeeds.
+    function testFuzz_upgrade_succeeds(address _newAnchorStateRegistry, uint256 _balance) external {
+        // Prevent overflow on an upgrade context
+        _balance = bound(_balance, 0, type(uint256).max - address(ethLockbox).balance);
+
+        // Set the initialize state of the portal to false.
+        vm.store(address(optimismPortal2), bytes32(uint256(0)), bytes32(uint256(0)));
+
+        // Set the balance of the portal and get the lockbox balance before the upgrade.
+        deal(address(optimismPortal2), _balance);
+        uint256 lockboxBalanceBefore = address(ethLockbox).balance;
+
+        // Expect the ETH to be migrated to the lockbox.
+        vm.expectCall(address(ethLockbox), _balance, abi.encodeCall(ethLockbox.lockETH, ()));
+
+        // Call the upgrade function.
+        vm.prank(Predeploys.PROXY_ADMIN);
+        optimismPortal2.upgrade(IAnchorStateRegistry(_newAnchorStateRegistry), IETHLockbox(ethLockbox));
+
+        // Assert the portal is properly upgraded.
+        assertEq(address(optimismPortal2.ethLockbox()), address(ethLockbox));
+        assertEq(address(optimismPortal2.anchorStateRegistry()), _newAnchorStateRegistry);
+        assertEq(address(optimismPortal2).balance, 0);
+        assertEq(address(ethLockbox).balance, lockboxBalanceBefore + _balance);
+    }
 }
 
+///! AD: This test suite should be relocated on SystemConfig.t.sol or ResourceMetering.t.sol since
+///! it is not testing the OptimismPortal2 function.
 /// @title OptimismPortal2_ResourceFuzz_Test
-/// @dev Test various values of the resource metering config to ensure that deposits cannot be
-///      broken by changing the config.
+/// @notice Test various values of the resource metering config to ensure that deposits cannot
+///         be broken by changing the config.
 contract OptimismPortal2_ResourceFuzz_Test is CommonTest {
     /// @dev The max gas limit observed throughout this test. Setting this too high can cause
     ///      the test to take too long to run.
@@ -2249,8 +2297,7 @@ contract OptimismPortal2_ResourceFuzz_Test is CommonTest {
         // Base fee can increase quickly and mean that we can't buy the amount of gas we want.
         // Here we add a VM assumption to bound the potential increase.
         // Compute the maximum possible increase in base fee.
-        uint256 maxPercentIncrease = uint256(_elasticityMultiplier - 1) * 100 /
-        uint256(_baseFeeMaxChangeDenominator);
+        uint256 maxPercentIncrease = uint256(_elasticityMultiplier - 1) * 100 / uint256(_baseFeeMaxChangeDenominator);
         // Assume that we have enough gas to burn.
         // Compute the maximum amount of gas we'd need to burn.
         // Assume we need 1/5 of our gas to do other stuff.
