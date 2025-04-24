@@ -186,13 +186,17 @@ func Implementations(ctx context.Context, cfg ImplementationsConfig) (opcm.Deplo
 		return dio, fmt.Errorf("failed to create script host: %w", err)
 	}
 
+	opcmScripts, err := opcm.NewScripts(l1Host)
+	if err != nil {
+		return dio, fmt.Errorf("failed to load OPCM scripts: %w", err)
+	}
+
 	superProxyAdmin, err := standard.SuperchainProxyAdminAddrFor(chainID.Uint64())
 	if err != nil {
 		return dio, fmt.Errorf("failed to get superchain proxy admin address: %w", err)
 	}
 
-	if dio, err = opcm.DeployImplementations(
-		l1Host,
+	if dio, err = opcmScripts.DeployImplementations.Run(
 		opcm.DeployImplementationsInput{
 			WithdrawalDelaySeconds:          new(big.Int).SetUint64(cfg.WithdrawalDelaySeconds),
 			MinProposalSizeBytes:            new(big.Int).SetUint64(cfg.MinProposalSizeBytes),
@@ -205,7 +209,6 @@ func Implementations(ctx context.Context, cfg ImplementationsConfig) (opcm.Deplo
 			ProtocolVersionsProxy:           cfg.ProtocolVersionsProxy,
 			SuperchainProxyAdmin:            superProxyAdmin,
 			UpgradeController:               cfg.UpgradeController,
-			UseInterop:                      cfg.UseInterop,
 		},
 	); err != nil {
 		return dio, fmt.Errorf("error deploying implementations: %w", err)
