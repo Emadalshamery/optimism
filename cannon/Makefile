@@ -48,7 +48,7 @@ clean:
 	rm -rf bin multicannon/embeds/cannon*
 
 elf:
-	make -C ./testdata/example elf
+	make -C ./testdata elf
 
 sanitize-program:
 	mips-linux-gnu-objdump -d -j .text $$GUEST_PROGRAM > ./bin/dump.txt
@@ -79,8 +79,8 @@ diff-%-cannon: cannon elf
 		echo "Loading 32-bit program"; \
 		ELF_SUFFIX="elf"; \
 	fi; \
-	$$OTHER_CANNON load-elf --type $$VM --path ./testdata/example/bin/hello.$${ELF_SUFFIX} --out ./bin/prestate-other.bin.gz --meta ""; \
-	./bin/cannon   load-elf --type $$VM --path ./testdata/example/bin/hello.$${ELF_SUFFIX} --out ./bin/prestate.bin.gz --meta "";
+	$$OTHER_CANNON load-elf --type $$VM --path ./testdata/go-1-23/bin/hello.$${ELF_SUFFIX} --out ./bin/prestate-other.bin.gz --meta ""; \
+	./bin/cannon   load-elf --type $$VM --path ./testdata/go-1-23/bin/hello.$${ELF_SUFFIX} --out ./bin/prestate.bin.gz --meta "";
 	@cmp ./bin/prestate-other.bin.gz ./bin/prestate.bin.gz;
 	@if [ $$? -eq 0 ]; then \
 		echo "Generated identical prestates"; \
