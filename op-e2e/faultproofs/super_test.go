@@ -32,7 +32,7 @@ func TestCreateSuperCannonGame(t *testing.T) {
 		sys.L2IDs()
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		game.LogGameData(ctx)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonGame(t *testing.T) {
@@ -41,7 +41,7 @@ func TestSuperCannonGame(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		testCannonGame(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonGame_ChallengeAllZeroClaim(t *testing.T) {
@@ -50,53 +50,56 @@ func TestSuperCannonGame_ChallengeAllZeroClaim(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		testCannonChallengeAllZeroClaim(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonPublishCannonRootClaim(t *testing.T) {
-	tests := []struct {
+	type TestCase struct {
 		disputeL2SequenceNumberOffset uint64
-	}{
+	}
+	testName := func(vm string, test TestCase) string {
+		return fmt.Sprintf("Dispute_%v_%v", test.disputeL2SequenceNumberOffset, vm)
+	}
+
+	tests := []TestCase{
 		{2},
 		{3},
 		{4},
 		{5},
 		{6},
 	}
+
 	vmStatusCh := make(chan byte, len(tests))
-	for _, test := range tests {
-		test := test
-		RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-			ctx := context.Background()
+	RunTestsAcrossVmTypes(t, tests, func(t *testing.T, allocType config.AllocType, test TestCase) {
+		ctx := context.Background()
 
-			sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
-			b, err := sys.L1GethClient().BlockByNumber(ctx, nil)
-			require.NoError(t, err)
-			disputeL2SequenceNumber := b.Time() + test.disputeL2SequenceNumberOffset
+		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
+		b, err := sys.L1GethClient().BlockByNumber(ctx, nil)
+		require.NoError(t, err)
+		disputeL2SequenceNumber := b.Time() + test.disputeL2SequenceNumberOffset
 
-			game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, disputeL2SequenceNumber, common.Hash{0x01})
-			game.DisputeLastBlock(ctx)
-			game.LogGameData(ctx)
-			game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
+		game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, disputeL2SequenceNumber, common.Hash{0x01})
+		game.DisputeLastBlock(ctx)
+		game.LogGameData(ctx)
+		game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
 
-			splitDepth := game.SplitDepth(ctx)
-			t.Logf("Waiting for claim at depth %v (split depth %v)", splitDepth+1, splitDepth)
-			game.WaitForClaimAtDepth(ctx, splitDepth+1)
+		splitDepth := game.SplitDepth(ctx)
+		t.Logf("Waiting for claim at depth %v (split depth %v)", splitDepth+1, splitDepth)
+		game.WaitForClaimAtDepth(ctx, splitDepth+1)
 
-			claims, err := game.Game.GetAllClaims(ctx, rpcblock.Latest)
-			require.NoError(t, err)
-			var bottomRootClaim types.Claim
-			for _, claim := range claims {
-				if claim.Depth() == splitDepth+1 {
-					require.True(t, bottomRootClaim == types.Claim{}, "Found multiple bottom root claims")
-					bottomRootClaim = claim
-				}
+		claims, err := game.Game.GetAllClaims(ctx, rpcblock.Latest)
+		require.NoError(t, err)
+		var bottomRootClaim types.Claim
+		for _, claim := range claims {
+			if claim.Depth() == splitDepth+1 {
+				require.True(t, bottomRootClaim == types.Claim{}, "Found multiple bottom root claims")
+				bottomRootClaim = claim
 			}
-			require.True(t, bottomRootClaim != types.Claim{}, "Failed to find bottom root claim")
-			t.Logf("Bottom root claim: %v", bottomRootClaim.Value)
-			vmStatusCh <- bottomRootClaim.Value[0]
-		}, WithMultithreading(), WithTestNamePrefix(fmt.Sprintf("Dispute_%v", test.disputeL2SequenceNumberOffset)))
-	}
+		}
+		require.True(t, bottomRootClaim != types.Claim{}, "Failed to find bottom root claim")
+		t.Logf("Bottom root claim: %v", bottomRootClaim.Value)
+		vmStatusCh <- bottomRootClaim.Value[0]
+	}, WithMultithreading[TestCase](), WithTestName[TestCase](testName))
 
 	// Cleanup ensures that the subtests run to completion before asserting the VM statuses
 	t.Cleanup(func() {
@@ -112,54 +115,55 @@ func TestSuperCannonPublishCannonRootClaim(t *testing.T) {
 }
 
 func TestSuperCannonDisputeGame(t *testing.T) {
-	tests := []struct {
+	type TestCase struct {
 		name             string
 		defendClaimDepth types.Depth
-	}{
+	}
+	testName := func(vm string, test TestCase) string {
+		return fmt.Sprintf("%v-%v", test.name, vm)
+	}
+	tests := []TestCase{
 		{"StepFirst", 0},
 		{"StepMiddle", 28},
 		{"StepInExtension", 1},
 	}
-	for _, test := range tests {
-		test := test
-		RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-			ctx := context.Background()
-			sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
-			game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01, 0xaa})
-			game.LogGameData(ctx)
+	RunTestsAcrossVmTypes(t, tests, func(t *testing.T, allocType config.AllocType, test TestCase) {
+		ctx := context.Background()
+		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
+		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01, 0xaa})
+		game.LogGameData(ctx)
 
-			disputeClaim := game.DisputeLastBlock(ctx)
-			splitDepth := game.SplitDepth(ctx)
+		disputeClaim := game.DisputeLastBlock(ctx)
+		splitDepth := game.SplitDepth(ctx)
 
-			game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
+		game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
 
-			game.SupportClaim(
-				ctx,
-				disputeClaim,
-				func(claim *disputegame.ClaimHelper) *disputegame.ClaimHelper {
-					if claim.Depth()+1 == splitDepth+test.defendClaimDepth {
-						return claim.Defend(ctx, common.Hash{byte(claim.Depth())})
-					} else {
-						return claim.Attack(ctx, common.Hash{byte(claim.Depth())})
-					}
-				},
-				func(parentIdx int64) {
-					t.Log("Calling step on challenger's claim...")
-					honestActor := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
-						c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
-					})
-					honestActor.StepFails(ctx, parentIdx, false)
-					honestActor.StepFails(ctx, parentIdx, true)
-				},
-			)
+		game.SupportClaim(
+			ctx,
+			disputeClaim,
+			func(claim *disputegame.ClaimHelper) *disputegame.ClaimHelper {
+				if claim.Depth()+1 == splitDepth+test.defendClaimDepth {
+					return claim.Defend(ctx, common.Hash{byte(claim.Depth())})
+				} else {
+					return claim.Attack(ctx, common.Hash{byte(claim.Depth())})
+				}
+			},
+			func(parentIdx int64) {
+				t.Log("Calling step on challenger's claim...")
+				honestActor := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
+					c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
+				})
+				honestActor.StepFails(ctx, parentIdx, false)
+				honestActor.StepFails(ctx, parentIdx, true)
+			},
+		)
 
-			sys.AdvanceL1Time(game.MaxClockDuration(ctx))
-			require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
+		sys.AdvanceL1Time(game.MaxClockDuration(ctx))
+		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 
-			game.LogGameData(ctx)
-			game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
-		}, WithMultithreading(), WithTestNamePrefix(test.name))
-	}
+		game.LogGameData(ctx)
+		game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
+	}, WithMultithreading[TestCase](), WithTestName(testName))
 }
 
 func TestSuperCannonDefendStep(t *testing.T) {
@@ -168,7 +172,7 @@ func TestSuperCannonDefendStep(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		testCannonDefendStep(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonStepWithLargePreimage(t *testing.T) {
@@ -214,51 +218,54 @@ func TestSuperCannonStepWithLargePreimage(t *testing.T) {
 		game.ChallengeToPreimageLoad(ctx, topGameLeaf, aliceKey(t), utils.PreimageLargerThan(preimage.MinPreimageSize), preimageLoadCheck, false)
 		// The above method already verified the image was uploaded and step called successfully
 		// So we don't waste time resolving the game - that's tested elsewhere.
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
-func TestSuperCannonStepWithPreimage(t *testing.T) {
-	testPreimageStep := func(t *testing.T, preimageType utils.PreimageOpt, preloadPreimage bool, allocType config.AllocType) {
-		ctx := context.Background()
-		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
-
-		status, err := sys.SupervisorClient().SyncStatus(ctx)
-		require.NoError(t, err)
-		l2Timestamp := status.SafeTimestamp
-
-		game := disputeGameFactory.StartSuperCannonGameWithCorrectRootAtTimestamp(ctx, l2Timestamp)
-		topGameLeaf := game.DisputeLastBlock(ctx)
-		game.LogGameData(ctx)
-
-		game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
-
-		// This attack creates a bottom game such that we will be making the last move at the bottom. (see game depth parameters for the super DG)
-		// This presents an opportunity for the challenger to step on our dishonest claim at the bottom.
-		// This assumes the execution game depth is even. But if it is odd, then this test should be set up more like the FDG counter part.
-		topGameLeaf = topGameLeaf.Attack(ctx, common.Hash{0x01})
-
-		// Now the honest challenger is positioned as the defender of the execution game. We then move to challenge it to induce a preimage load
-		preimageLoadCheck := game.CreateStepPreimageLoadCheck(ctx)
-		game.ChallengeToPreimageLoad(ctx, topGameLeaf, aliceKey(t), preimageType, preimageLoadCheck, preloadPreimage)
-		// The above method already verified the image was uploaded and step called successfully
-		// So we don't waste time resolving the game - that's tested elsewhere.
+func TestSuperCannonStepWithPreimage_nonExistingPreimage(t *testing.T) {
+	preimageConditions := []string{"keccak", "sha256", "blob"}
+	testName := func(vm string, preimageType string) string {
+		return fmt.Sprintf("%v-%v", preimageType, vm)
 	}
 
-	preimageConditions := []string{"keccak", "sha256", "blob"}
-	for _, preimageType := range preimageConditions {
-		preimageType := preimageType
+	RunTestsAcrossVmTypes(t, preimageConditions, func(t *testing.T, allocType config.AllocType, preimageType string) {
 		if preimageType == "blob" || preimageType == "sha256" {
 			t.Skip("TODO(#15311): Add blob preimage test case. sha256 is also used for blobs")
 		}
-		RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-			testPreimageStep(t, utils.FirstPreimageLoadOfType(preimageType), false, allocType)
-		}, WithMultithreading(), WithTestNamePrefix("non-existing preimage-"+preimageType))
-	}
+		testSuperPreimageStep(t, utils.FirstPreimageLoadOfType(preimageType), false, allocType)
+	}, WithMultithreading[string](), WithTestName(testName))
+}
 
+func TestSuperCannonStepWithPreimage_existingPreimage(t *testing.T) {
 	// Only test pre-existing images with one type to save runtime
 	RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-		testPreimageStep(t, utils.FirstKeccakPreimageLoad(), true, allocType)
-	}, WithMultithreading(), WithTestNamePrefix("preimage already exists"))
+		testSuperPreimageStep(t, utils.FirstKeccakPreimageLoad(), true, allocType)
+	}, WithMultithreading[any](), WithTestNamePrefix[any]("preimage already exists"))
+}
+
+func testSuperPreimageStep(t *testing.T, preimageType utils.PreimageOpt, preloadPreimage bool, allocType config.AllocType) {
+	ctx := context.Background()
+	sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
+
+	status, err := sys.SupervisorClient().SyncStatus(ctx)
+	require.NoError(t, err)
+	l2Timestamp := status.SafeTimestamp
+
+	game := disputeGameFactory.StartSuperCannonGameWithCorrectRootAtTimestamp(ctx, l2Timestamp)
+	topGameLeaf := game.DisputeLastBlock(ctx)
+	game.LogGameData(ctx)
+
+	game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
+
+	// This attack creates a bottom game such that we will be making the last move at the bottom. (see game depth parameters for the super DG)
+	// This presents an opportunity for the challenger to step on our dishonest claim at the bottom.
+	// This assumes the execution game depth is even. But if it is odd, then this test should be set up more like the FDG counter part.
+	topGameLeaf = topGameLeaf.Attack(ctx, common.Hash{0x01})
+
+	// Now the honest challenger is positioned as the defender of the execution game. We then move to challenge it to induce a preimage load
+	preimageLoadCheck := game.CreateStepPreimageLoadCheck(ctx)
+	game.ChallengeToPreimageLoad(ctx, topGameLeaf, aliceKey(t), preimageType, preimageLoadCheck, preloadPreimage)
+	// The above method already verified the image was uploaded and step called successfully
+	// So we don't waste time resolving the game - that's tested elsewhere.
 }
 
 func TestSuperCannonProposalValid_AttackWithCorrectTrace(t *testing.T) {
@@ -267,7 +274,7 @@ func TestSuperCannonProposalValid_AttackWithCorrectTrace(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGameWithCorrectRoot(ctx)
 		testCannonProposalValid_AttackWithCorrectTrace(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonProposalValid_DefendWithCorrectTrace(t *testing.T) {
@@ -276,7 +283,7 @@ func TestSuperCannonProposalValid_DefendWithCorrectTrace(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGameWithCorrectRoot(ctx)
 		testCannonProposalValid_DefendWithCorrectTrace(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonPoisonedPostState(t *testing.T) {
@@ -285,7 +292,7 @@ func TestSuperCannonPoisonedPostState(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		testCannonPoisonedPostState(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonRootBeyondProposedBlock_ValidRoot(t *testing.T) {
@@ -294,7 +301,7 @@ func TestSuperCannonRootBeyondProposedBlock_ValidRoot(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGameWithCorrectRoot(ctx)
 		testDisputeRootBeyondProposedBlockValidOutputRoot(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonRootBeyondProposedBlock_InvalidRoot(t *testing.T) {
@@ -303,7 +310,7 @@ func TestSuperCannonRootBeyondProposedBlock_InvalidRoot(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		testDisputeRootBeyondProposedBlockInvalidOutputRoot(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonRootChangeClaimedRoot(t *testing.T) {
@@ -312,16 +319,20 @@ func TestSuperCannonRootChangeClaimedRoot(t *testing.T) {
 		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 		game := disputeGameFactory.StartSuperCannonGame(ctx, common.Hash{0x01})
 		testDisputeRootChangeClaimedRoot(t, ctx, createSuperGameArena(t, sys, game), &game.SplitGameHelper)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperInvalidateUnsafeProposal(t *testing.T) {
 	t.Skip("TODO(#15321): Challenger does not respond to unsafe proposals")
 	ctx := context.Background()
-	tests := []struct {
+	type TestCase struct {
 		name     string
 		strategy func(correctTrace *disputegame.OutputHonestHelper, parent *disputegame.ClaimHelper) *disputegame.ClaimHelper
-	}{
+	}
+	testName := func(vm string, test TestCase) string {
+		return fmt.Sprintf("%v-%v", test.name, vm)
+	}
+	tests := []TestCase{
 		{
 			name: "Attack",
 			strategy: func(correctTrace *disputegame.OutputHonestHelper, parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
@@ -342,71 +353,71 @@ func TestSuperInvalidateUnsafeProposal(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		test := test
-		RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-			sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
+	RunTestsAcrossVmTypes(t, tests, func(t *testing.T, allocType config.AllocType, test TestCase) {
+		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
 
-			client := sys.SupervisorClient()
-			status, err := client.SyncStatus(ctx)
-			require.NoError(t, err, "Failed to get sync status")
-			// Ensure that the superchain has progressed a bit past the genesis timestamp
-			disputeGameFactory.WaitForSuperTimestamp(status.SafeTimestamp+4, &disputegame.GameCfg{})
-			// halt the safe chain
-			for _, id := range sys.L2IDs() {
-				require.NoError(t, sys.Batcher(id).Stop(ctx))
+		client := sys.SupervisorClient()
+		status, err := client.SyncStatus(ctx)
+		require.NoError(t, err, "Failed to get sync status")
+		// Ensure that the superchain has progressed a bit past the genesis timestamp
+		disputeGameFactory.WaitForSuperTimestamp(status.SafeTimestamp+4, &disputegame.GameCfg{})
+		// halt the safe chain
+		for _, id := range sys.L2IDs() {
+			require.NoError(t, sys.Batcher(id).Stop(ctx))
+		}
+
+		status, err = client.SyncStatus(ctx)
+		require.NoError(t, err, "Failed to get sync status")
+
+		// Wait for any client to advance its unsafe head past the safe chain. We know this head will remain unsafe since the batc
+		l2Client := sys.L2GethClient(sys.L2IDs()[0], "sequencer")
+		require.NoError(t, wait.ForNextBlock(ctx, l2Client))
+		head, err := l2Client.BlockByNumber(ctx, nil)
+		require.NoError(t, err, "Failed to get head block")
+		unsafeTimestamp := head.Time()
+
+		// Root claim is _dishonest_ because the required data is not available on L1
+		unsafeSuper := createSuperRoot(t, ctx, sys, unsafeTimestamp)
+		unsafeRoot := eth.SuperRoot(unsafeSuper)
+		game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, unsafeTimestamp, common.Hash(unsafeRoot), disputegame.WithFutureProposal())
+
+		correctTrace := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
+			c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
+		})
+		game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
+
+		game.SupportClaim(ctx, game.RootClaim(ctx), func(parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
+			if parent.IsBottomGameRoot(ctx) {
+				return correctTrace.AttackClaim(ctx, parent)
 			}
-
-			status, err = client.SyncStatus(ctx)
-			require.NoError(t, err, "Failed to get sync status")
-
-			// Wait for any client to advance its unsafe head past the safe chain. We know this head will remain unsafe since the batc
-			l2Client := sys.L2GethClient(sys.L2IDs()[0], "sequencer")
-			require.NoError(t, wait.ForNextBlock(ctx, l2Client))
-			head, err := l2Client.BlockByNumber(ctx, nil)
-			require.NoError(t, err, "Failed to get head block")
-			unsafeTimestamp := head.Time()
-
-			// Root claim is _dishonest_ because the required data is not available on L1
-			unsafeSuper := createSuperRoot(t, ctx, sys, unsafeTimestamp)
-			unsafeRoot := eth.SuperRoot(unsafeSuper)
-			game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, unsafeTimestamp, common.Hash(unsafeRoot), disputegame.WithFutureProposal())
-
-			correctTrace := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
-				c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
-			})
-			game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
-
-			game.SupportClaim(ctx, game.RootClaim(ctx), func(parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
-				if parent.IsBottomGameRoot(ctx) {
-					return correctTrace.AttackClaim(ctx, parent)
-				}
-				return test.strategy(correctTrace, parent)
+			return test.strategy(correctTrace, parent)
+		},
+			func(parentIdx int64) {
+				t.Log("Calling step on challenger's claim...")
+				correctTrace.StepFails(ctx, parentIdx, false)
+				correctTrace.StepFails(ctx, parentIdx, true)
 			},
-				func(parentIdx int64) {
-					t.Log("Calling step on challenger's claim...")
-					correctTrace.StepFails(ctx, parentIdx, false)
-					correctTrace.StepFails(ctx, parentIdx, true)
-				},
-			)
+		)
 
-			// Time travel past when the game will be resolvable.
-			sys.AdvanceL1Time(game.MaxClockDuration(ctx))
-			require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
+		// Time travel past when the game will be resolvable.
+		sys.AdvanceL1Time(game.MaxClockDuration(ctx))
+		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 
-			game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
-			game.LogGameData(ctx)
-		}, WithMultithreading(), WithTestNamePrefix(test.name))
-	}
+		game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
+		game.LogGameData(ctx)
+	}, WithMultithreading[TestCase](), WithTestName(testName))
 }
 
 func TestSuperInvalidateProposalForFutureBlock(t *testing.T) {
 	ctx := context.Background()
-
-	tests := []struct {
+	type TestCase struct {
 		name     string
 		strategy func(correctTrace *disputegame.OutputHonestHelper, parent *disputegame.ClaimHelper) *disputegame.ClaimHelper
-	}{
+	}
+	testName := func(vm string, test TestCase) string {
+		return fmt.Sprintf("%v-%v", test.name, vm)
+	}
+	tests := []TestCase{
 		{
 			name: "Attack",
 			strategy: func(correctTrace *disputegame.OutputHonestHelper, parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
@@ -427,48 +438,48 @@ func TestSuperInvalidateProposalForFutureBlock(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		test := test
-		RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-			sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
-			// Root claim is _dishonest_ because the required data is not available on L1
-			farFutureTimestamp := time.Now().Add(time.Second * 10_000_000).Unix()
-			game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, uint64(farFutureTimestamp), common.Hash{0x01}, disputegame.WithFutureProposal())
-			correctTrace := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
-				c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
-			})
-			game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
+	RunTestsAcrossVmTypes(t, tests, func(t *testing.T, allocType config.AllocType, test TestCase) {
+		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
+		// Root claim is _dishonest_ because the required data is not available on L1
+		farFutureTimestamp := time.Now().Add(time.Second * 10_000_000).Unix()
+		game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, uint64(farFutureTimestamp), common.Hash{0x01}, disputegame.WithFutureProposal())
+		correctTrace := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
+			c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
+		})
+		game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
 
-			game.SupportClaim(ctx, game.RootClaim(ctx), func(parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
-				if parent.IsBottomGameRoot(ctx) {
-					return correctTrace.AttackClaim(ctx, parent)
-				}
-				return test.strategy(correctTrace, parent)
+		game.SupportClaim(ctx, game.RootClaim(ctx), func(parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
+			if parent.IsBottomGameRoot(ctx) {
+				return correctTrace.AttackClaim(ctx, parent)
+			}
+			return test.strategy(correctTrace, parent)
+		},
+			func(parentIdx int64) {
+				t.Log("Calling step on challenger's claim...")
+				correctTrace.StepFails(ctx, parentIdx, false)
+				correctTrace.StepFails(ctx, parentIdx, true)
 			},
-				func(parentIdx int64) {
-					t.Log("Calling step on challenger's claim...")
-					correctTrace.StepFails(ctx, parentIdx, false)
-					correctTrace.StepFails(ctx, parentIdx, true)
-				},
-			)
+		)
 
-			// Time travel past when the game will be resolvable.
-			sys.AdvanceL1Time(game.MaxClockDuration(ctx))
-			require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
+		// Time travel past when the game will be resolvable.
+		sys.AdvanceL1Time(game.MaxClockDuration(ctx))
+		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 
-			game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
-			game.LogGameData(ctx)
-		}, WithMultithreading(), WithTestNamePrefix(test.name))
-	}
+		game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
+		game.LogGameData(ctx)
+	}, WithMultithreading[TestCase](), WithTestName(testName))
 }
 
 func TestSuperInvalidateCorrectProposalFutureBlock(t *testing.T) {
 	ctx := context.Background()
-
-	tests := []struct {
+	type TestCase struct {
 		name     string
 		strategy func(correctTrace *disputegame.OutputHonestHelper, parent *disputegame.ClaimHelper) *disputegame.ClaimHelper
-	}{
+	}
+	testName := func(vm string, test TestCase) string {
+		return fmt.Sprintf("%v-%v", test.name, vm)
+	}
+	tests := []TestCase{
 		{
 			name: "Attack",
 			strategy: func(correctTrace *disputegame.OutputHonestHelper, parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
@@ -489,54 +500,51 @@ func TestSuperInvalidateCorrectProposalFutureBlock(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		test := test
-		RunTestAcrossVmTypes(t, func(t *testing.T, allocType config.AllocType) {
-			sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
-			client := sys.SupervisorClient()
+	RunTestsAcrossVmTypes(t, tests, func(t *testing.T, allocType config.AllocType, test TestCase) {
+		sys, disputeGameFactory, _ := StartInteropFaultDisputeSystem(t, WithAllocType(allocType))
+		client := sys.SupervisorClient()
 
-			status, err := client.SyncStatus(ctx)
-			require.NoError(t, err, "Failed to get sync status")
-			superRoot, err := client.SuperRootAtTimestamp(ctx, hexutil.Uint64(status.SafeTimestamp))
-			require.NoError(t, err, "Failed to get super root at safe timestamp")
+		status, err := client.SyncStatus(ctx)
+		require.NoError(t, err, "Failed to get sync status")
+		superRoot, err := client.SuperRootAtTimestamp(ctx, hexutil.Uint64(status.SafeTimestamp))
+		require.NoError(t, err, "Failed to get super root at safe timestamp")
 
-			// Stop the batcher so the safe head doesn't advance
-			for _, id := range sys.L2IDs() {
-				require.NoError(t, sys.Batcher(id).Stop(ctx))
+		// Stop the batcher so the safe head doesn't advance
+		for _, id := range sys.L2IDs() {
+			require.NoError(t, sys.Batcher(id).Stop(ctx))
+		}
+
+		// Create a dispute game with a proposal that is valid at `superRoot.Timestamp`, but that claims to correspond to timestamp
+		// `superRoot.Timestamp + 100000`. This is dishonest, because the superchain hasn't reached this timestamp yet.
+		game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, superRoot.Timestamp+100_000, common.Hash(superRoot.SuperRoot), disputegame.WithFutureProposal())
+
+		game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
+
+		correctTrace := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
+			c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
+		})
+
+		game.SupportClaim(ctx, game.RootClaim(ctx), func(parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
+			if parent.IsBottomGameRoot(ctx) {
+				return correctTrace.AttackClaim(ctx, parent)
 			}
-
-			// Create a dispute game with a proposal that is valid at `superRoot.Timestamp`, but that claims to correspond to timestamp
-			// `superRoot.Timestamp + 100000`. This is dishonest, because the superchain hasn't reached this timestamp yet.
-			game := disputeGameFactory.StartSuperCannonGameAtTimestamp(ctx, superRoot.Timestamp+100_000, common.Hash(superRoot.SuperRoot), disputegame.WithFutureProposal())
-
-			game.StartChallenger(ctx, "Challenger", challenger.WithPrivKey(aliceKey(t)), challenger.WithDepset(t, sys.DependencySet()))
-
-			correctTrace := game.CreateHonestActor(ctx, disputegame.WithPrivKey(malloryKey(t)), func(c *disputegame.HonestActorConfig) {
-				c.ChallengerOpts = append(c.ChallengerOpts, challenger.WithDepset(t, sys.DependencySet()))
-			})
-
-			game.SupportClaim(ctx, game.RootClaim(ctx), func(parent *disputegame.ClaimHelper) *disputegame.ClaimHelper {
-				if parent.IsBottomGameRoot(ctx) {
-					return correctTrace.AttackClaim(ctx, parent)
-				}
-				return test.strategy(correctTrace, parent)
+			return test.strategy(correctTrace, parent)
+		},
+			func(parentIdx int64) {
+				t.Log("Calling step on challenger's claim...")
+				correctTrace.StepFails(ctx, parentIdx, false)
+				correctTrace.StepFails(ctx, parentIdx, true)
 			},
-				func(parentIdx int64) {
-					t.Log("Calling step on challenger's claim...")
-					correctTrace.StepFails(ctx, parentIdx, false)
-					correctTrace.StepFails(ctx, parentIdx, true)
-				},
-			)
-			game.LogGameData(ctx)
+		)
+		game.LogGameData(ctx)
 
-			// Time travel past when the game will be resolvable.
-			sys.AdvanceL1Time(game.MaxClockDuration(ctx))
-			require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
+		// Time travel past when the game will be resolvable.
+		sys.AdvanceL1Time(game.MaxClockDuration(ctx))
+		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 
-			game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
-			game.LogGameData(ctx)
-		}, WithMultithreading(), WithTestNamePrefix(test.name))
-	}
+		game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
+		game.LogGameData(ctx)
+	}, WithMultithreading[TestCase](), WithTestName(testName))
 }
 
 func TestSuperCannonHonestSafeTraceExtensionValidRoot(t *testing.T) {
@@ -589,7 +597,7 @@ func TestSuperCannonHonestSafeTraceExtensionValidRoot(t *testing.T) {
 		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 
 		game.WaitForGameStatus(ctx, gameTypes.GameStatusDefenderWon)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonHonestSafeTraceExtensionInvalidRoot(t *testing.T) {
@@ -648,7 +656,7 @@ func TestSuperCannonHonestSafeTraceExtensionInvalidRoot(t *testing.T) {
 		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 
 		game.WaitForGameStatus(ctx, gameTypes.GameStatusChallengerWon)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func TestSuperCannonGame_HonestCallsSteps(t *testing.T) {
@@ -684,7 +692,7 @@ func TestSuperCannonGame_HonestCallsSteps(t *testing.T) {
 		sys.AdvanceL1Time(game.MaxClockDuration(ctx))
 		require.NoError(t, wait.ForNextBlock(ctx, sys.L1GethClient()))
 		game.WaitForGameStatus(ctx, gameTypes.GameStatusDefenderWon)
-	}, WithMultithreading())
+	}, WithMultithreading[any]())
 }
 
 func createSuperRoot(t *testing.T, ctx context.Context, sys interop.SuperSystem, timestamp uint64) *eth.SuperV1 {

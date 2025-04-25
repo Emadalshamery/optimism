@@ -121,14 +121,14 @@ func SendKZGPointEvaluationTx(t *testing.T, sys *e2esys.System, l2Node string, p
 
 type VMTest func(t *testing.T, allocType config.AllocType)
 
-type vmTestOptions struct {
-	testNameModifier func(vmName string) string
+type vmTestOptions[T any] struct {
+	testNameModifier func(vmName string, testCase T) string
 	allocTypes       []config.AllocType
 }
 
-func defaultVmTestOptions() vmTestOptions {
-	return vmTestOptions{
-		testNameModifier: func(vmName string) string {
+func defaultVmTestOptions[T any]() vmTestOptions[T] {
+	return vmTestOptions[T]{
+		testNameModifier: func(vmName string, testcase T) string {
 			return vmName
 		},
 		allocTypes: []config.AllocType{
@@ -139,33 +139,53 @@ func defaultVmTestOptions() vmTestOptions {
 	}
 }
 
-type VMTestOption func(*vmTestOptions)
+type VMTestOption[T any] func(*vmTestOptions[T])
 
-func WithMultithreading() VMTestOption {
-	return func(o *vmTestOptions) {
+func WithMultithreading[T any]() VMTestOption[T] {
+	return func(o *vmTestOptions[T]) {
 		o.allocTypes = []config.AllocType{config.AllocTypeMTCannon, config.AllocTypeMTCannonNext}
 	}
 }
 
-func WithTestNamePrefix(prefix string) VMTestOption {
-	return func(o *vmTestOptions) {
-		o.testNameModifier = func(vmName string) string {
+func WithTestNamePrefix[T any](prefix string) VMTestOption[T] {
+	return func(o *vmTestOptions[T]) {
+		o.testNameModifier = func(vmName string, _ T) string {
 			return fmt.Sprintf("%v-%v", prefix, vmName)
 		}
 	}
 }
 
-func RunTestAcrossVmTypes(t *testing.T, test VMTest, opts ...VMTestOption) {
+func WithTestName[T any](testName func(vmName string, _ T) string) VMTestOption[T] {
+	return func(o *vmTestOptions[T]) {
+		o.testNameModifier = testName
+	}
+}
+
+// RunTestAcrossVmTypes Runs a single test case across multiple vm types
+func RunTestAcrossVmTypes(t *testing.T, test VMTest, opts ...VMTestOption[any]) {
+	vmTestCase := func(t *testing.T, allocType config.AllocType, _ any) {
+		test(t, allocType)
+	}
+	RunTestsAcrossVmTypes[any](t, []any{nil}, vmTestCase, opts...)
+}
+
+type VMTestCase[T any] func(t *testing.T, allocType config.AllocType, testcase T)
+
+// RunTestsAcrossVmTypes Runs a set of testCases, each testCase is run across multiple vm types
+func RunTestsAcrossVmTypes[T any](t *testing.T, testCases []T, test VMTestCase[T], opts ...VMTestOption[T]) {
 	op_e2e.InitParallel(t, op_e2e.UsesCannon)
-	options := defaultVmTestOptions()
+	options := defaultVmTestOptions[T]()
 	for _, opt := range opts {
 		opt(&options)
 	}
 
-	for _, allocType := range options.allocTypes {
-		testName := options.testNameModifier(string(allocType))
-		t.Run(testName, func(t *testing.T) {
-			test(t, allocType)
-		})
+	for _, testCase := range testCases {
+		for _, allocType := range options.allocTypes {
+			testName := options.testNameModifier(string(allocType), testCase)
+			t.Run(testName, func(t *testing.T) {
+				op_e2e.InitParallel(t, op_e2e.UsesCannon)
+				test(t, allocType, testCase)
+			})
+		}
 	}
 }
