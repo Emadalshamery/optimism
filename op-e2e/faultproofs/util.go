@@ -132,7 +132,6 @@ func defaultVmTestOptions[T any]() vmTestOptions[T] {
 			return vmName
 		},
 		allocTypes: []config.AllocType{
-			config.AllocTypeStandard,
 			config.AllocTypeMTCannon,
 			config.AllocTypeMTCannonNext,
 		},
