@@ -62,7 +62,7 @@ reproducible-prestate: check-custom-chains
 	@echo "CannonInterop Absolute prestate hash: "
 	@cat ./bin/prestate-proof-interop.json | jq -r .pre
 	@echo "\nCannon64Next Absolute prestate hash: "
-	@cat ./bin/prestate-proof-interop.json | jq -r .pre
+	@cat ./bin/prestate-proof-mt64Next.json | jq -r .pre
 	@echo
 .PHONY: reproducible-prestate
 
