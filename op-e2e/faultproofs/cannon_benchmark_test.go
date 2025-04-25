@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	op_e2e "github.com/ethereum-optimism/optimism/op-e2e"
 	"github.com/ethereum-optimism/optimism/op-e2e/config"
 	"github.com/ethereum-optimism/optimism/op-e2e/system/e2esys"
 
@@ -39,7 +38,6 @@ func TestBenchmarkCannonFPP(t *testing.T) {
 }
 
 func testBenchmarkCannonFPP(t *testing.T, allocType config.AllocType) {
-	op_e2e.InitParallel(t, op_e2e.UsesCannon)
 	ctx := context.Background()
 	cfg := e2esys.DefaultSystemConfig(t, e2esys.WithAllocType(allocType))
 	// We don't need a verifier - just the sequencer is enough
