@@ -27,12 +27,7 @@ op-program-client:
 	env GO111MODULE=on GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client ./client/cmd/main.go
 	env GO111MODULE=on GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client-interop ./client/interopcmd/main.go
 
-op-program-client-mips: op-program-client-mips32 op-program-client-mips64 op-program-client-mips64-interop
-
-op-program-client-mips32:
-	env GO111MODULE=on GOOS=linux GOARCH=mips GOMIPS=softfloat go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client.elf ./client/cmd/main.go
-	# verify output with: readelf -h bin/op-program-client.elf
-	# result is mips32, big endian, R3000
+op-program-client-mips: op-program-client-mips64 op-program-client-mips64-interop
 
 op-program-client-mips64:
 	env GO111MODULE=on GOOS=linux GOARCH=mips64 GOMIPS64=softfloat go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client64.elf ./client/cmd/main.go
@@ -51,13 +46,17 @@ check-custom-chains: op-program-host
 	./bin/op-program configs check-custom-chains
 
 reproducible-prestate: check-custom-chains
+	@docker build --output ./bin/ --progress plain -f Dockerfile.repro.next ../
 	@docker build --output ./bin/ --progress plain -f Dockerfile.repro ../
-	@echo "Cannon Absolute prestate hash: "
-	@cat ./bin/prestate-proof.json | jq -r .pre
-	@echo "Cannon64 Absolute prestate hash: "
+	@echo "-------------------- Production Prestates --------------------\n"
+	@echo "\nCannon64 Absolute prestate hash: "
 	@cat ./bin/prestate-proof-mt64.json | jq -r .pre
+	@echo "\n-------------------- Experimental Prestates --------------------\n"
 	@echo "CannonInterop Absolute prestate hash: "
 	@cat ./bin/prestate-proof-interop.json | jq -r .pre
+	@echo "\nCannon64Next Absolute prestate hash: "
+	@cat ./bin/prestate-proof-mt64Next.json | jq -r .pre
+	@echo
 .PHONY: reproducible-prestate
 
 verify-reproducibility:
@@ -108,10 +107,7 @@ verify-sepolia-fjord: op-program-host op-program-client
 
 verify-compat: verify-sepolia-delta verify-sepolia-ecotone verify-mainnet-genesis
 
-analyze-op-program-client: analyze-op-program-client-cannon-singlethreaded-32 analyze-op-program-client-cannon-multithreaded-64
-
-analyze-op-program-client-cannon-singlethreaded-32:
-	./scripts/run-static-analysis.sh cannon-singlethreaded-32 ./compatibility-test/baseline-cannon-singlethreaded-32.json
+analyze-op-program-client: analyze-op-program-client-cannon-multithreaded-64
 
 analyze-op-program-client-cannon-multithreaded-64:
 	./scripts/run-static-analysis.sh cannon-multithreaded-64 ./compatibility-test/baseline-cannon-multithreaded-64.json
@@ -121,7 +117,6 @@ analyze-op-program-client-cannon-multithreaded-64:
 	op-program-host \
 	op-program-client \
 	op-program-client-mips \
-	op-program-client-mips32 \
 	op-program-client-mips64 \
 	op-program-client-riscv \
 	clean \
@@ -135,5 +130,4 @@ analyze-op-program-client-cannon-multithreaded-64:
 	run-sepolia-verify \
 	run-compat \
 	analyze-op-program-client \
-	analyze-op-program-client-cannon-singlethreaded-32 \
 	analyze-op-program-client-cannon-multithreaded-64

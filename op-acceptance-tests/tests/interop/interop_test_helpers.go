@@ -110,6 +110,9 @@ func RandomTopicAndData(rng *rand.Rand, cnt, len int) ([][32]byte, []byte) {
 }
 
 func RandomInitTrigger(rng *rand.Rand, eventLoggerAddress common.Address, cnt, len int) *txintent.InitTrigger {
+	if cnt >= 5 {
+		panic(fmt.Sprintf("log holds at most 4 topics, got %d", cnt))
+	}
 	topics, data := RandomTopicAndData(rng, cnt, len)
 	return &txintent.InitTrigger{
 		Emitter:    eventLoggerAddress,
@@ -126,7 +129,12 @@ func ExecTriggerFromInitTrigger(init *txintent.InitTrigger, logIndex uint, targe
 	}
 	log := &types.Log{Address: init.Emitter, Topics: topics,
 		Data: init.OpaqueData, BlockNumber: targetNum, Index: logIndex}
-	logs := []*types.Log{log}
+	logs := make([]*types.Log, logIndex+1)
+	for i := range logs {
+		// dummy logs to fit in log index
+		logs[i] = &types.Log{}
+	}
+	logs[logIndex] = log
 	rec := &types.Receipt{Logs: logs}
 	includedIn := eth.BlockRef{Time: targetTime}
 	output := &txintent.InteropOutput{}

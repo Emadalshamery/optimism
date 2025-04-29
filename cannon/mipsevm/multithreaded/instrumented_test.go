@@ -20,19 +20,14 @@ func vmFactory(state *State, po mipsevm.PreimageOracle, stdOut, stdErr io.Writer
 	return NewInstrumentedState(state, po, stdOut, stdErr, log, meta, allFeaturesEnabled())
 }
 
-func TestInstrumentedState_OpenMips(t *testing.T) {
-	t.Parallel()
-	testutil.RunVMTests_OpenMips(t, CreateEmptyState, vmFactory, "clone.bin")
-}
-
 func TestInstrumentedState_Hello(t *testing.T) {
 	t.Parallel()
-	testutil.RunVMTest_Hello(t, CreateInitialState, vmFactory, false)
+	testutil.RunVMTest_Hello(t, CreateInitialState, vmFactory)
 }
 
 func TestInstrumentedState_Claim(t *testing.T) {
 	t.Parallel()
-	testutil.RunVMTest_Claim(t, CreateInitialState, vmFactory, false)
+	testutil.RunVMTest_Claim(t, CreateInitialState, vmFactory)
 }
 
 func TestInstrumentedState_UtilsCheck(t *testing.T) {
@@ -50,7 +45,7 @@ func TestInstrumentedState_UtilsCheck(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(c.name), CreateInitialState, false)
+			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(c.name), CreateInitialState)
 			oracle := testutil.StaticOracle(t, []byte{})
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
@@ -183,7 +178,7 @@ func TestInstrumentedState_MultithreadedProgram(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(test.programName), CreateInitialState, false)
+			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(test.programName), CreateInitialState)
 			oracle := testutil.StaticOracle(t, []byte{})
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
@@ -229,7 +224,7 @@ func TestInstrumentedState_Alloc(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath("alloc"), CreateInitialState, false)
+			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath("alloc"), CreateInitialState)
 			oracle := testutil.AllocOracle(t, test.numAllocs, test.allocSize)
 
 			us := NewInstrumentedState(state, oracle, os.Stdout, os.Stderr, testutil.CreateLogger(), meta, allFeaturesEnabled())
@@ -259,9 +254,14 @@ func TestInstrumentedState_Alloc(t *testing.T) {
 // dependency loop, so we just cover the everything enabled case as that should be the upcoming version.
 func allFeaturesEnabled() mipsevm.FeatureToggles {
 	toggles := mipsevm.FeatureToggles{}
-	tRef := reflect.ValueOf(toggles)
+	tRef := reflect.ValueOf(&toggles).Elem() // Get a pointer and then dereference
+
 	for i := 0; i < tRef.NumField(); i++ {
-		tRef.Field(i).Set(reflect.ValueOf(true))
+		field := tRef.Field(i)
+		if field.Kind() == reflect.Bool && field.CanSet() {
+			field.SetBool(true)
+		}
 	}
+
 	return toggles
 }

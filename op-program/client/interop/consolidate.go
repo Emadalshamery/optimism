@@ -151,7 +151,7 @@ func singleRoundConsolidation(
 	if err != nil {
 		return fmt.Errorf("failed to get dependency set: %w", err)
 	}
-	deps, err := newConsolidateCheckDeps(depset, bootInfo, consolidateState.TransitionState, superRoot.Chains, l2PreimageOracle, consolidateState)
+	deps, err := newConsolidateCheckDeps(depset, bootInfo.Configs, consolidateState.TransitionState, superRoot.Chains, l2PreimageOracle, consolidateState)
 	if err != nil {
 		return fmt.Errorf("failed to create consolidate check deps: %w", err)
 	}
@@ -228,11 +228,7 @@ func singleRoundConsolidation(
 }
 
 func isInvalidMessageError(err error) bool {
-	// TODO(#14011): Create an error category for InvalidExecutingMessage errors in the cross package for easier maintenance.
-	return errors.Is(err, supervisortypes.ErrConflict) ||
-		errors.Is(err, cross.ErrExecMsgHasInvalidIndex) ||
-		errors.Is(err, cross.ErrExecMsgUnknownChain) ||
-		errors.Is(err, cross.ErrCycle) || errors.Is(err, supervisortypes.ErrUnknownChain)
+	return errors.Is(err, supervisortypes.ErrConflict) || errors.Is(err, supervisortypes.ErrUnknownChain)
 }
 
 type ConsolidateCheckDeps interface {
@@ -265,7 +261,7 @@ type consolidateCheckDeps struct {
 
 func newConsolidateCheckDeps(
 	depset depset.DependencySet,
-	bootInfo *boot.BootInfoInterop,
+	configSource boot.ConfigSource,
 	transitionState *types.TransitionState,
 	chains []eth.ChainIDAndOutput,
 	oracle l2.Oracle,
@@ -281,7 +277,7 @@ func newConsolidateCheckDeps(
 		blockByHash := func(hash common.Hash) *ethtypes.Block {
 			return oracle.BlockByHash(hash, chain.ChainID)
 		}
-		l2ChainConfig, err := bootInfo.Configs.ChainConfig(chain.ChainID)
+		l2ChainConfig, err := configSource.ChainConfig(chain.ChainID)
 		if err != nil {
 			return nil, fmt.Errorf("no chain config available for chain ID %v: %w", chain.ChainID, err)
 		}
