@@ -95,7 +95,7 @@ contract SuperFaultDisputeGame_Init is DisputeGameFactory_Init {
         );
 
         // Register the game implementation with the factory.
-        disputeGameFactory.setImplementation(GAME_TYPE, gameImpl);
+        disputeGameFactory.setImplementation(GAME_TYPE, gameImpl, "");
         uint256 bondAmount = disputeGameFactory.initBonds(GAME_TYPE);
 
         vm.prank(superchainConfig.guardian());

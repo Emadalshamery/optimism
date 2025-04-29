@@ -69,30 +69,12 @@ contract PermissionedDisputeGame_Init is DisputeGameFactory_Init {
             DeployUtils.create1({
                 _name: "PermissionedDisputeGame",
                 _args: DeployUtils.encodeConstructor(
-                    abi.encodeCall(
-                        IPermissionedDisputeGame.__constructor__,
-                        (
-                            IFaultDisputeGame.GameConstructorParams({
-                                gameType: GAME_TYPE,
-                                absolutePrestate: absolutePrestate,
-                                maxGameDepth: 2 ** 3,
-                                splitDepth: 2 ** 2,
-                                clockExtension: Duration.wrap(3 hours),
-                                maxClockDuration: Duration.wrap(3.5 days),
-                                vm: _vm,
-                                weth: _weth,
-                                anchorStateRegistry: anchorStateRegistry,
-                                l2ChainId: 0
-                            }),
-                            PROPOSER,
-                            CHALLENGER
-                        )
-                    )
+                    abi.encodeCall(IPermissionedDisputeGame.__constructor__, (PROPOSER, CHALLENGER))
                 )
             })
         );
         // Register the game implementation with the factory.
-        disputeGameFactory.setImplementation(GAME_TYPE, gameImpl);
+        disputeGameFactory.setImplementation(GAME_TYPE, gameImpl, "");
 
         // Create a new game.
         uint256 bondAmount = disputeGameFactory.initBonds(GAME_TYPE);

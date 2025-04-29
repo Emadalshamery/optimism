@@ -797,9 +797,10 @@ contract Deploy is Deployer {
                         _salt: _implSalt(),
                         _name: "SuperFaultDisputeGame",
                         _nick: string.concat("SuperFaultDisputeGame_", vm.toString(rawGameType)),
-                        _args: DeployUtils.encodeConstructor(abi.encodeCall(IFaultDisputeGame.__constructor__, (_params)))
+                        _args: DeployUtils.encodeConstructor(abi.encodeCall(IFaultDisputeGame.__constructor__, ()))
                     })
-                )
+                ),
+                "" // TODO: fix
             );
         } else if (rawGameType == 5) {
             _factory.setImplementation(
@@ -813,11 +814,12 @@ contract Deploy is Deployer {
                         _args: DeployUtils.encodeConstructor(
                             abi.encodeCall(
                                 IPermissionedDisputeGame.__constructor__,
-                                (_params, cfg.l2OutputOracleProposer(), cfg.l2OutputOracleChallenger())
+                                (cfg.l2OutputOracleProposer(), cfg.l2OutputOracleChallenger())
                             )
                         )
                     })
-                )
+                ),
+                "" // TODO: fix
             );
         } else {
             _factory.setImplementation(
@@ -828,10 +830,12 @@ contract Deploy is Deployer {
                         _salt: _implSalt(),
                         _name: "FaultDisputeGame",
                         _nick: string.concat("FaultDisputeGame_", vm.toString(rawGameType)),
-                        _args: DeployUtils.encodeConstructor(abi.encodeCall(IFaultDisputeGame.__constructor__, (_params)))
+                        _args: DeployUtils.encodeConstructor(abi.encodeCall(IFaultDisputeGame.__constructor__, ()))
                     })
-                )
+                ),
+                ""
             );
+            /// TODO: Fix
         }
 
         string memory gameTypeString;
