@@ -311,9 +311,9 @@ func WithL2CLP2PConnection(l2CL1ID, l2CL2ID stack.L2CLNodeID) stack.Option[*Orch
 	return stack.AfterDeploy(func(orch *Orchestrator) {
 		require := orch.P().Require()
 
-		l2CL1, ok := orch.l2CLs.Get(l2CL1ID)
+		l2cl1, ok := orch.l2CLs.Get(l2CL1ID)
 		require.True(ok, "looking for L2 CL node 1 to connect p2p")
-		l2CL2, ok := orch.l2CLs.Get(l2CL2ID)
+		l2cl2, ok := orch.l2CLs.Get(l2CL2ID)
 		require.True(ok, "looking for L2 CL node 2 to connect p2p")
 		require.Equal(l2CL1.cfg.Rollup.L2ChainID, l2CL2.cfg.Rollup.L2ChainID, "must be same l2 chain")
 
