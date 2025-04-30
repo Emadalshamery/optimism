@@ -8,6 +8,7 @@ import { EIP1967Helper } from "test/mocks/EIP1967Helper.sol";
 
 // Scripts
 import { Config } from "scripts/libraries/Config.sol";
+import { Artifacts } from "scripts/Artifacts.s.sol";
 
 // Target contract
 import { StandardValidator } from "src/L1/StandardValidator.sol";
@@ -42,6 +43,7 @@ import { IStandardBridge } from "interfaces/universal/IStandardBridge.sol";
 import { IFaultDisputeGame } from "interfaces/dispute/IFaultDisputeGame.sol";
 import { IPermissionedDisputeGame } from "interfaces/dispute/IPermissionedDisputeGame.sol";
 import { IBigStepper } from "interfaces/dispute/IBigStepper.sol";
+import { OPContractsManager } from "src/L1/OPContractsManager.sol";
 
 contract StandardValidatorTest is Test {
     CommonTest commonTest;
@@ -76,6 +78,13 @@ contract StandardValidatorTest is Test {
     function setUp() public virtual {
         commonTest = new CommonTest();
         commonTest.setUp();
+
+        // TODO: remove once inheriting from Commont test
+        Artifacts artifacts = Artifacts(address(uint160(uint256(keccak256(abi.encode("optimism.artifacts"))))));
+        // Get OPContractsManager instance
+        address opcmAddress = artifacts.mustGetAddress("OPContractsManager");
+        OPContractsManager opcm = OPContractsManager(opcmAddress);
+        OPContractsManager.Implementations memory impls = opcm.implementations();
 
         // Setup test addresses
         superchainConfig = ISuperchainConfig(makeAddr("superchainConfig"));
@@ -116,19 +125,19 @@ contract StandardValidatorTest is Test {
         // Mock proxyAdmin owner
         vm.mockCall(address(proxyAdmin), abi.encodeCall(IProxyAdmin.owner, ()), abi.encode(l1PAOMultisig));
 
-        // Deploy validator with all required constructor args
+        // Deploy validator with implementations from OPCM
         validator = new StandardValidator(
             StandardValidator.Implementations({
-                systemConfigImpl: makeAddr("systemConfigImpl"),
-                optimismPortalImpl: makeAddr("optimismPortalImpl"),
-                l1CrossDomainMessengerImpl: makeAddr("l1CrossDomainMessengerImpl"),
-                l1StandardBridgeImpl: makeAddr("l1StandardBridgeImpl"),
-                l1ERC721BridgeImpl: makeAddr("l1ERC721BridgeImpl"),
-                optimismMintableERC20FactoryImpl: makeAddr("optimismMintableERC20FactoryImpl"),
-                disputeGameFactoryImpl: makeAddr("disputeGameFactoryImpl"),
-                mipsImpl: makeAddr("mips"),
-                anchorStateRegistryImpl: makeAddr("anchorStateRegistryImpl"),
-                delayedWETHImpl: makeAddr("delayedWETHImpl")
+                systemConfigImpl: impls.systemConfigImpl,
+                optimismPortalImpl: impls.optimismPortalImpl,
+                l1CrossDomainMessengerImpl: impls.l1CrossDomainMessengerImpl,
+                l1StandardBridgeImpl: impls.l1StandardBridgeImpl,
+                l1ERC721BridgeImpl: impls.l1ERC721BridgeImpl,
+                optimismMintableERC20FactoryImpl: impls.optimismMintableERC20FactoryImpl,
+                disputeGameFactoryImpl: impls.disputeGameFactoryImpl,
+                mipsImpl: impls.mipsImpl,
+                anchorStateRegistryImpl: impls.anchorStateRegistryImpl,
+                delayedWETHImpl: impls.delayedWETHImpl
             }),
             superchainConfig,
             l1PAOMultisig,
