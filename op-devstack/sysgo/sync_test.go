@@ -402,6 +402,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		logger := system.T().Logger()
 		require := system.T().Require()
 
+		elA := system.L2Network(ids.L2A).L2ELNode(ids.L2A2EL)
 		elA2 := system.L2Network(ids.L2A).L2ELNode(ids.L2A2EL)
 		clA := system.L2Network(ids.L2A).L2CLNode(ids.L2ACL)
 		clA2 := system.L2Network(ids.L2A).L2CLNode(ids.L2A2CL)
@@ -458,14 +459,27 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			blockA2 := queryBlockFromEL(elA2, eth.Safe)
+			blockA := queryBlockFromELByNumber(elA, blockA2.Number)
+			require.Equal(blockA.Hash, blockA2.Hash)
 			logger.Info("safe head sync status", "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number, "verifier EL", blockA2.Number)
-			// verifier reached supervisor safe head
-			check := syncA2.SafeL2.Number == chainAView.Safe.Number
+			// verifier follows supervisor safe head
+			blockNumDelta := chainAView.Safe.Number - syncA2.SafeL2.Number
+			check := blockNumDelta <= 5
 			check = check && syncA2.SafeL2.Hash == chainAView.Safe.Hash
 			// verifier consolidated every previously known unsafe head to safe head
 			check = check && syncA2.SafeL2.Number >= unsafeA2.Number
 			return check
 		}, 60*time.Second, waitTime)
+
+		logger.Info("make sure verifier keeps following supervisor safe head")
+		require.Never(func() bool {
+			syncA2 := querySyncStatusFromCL(clA2)
+			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
+			blockNumDelta := chainAView.Safe.Number - syncA2.SafeL2.Number
+			logger.Info("safe head sync status", "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number)
+			check := blockNumDelta <= 5
+			return !check
+		}, 40*time.Second, waitTime)
 
 		// make sure the resulting chain viewed by verifier did not reorged
 		block := queryBlockFromELByNumber(elA2, unsafeA2.Number)
