@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 // Libraries
-import { GameType, Claim, GameTypes, Hash } from "src/dispute/lib/Types.sol";
+import { GameType, Claim, GameTypes } from "src/dispute/lib/Types.sol";
 import { Duration } from "src/dispute/lib/LibUDT.sol";
 import { Predeploys } from "src/libraries/Predeploys.sol";
 import { Constants } from "src/libraries/Constants.sol";

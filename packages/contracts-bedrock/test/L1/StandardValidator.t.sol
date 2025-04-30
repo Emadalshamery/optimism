@@ -4,10 +4,8 @@ pragma solidity 0.8.15;
 // Testing
 import { Test } from "forge-std/Test.sol";
 import { CommonTest } from "test/setup/CommonTest.sol";
-import { EIP1967Helper } from "test/mocks/EIP1967Helper.sol";
 
 // Scripts
-import { Config } from "scripts/libraries/Config.sol";
 import { Artifacts } from "scripts/Artifacts.s.sol";
 
 // Target contract
