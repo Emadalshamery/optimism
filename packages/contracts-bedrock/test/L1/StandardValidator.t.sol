@@ -574,15 +574,6 @@ contract StandardValidatorTest is Test {
         );
         assertEq(string.concat(errorPrefix, "-ANCHORP-30"), validate(true));
 
-        // Test invalid anchor state registry root
-        _mockValidationCalls();
-        vm.mockCall(
-            address(_asr),
-            abi.encodeCall(IAnchorStateRegistry.anchors, (_gameType)),
-            abi.encode(Hash.wrap(bytes32(uint256(0xbad))), 0)
-        );
-        assertEq(string.concat(errorPrefix, "-ANCHORP-40"), validate(true));
-
         // Test invalid DelayedWETH version
         _mockValidationCalls();
         vm.mockCall(address(_weth), abi.encodeCall(ISemver.version, ()), abi.encode("1.0.0"));

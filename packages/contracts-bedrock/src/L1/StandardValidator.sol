@@ -477,9 +477,6 @@ contract StandardValidator {
             address(_asr.disputeGameFactory()) == address(_dgf), string.concat(_errorPrefix, "-30"), _errors
         );
 
-        (Hash actualRoot,) = _asr.anchors(_gameType);
-        bytes32 expectedRoot = 0xdead000000000000000000000000000000000000000000000000000000000000;
-        _errors = internalRequire(Hash.unwrap(actualRoot) == expectedRoot, string.concat(_errorPrefix, "-40"), _errors);
         _errors = internalRequire(_asr.systemConfig() == _sysCfg, string.concat(_errorPrefix, "-50"), _errors);
         _errors = internalRequire(
             address(_asr.superchainConfig()) == address(superchainConfig), string.concat(_errorPrefix, "-50"), _errors
