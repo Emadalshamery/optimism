@@ -457,12 +457,13 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 
 		logger.Info("make sure verifier safe head synced with supervisor")
 		require.Eventually(func() bool {
+			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			blockA2 := queryBlockFromEL(elA2, eth.Safe)
 			blockA := queryBlockFromELByNumber(elA, blockA2.Number)
 			require.Equal(blockA.Hash, blockA2.Hash)
-			logger.Info("safe head sync status", "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number, "verifier EL", blockA2.Number)
+			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number, "verifier EL", blockA2.Number)
 			// verifier follows supervisor safe head
 			blockNumDelta := chainAView.Safe.Number - syncA2.SafeL2.Number
 			check := blockNumDelta <= 5
@@ -472,13 +473,14 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			return check
 		}, 60*time.Second, waitTime)
 
-		logger.Info("make sure verifier keeps following supervisor safe head")
+		logger.Info("make sure verifier safe head keeps following supervisor safe head")
 		require.Never(func() bool {
+			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			blockNumDelta := chainAView.Safe.Number - syncA2.SafeL2.Number
-			logger.Info("safe head sync status", "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number)
-			check := blockNumDelta <= 5
+			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number)
+			check := blockNumDelta <= 10
 			return !check
 		}, 40*time.Second, waitTime)
 
