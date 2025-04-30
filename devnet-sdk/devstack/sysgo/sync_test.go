@@ -465,8 +465,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			require.Equal(blockA.Hash, blockA2.Hash)
 			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number, "verifier EL", blockA2.Number)
 			// verifier follows supervisor safe head
-			blockNumDelta := chainAView.Safe.Number - syncA2.SafeL2.Number
-			check := blockNumDelta <= 5
+			check := chainAView.Safe.Number <= 5+syncA2.SafeL2.Number
 			check = check && syncA2.SafeL2.Hash == chainAView.Safe.Hash
 			// verifier consolidated every previously known unsafe head to safe head
 			check = check && syncA2.SafeL2.Number >= unsafeA2.Number
@@ -478,9 +477,8 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
-			blockNumDelta := chainAView.Safe.Number - syncA2.SafeL2.Number
 			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number)
-			check := blockNumDelta <= 10
+			check := chainAView.Safe.Number <= 10+syncA2.SafeL2.Number
 			return !check
 		}, 40*time.Second, waitTime)
 
