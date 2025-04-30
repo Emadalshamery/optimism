@@ -192,6 +192,7 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 	waitTime := time.Duration(blockTime+1) * time.Second
 	{
 		logger := system.T().Logger()
+		require := system.T().Require()
 
 		elA := system.L2Network(ids.L2A).L2ELNode(ids.L2AEL)
 		elA2 := system.L2Network(ids.L2A).L2ELNode(ids.L2A2EL)
@@ -201,7 +202,7 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 
 		targetBlockNum1 := uint64(10)
 		logger.Info("wait until reaching target block", "blockNum", targetBlockNum1)
-		require.Eventually(t, func() bool {
+		require.Eventually(func() bool {
 			blockA := queryBlockFromEL(elA, eth.Unsafe)
 			blockA2 := queryBlockFromEL(elA2, eth.Unsafe)
 			logger.Info("chain A", "blockNum", blockA.Number, "block", blockA)
@@ -216,7 +217,7 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 		prevblockA2 := queryBlockFromEL(elA2, eth.Unsafe)
 		targetBlockNum2 := prevblockA2.Number + 5
 		logger.Info("make sure verifier advances safe head by reading L1", "blockNum", targetBlockNum2)
-		require.Eventually(t, func() bool {
+		require.Eventually(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			logger.Info("chain A", "sync", syncA)
@@ -226,7 +227,7 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 		}, 60*time.Second, waitTime)
 
 		logger.Info("verifier heads will lag compared from sequencer heads and supervisor view")
-		require.Never(t, func() bool {
+		require.Never(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView := querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
@@ -244,7 +245,7 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 		WithL2CLP2PConnection(ids.L2ACL, ids.L2A2CL).AfterDeploy(orch)
 
 		logger.Info("verifier catchs up sequencer unsafe chain with was unknown for verifier")
-		require.Eventually(t, func() bool {
+		require.Eventually(func() bool {
 			blockA := queryBlockFromEL(elA, eth.Unsafe)
 			blockA2 := queryBlockFromEL(elA2, eth.Unsafe)
 			return blockA.Number == blockA2.Number && blockA.Hash == blockA2.Hash
@@ -298,6 +299,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 	waitTime := time.Duration(blockTime+1) * time.Second
 	{
 		logger := system.T().Logger()
+		require := system.T().Require()
 
 		elA2 := system.L2Network(ids.L2A).L2ELNode(ids.L2A2EL)
 		clA := system.L2Network(ids.L2A).L2CLNode(ids.L2ACL)
@@ -306,7 +308,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 
 		logger.Info("make sure verifier safe head advances")
 		targetBlockNum1 := uint64(5)
-		require.Eventually(t, func() bool {
+		require.Eventually(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			logger.Info("chain A", "sync", syncA)
@@ -330,7 +332,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		targetBlockNum2 := safeA2.Number * 2
 		logger.Info("wait until supervisor reaches safe head", "target", targetBlockNum2)
 		var chainAView *eth.SupervisorChainSyncStatus
-		require.Eventually(t, func() bool {
+		require.Eventually(func() bool {
 			chainAView := querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			logger.Info("supervisor safe head", "number", chainAView.Safe.Number)
 			return chainAView.Safe.Number > targetBlockNum2
@@ -348,10 +350,10 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 
 		// Make sure there are unsafe blocks to be consolidated:
 		// To check verifier does not have to process blocks since unsafe blocks are already processed
-		require.Greater(t, unsafeA2.Number, safeA2.Number)
+		require.Greater(unsafeA2.Number, safeA2.Number)
 
 		logger.Info("make sure verifier safe head synced with supervisor")
-		require.Eventually(t, func() bool {
+		require.Eventually(func() bool {
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			blockA2 := queryBlockFromEL(elA2, eth.Safe)
@@ -366,6 +368,6 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 
 		// make sure the resulting chain viewed by verifier did not reorged
 		block := queryBlockFromELByNumber(elA2, unsafeA2.Number)
-		require.Equal(t, unsafeA2.Hash, block.Hash)
+		require.Equal(unsafeA2.Hash, block.Hash)
 	}
 }
