@@ -403,7 +403,6 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		logger := system.T().Logger()
 		require := system.T().Require()
 
-		elA := system.L2Network(ids.L2A).L2ELNode(ids.L2AEL)
 		elA2 := system.L2Network(ids.L2A).L2ELNode(ids.L2A2EL)
 		clA := system.L2Network(ids.L2A).L2CLNode(ids.L2ACL)
 		clA2 := system.L2Network(ids.L2A).L2CLNode(ids.L2A2CL)
