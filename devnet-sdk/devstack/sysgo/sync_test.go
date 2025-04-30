@@ -290,10 +290,12 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 			return syncA, syncA2
 		}
 
-		querySupervisor := func(chainID eth.ChainID) eth.BlockID {
+		querySupervisor := func(chainID eth.ChainID) *eth.SupervisorChainSyncStatus {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			view, err := supervisor.QueryAPI().LocalUnsafe(ctx, chainID)
+			viewAll, err := supervisor.QueryAPI().SyncStatus(ctx)
 			require.NoError(t, err)
+			view, ok := viewAll.Chains[chainID]
+			require.True(t, ok)
 			cancel()
 			return view
 		}
@@ -327,8 +329,8 @@ func TestUnsafeChainUnknownToL2CL(gt *testing.T) {
 			// safe head may be matched or lagged
 			check = check && syncA.SafeL2.Number >= syncA2.SafeL2.Number
 			// unsafe head may be matched or lagged compared to supervisor unsafe head view for chain A
-			check = check && chainAView.Number >= syncA2.UnsafeL2.Number
-			logger.Info("unsafe head sync status", "sequencer", syncA.UnsafeL2.Number, "supervisor", chainAView.Number, "verifier", syncA2.UnsafeL2.Number)
+			check = check && chainAView.LocalUnsafe.Number >= syncA2.UnsafeL2.Number
+			logger.Info("unsafe head sync status", "sequencer", syncA.UnsafeL2.Number, "supervisor", chainAView.LocalUnsafe.Number, "verifier", syncA2.UnsafeL2.Number)
 			return !check
 		}, 15*time.Second, waitTime)
 
