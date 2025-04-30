@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 // Interfaces
 import { ISuperchainConfig } from "interfaces/L1/ISuperchainConfig.sol";
+import { ISystemConfig } from "interfaces/L1/ISystemConfig.sol";
+import { IProxyAdmin } from "interfaces/universal/IProxyAdmin.sol";
 
 interface IStandardValidator {
     struct Implementations {
@@ -19,8 +21,8 @@ interface IStandardValidator {
     }
 
     struct ValidationInput {
-        address proxyAdmin;
-        address sysCfg;
+        IProxyAdmin proxyAdmin;
+        ISystemConfig sysCfg;
         bytes32 absolutePrestate;
         uint256 l2ChainID;
     }
@@ -47,12 +49,7 @@ interface IStandardValidator {
     function optimismPortalVersion() external pure returns (string memory);
     function permissionedDisputeGameVersion() external pure returns (string memory);
     function preimageOracleVersion() external pure returns (string memory);
-    function protocolVersions() external view returns (address);
-    function protocolVersionsImpl() external view returns (address);
-    function protocolVersionsVersion() external pure returns (string memory);
-    function superchainConfig() external view returns (address);
-    function superchainConfigImpl() external view returns (address);
-    function superchainConfigVersion() external pure returns (string memory);
+    function superchainConfig() external view returns (ISuperchainConfig);
     function systemConfigImpl() external view returns (address);
     function systemConfigVersion() external pure returns (string memory);
     function withdrawalDelaySeconds() external view returns (uint256);
