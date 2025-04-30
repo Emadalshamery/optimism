@@ -377,6 +377,7 @@ func (d *consolidateCheckDeps) OpenBlock(
 		return eth.BlockRef{}, 0, nil, err
 	}
 	d.consolidateState.setCachedExecMsgs(block.Hash(), execMsgs, logCount)
+	fmt.Printf("DEBUG: caching %d execMsgs for block %s\n", len(execMsgs), block.Hash())
 	return ref, logCount, execMsgs, nil
 }
 

@@ -2,22 +2,37 @@ package interop
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/big"
+	"math/rand"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/ethereum-optimism/optimism/devnet-sdk/contracts/constants"
+	testinterop "github.com/ethereum-optimism/optimism/op-acceptance-tests/tests/interop"
+	"github.com/ethereum-optimism/optimism/op-challenger/config"
 	"github.com/ethereum-optimism/optimism/op-challenger/game/fault/trace/super"
+	"github.com/ethereum-optimism/optimism/op-challenger/game/fault/trace/utils"
+	"github.com/ethereum-optimism/optimism/op-challenger/game/fault/trace/vm"
 	challengerTypes "github.com/ethereum-optimism/optimism/op-challenger/game/fault/types"
+	"github.com/ethereum-optimism/optimism/op-challenger/metrics"
 	"github.com/ethereum-optimism/optimism/op-e2e/actions/helpers"
 	"github.com/ethereum-optimism/optimism/op-e2e/actions/interop/dsl"
 	fpHelpers "github.com/ethereum-optimism/optimism/op-e2e/actions/proofs/helpers"
+	"github.com/ethereum-optimism/optimism/op-e2e/e2eutils/challenger"
+	"github.com/ethereum-optimism/optimism/op-e2e/e2eutils/fakebeacon"
 	"github.com/ethereum-optimism/optimism/op-program/client/claim"
 	"github.com/ethereum-optimism/optimism/op-program/client/interop"
 	"github.com/ethereum-optimism/optimism/op-program/client/interop/types"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/testlog"
+	"github.com/ethereum-optimism/optimism/op-service/txintent"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1260,6 +1275,398 @@ func TestInteropFaultProofs_DepositMessage_InvalidExecution(gt *testing.T) {
 	runFppAndChallengerTests(gt, system, tests)
 }
 
+func TestInteropFaultProofs_MultiExecutor(gt *testing.T) {
+	t := helpers.NewDefaultTesting(gt)
+
+	system := dsl.NewInteropDSL(t)
+	actors := system.Actors
+	emitter := system.DeployEmitterContracts()
+
+	actors.ChainA.Sequencer.ActL2StartBlock(t)
+	actors.ChainB.Sequencer.ActL2StartBlock(t)
+
+	block, err := actors.ChainA.SequencerEngine.EthClient().BlockByNumber(t.Ctx(), nil)
+	gasLimit := block.GasLimit()
+	require.NoError(t, err)
+	require.Greater(t, gasLimit, uint64(30_000_000))
+
+	msg := dsl.NewMessage(system, actors.ChainA, emitter, "hello").Emit()
+	numExecutions := int(gasLimit / 50_000)
+	var execs []*dsl.Message
+	for range numExecutions {
+		execs = append(execs, msg.ExecuteOn(actors.ChainB))
+	}
+
+	actors.ChainA.Sequencer.ActL2EndBlock(t)
+	actors.ChainB.Sequencer.ActL2EndBlock(t)
+
+	block, err = actors.ChainB.SequencerEngine.EthClient().BlockByNumber(t.Ctx(), nil)
+	require.NoError(t, err)
+	t.Logf("numExecutions: %d at gas limit %d. gas used: %d", numExecutions, gasLimit, block.GasUsed())
+
+	system.SubmitBatchData(dsl.WithSkipCrossSafeUpdate())
+
+	endTimestamp := actors.ChainB.Sequencer.L2Unsafe().Time
+	startTimestamp := endTimestamp - 1
+
+	preConsolidation := system.Outputs.TransitionState(startTimestamp, consolidateStep,
+		system.Outputs.OptimisticBlockAtTimestamp(actors.ChainA, endTimestamp),
+		system.Outputs.OptimisticBlockAtTimestamp(actors.ChainB, endTimestamp),
+	).Marshal()
+
+	system.ProcessCrossSafe()
+	msg.CheckEmitted()
+	for _, exec := range execs {
+		exec.CheckExecuted()
+	}
+
+	crossSafeEnd := system.Outputs.SuperRoot(endTimestamp)
+	proposalTimestamp := actors.ChainA.Sequencer.L2Unsafe().Time
+
+	tt := &transitionTest{
+		name:              "Consolidate",
+		agreedClaim:       preConsolidation,
+		disputedClaim:     crossSafeEnd.Marshal(),
+		proposalTimestamp: proposalTimestamp,
+		skipChallenger:    true,
+		expectValid:       true,
+	}
+	gt.Run(tt.name, func(gt *testing.T) {
+		//runCannon(gt, t.Ctx(), system.Actors, system.DepSet(), tt)
+	})
+	t.Log("Running FPP")
+	runFppAndChallengerTests(gt, system, []*transitionTest{tt})
+}
+
+func TestInteropFaultProofs_MulticallValidateMessages(gt *testing.T) {
+	t := helpers.NewDefaultTesting(gt)
+	rng := rand.New(rand.NewSource(1234))
+	is := dsl.SetupInterop(t)
+	actors := is.CreateActors()
+	actors.PrepareChainState(t)
+	alice := setupUser(t, is, actors.ChainA, 0)
+	bob := setupUser(t, is, actors.ChainB, 0)
+
+	actors.ChainA.Sequencer.ActL2StartBlock(t)
+	deployOptsA, _ := DefaultTxOpts(t, setupUser(t, is, actors.ChainA, 1), actors.ChainA)
+	eventLoggerAddressA := DeployEventLogger(t, deployOptsA)
+	actors.ChainB.Sequencer.ActL2StartBlock(t)
+	deployOptsB, _ := DefaultTxOpts(t, setupUser(t, is, actors.ChainB, 1), actors.ChainB)
+	eventLoggerAddressB := DeployEventLogger(t, deployOptsB)
+
+	assertHeads(t, actors.ChainA, 1, 0, 0, 0)
+	assertHeads(t, actors.ChainB, 1, 0, 0, 0)
+
+	require.Equal(t, actors.ChainA.RollupCfg.Genesis.L2Time, actors.ChainB.RollupCfg.Genesis.L2Time)
+	// assume all two txs land in block number 2, same time
+	targetTime := actors.ChainA.RollupCfg.Genesis.L2Time + actors.ChainA.RollupCfg.BlockTime*2
+	targetNum := uint64(2)
+	optsA, _ := DefaultTxOpts(t, alice, actors.ChainA)
+	optsB, _ := DefaultTxOpts(t, bob, actors.ChainB)
+
+	// open blocks on both chains
+	actors.ChainA.Sequencer.ActL2StartBlock(t)
+	actors.ChainB.Sequencer.ActL2StartBlock(t)
+
+	// speculatively build exec message by knowing necessary info to build Message
+	initX := testinterop.RandomInitTrigger(rng, eventLoggerAddressA, 3, 10)
+	logIndexX, logIndexY := uint(0), uint(0)
+	initY := testinterop.RandomInitTrigger(rng, eventLoggerAddressB, 4, 7)
+
+	var callsA []txintent.Call
+	var callsB []txintent.Call
+	callsA = append(callsA, initX)
+	callsB = append(callsB, initY)
+
+	block, err := actors.ChainA.SequencerEngine.EthClient().BlockByNumber(t.Ctx(), nil)
+	gasLimit := block.GasLimit()
+	require.NoError(t, err)
+	require.Greater(t, gasLimit, uint64(30_000_000))
+	numExecs := int(gasLimit / 18_000)
+	t.Logf("numExecs: %d at gas limit %d", numExecs, gasLimit)
+
+	// execute the same message multiple times
+	for range numExecs {
+		execX, err := testinterop.ExecTriggerFromInitTrigger(initX, logIndexX, targetNum, targetTime, actors.ChainA.ChainID)
+		require.NoError(t, err)
+		callsB = append(callsB, execX)
+		execY, err := testinterop.ExecTriggerFromInitTrigger(initY, logIndexY, targetNum, targetTime, actors.ChainB.ChainID)
+		require.NoError(t, err)
+		callsA = append(callsA, execY)
+	}
+
+	// Intent to initiate message X and execute message Y at chain A
+	txA := txintent.NewIntent[*txintent.MultiTrigger, *txintent.InteropOutput](optsA)
+	txA.Content.Set(&txintent.MultiTrigger{Emitter: constants.MultiCall3, Calls: callsA})
+	// Intent to initiate message Y and execute message X at chain B
+	txB := txintent.NewIntent[*txintent.MultiTrigger, *txintent.InteropOutput](optsB)
+	txB.Content.Set(&txintent.MultiTrigger{Emitter: constants.MultiCall3, Calls: callsB})
+
+	includedA, err := txA.PlannedTx.IncludedBlock.Eval(t.Ctx())
+	require.NoError(t, err)
+	includedB, err := txB.PlannedTx.IncludedBlock.Eval(t.Ctx())
+	require.NoError(t, err)
+
+	// Make sure two txs both sealed in block at expected time
+	require.Equal(t, includedA.Time, targetTime)
+	require.Equal(t, includedA.Number, targetNum)
+	require.Equal(t, includedB.Time, targetTime)
+	require.Equal(t, includedB.Number, targetNum)
+
+	assertHeads(t, actors.ChainA, targetNum, 0, 0, 0)
+	assertHeads(t, actors.ChainB, targetNum, 0, 0, 0)
+
+	var indexes []int
+	for range len(callsA) - 1 {
+		indexes = append(indexes, int(logIndexX))
+	}
+
+	// confirm speculatively built exec message X by rebuilding after txA inclusion
+	_, err = txA.Result.Eval(t.Ctx())
+	require.NoError(t, err)
+	multiTriggerA, err := txintent.ExecuteIndexeds(constants.MultiCall3, constants.CrossL2Inbox, &txA.Result, indexes)(t.Ctx())
+	require.NoError(t, err)
+	for i := range len(callsA) - 1 {
+		require.Equal(t, multiTriggerA.Calls[logIndexX], callsB[i+1])
+	}
+
+	// confirm speculatively built exec message Y by rebuilding after txB inclusion
+	_, err = txB.Result.Eval(t.Ctx())
+	require.NoError(t, err)
+	multiTriggerB, err := txintent.ExecuteIndexeds(constants.MultiCall3, constants.CrossL2Inbox, &txB.Result, indexes)(t.Ctx())
+	require.NoError(t, err)
+	for i := range len(callsA) - 1 {
+		require.Equal(t, multiTriggerB.Calls[logIndexY], callsA[i+1])
+	}
+
+	// store unsafe head of chain A, B to compare after consolidation
+	chainAUnsafeHead := actors.ChainA.Sequencer.SyncStatus().UnsafeL2
+	chainBUnsafeHead := actors.ChainB.Sequencer.SyncStatus().UnsafeL2
+
+	checkLogs := func(chain *dsl.Chain, bh common.Hash) {
+		cl := chain.SequencerEngine.EthClient()
+		block, err = cl.BlockByHash(t.Ctx(), bh)
+		require.NoError(t, err)
+
+		var logs int
+		for _, tx := range block.Transactions() {
+			receipt, err := cl.TransactionReceipt(t.Ctx(), tx.Hash())
+			require.NoError(t, err)
+			logs += len(receipt.Logs)
+		}
+		require.Greater(t, logs, len(callsA)-1)
+		t.Logf("Number of logs: %d. number of transactions: %d. gas used: %d", logs, len(block.Transactions()), block.GasUsed())
+	}
+	checkLogs(actors.ChainA, chainAUnsafeHead.Hash)
+	checkLogs(actors.ChainB, chainBUnsafeHead.Hash)
+
+	superRootSource, err := dsl.NewSuperRootSource(
+		t.Ctx(),
+		actors.ChainA.Sequencer.RollupClient(),
+		actors.ChainB.Sequencer.RollupClient())
+	require.NoError(t, err)
+	outputs := dsl.NewOutputs(t, superRootSource)
+
+	endTimestamp := chainAUnsafeHead.Time
+	startTimestamp := endTimestamp - 1
+	preConsolidation := outputs.TransitionState(startTimestamp, consolidateStep,
+		outputs.OptimisticBlockAtTimestamp(actors.ChainA, endTimestamp),
+		outputs.OptimisticBlockAtTimestamp(actors.ChainB, endTimestamp),
+	).Marshal()
+
+	consolidateToSafe(t, actors, 0, 0, targetNum, targetNum)
+
+	// unsafe heads consolidated to safe
+	require.Equal(t, chainAUnsafeHead, actors.ChainA.Sequencer.SyncStatus().SafeL2)
+	require.Equal(t, chainBUnsafeHead, actors.ChainB.Sequencer.SyncStatus().SafeL2)
+
+	crossSafeEnd := outputs.SuperRoot(endTimestamp)
+	proposalTimestamp := actors.ChainA.Sequencer.L2Unsafe().Time
+	tt := &transitionTest{
+		name:              "Consolidate",
+		agreedClaim:       preConsolidation,
+		disputedClaim:     crossSafeEnd.Marshal(),
+		proposalTimestamp: proposalTimestamp,
+		skipChallenger:    true,
+		expectValid:       true,
+	}
+	gt.Run(tt.name, func(gt *testing.T) {
+		runCannon(gt, t.Ctx(), actors, is.DepSet, tt)
+	})
+	gt.Run(fmt.Sprintf("%s-fpp", tt.name), func(gt *testing.T) {
+		runFppTest(gt, tt, actors, is.DepSet)
+	})
+}
+
+func TestInteropFaultProofs_MulticallValidateMessages_SeparateInits(gt *testing.T) {
+	t := helpers.NewDefaultTesting(gt)
+	rng := rand.New(rand.NewSource(1234))
+	is := dsl.SetupInterop(t)
+	actors := is.CreateActors()
+	actors.PrepareChainState(t)
+	alice := setupUser(t, is, actors.ChainA, 0)
+	bob := setupUser(t, is, actors.ChainB, 0)
+
+	actors.ChainA.Sequencer.ActL2StartBlock(t)
+	deployOptsA, _ := DefaultTxOpts(t, setupUser(t, is, actors.ChainA, 1), actors.ChainA)
+	eventLoggerAddressA := DeployEventLogger(t, deployOptsA)
+	actors.ChainB.Sequencer.ActL2StartBlock(t)
+	deployOptsB, _ := DefaultTxOpts(t, setupUser(t, is, actors.ChainB, 1), actors.ChainB)
+	eventLoggerAddressB := DeployEventLogger(t, deployOptsB)
+
+	assertHeads(t, actors.ChainA, 1, 0, 0, 0)
+	assertHeads(t, actors.ChainB, 1, 0, 0, 0)
+
+	require.Equal(t, actors.ChainA.RollupCfg.Genesis.L2Time, actors.ChainB.RollupCfg.Genesis.L2Time)
+	// assume all two txs land in block number 2, same time
+	targetTime := actors.ChainA.RollupCfg.Genesis.L2Time + actors.ChainA.RollupCfg.BlockTime*2
+	targetNum := uint64(2)
+	optsA, _ := DefaultTxOpts(t, alice, actors.ChainA)
+	optsB, _ := DefaultTxOpts(t, bob, actors.ChainB)
+
+	// open blocks on both chains
+	actors.ChainA.Sequencer.ActL2StartBlock(t)
+	actors.ChainB.Sequencer.ActL2StartBlock(t)
+
+	eventCnt := 1000
+	initCallsX := make([]*txintent.InitTrigger, eventCnt)
+	initCallsY := make([]*txintent.InitTrigger, eventCnt)
+	for index := range eventCnt {
+		initCallsX[index] = testinterop.RandomInitTrigger(rng, eventLoggerAddressA, 1, 5)
+		initCallsY[index] = testinterop.RandomInitTrigger(rng, eventLoggerAddressB, 1, 5)
+	}
+
+	var execCallsA []txintent.Call
+	var execCallsB []txintent.Call
+	for index := range eventCnt {
+		execX, err := testinterop.ExecTriggerFromInitTrigger(initCallsX[index], uint(index), targetNum, targetTime, actors.ChainA.ChainID)
+		require.NoError(t, err)
+		execCallsB = append(execCallsB, execX)
+		execY, err := testinterop.ExecTriggerFromInitTrigger(initCallsY[index], uint(index), targetNum, targetTime, actors.ChainB.ChainID)
+		require.NoError(t, err)
+		execCallsA = append(execCallsA, execY)
+	}
+
+	callsA := make([]txintent.Call, 0, eventCnt*2)
+	for _, call := range initCallsX {
+		callsA = append(callsA, call)
+	}
+	callsA = append(callsA, execCallsA...)
+
+	callsB := make([]txintent.Call, 0, eventCnt*2)
+	for _, call := range initCallsY {
+		callsB = append(callsB, call)
+	}
+	callsB = append(callsB, execCallsB...)
+
+	txA := txintent.NewIntent[*txintent.MultiTrigger, *txintent.InteropOutput](optsA)
+	txA.Content.Set(&txintent.MultiTrigger{Emitter: constants.MultiCall3, Calls: callsA})
+	txB := txintent.NewIntent[*txintent.MultiTrigger, *txintent.InteropOutput](optsB)
+	txB.Content.Set(&txintent.MultiTrigger{Emitter: constants.MultiCall3, Calls: callsB})
+
+	block, err := actors.ChainA.SequencerEngine.EthClient().BlockByNumber(t.Ctx(), nil)
+	gasLimit := block.GasLimit()
+	require.NoError(t, err)
+	require.Greater(t, gasLimit, uint64(30_000_000))
+	t.Logf("numExecs: %d at gas limit %d", eventCnt, gasLimit)
+
+	includedA, err := txA.PlannedTx.IncludedBlock.Eval(t.Ctx())
+	require.NoError(t, err)
+	includedB, err := txB.PlannedTx.IncludedBlock.Eval(t.Ctx())
+	require.NoError(t, err)
+
+	// Make sure two txs both sealed in block at expected time
+	require.Equal(t, includedA.Time, targetTime)
+	require.Equal(t, includedA.Number, targetNum)
+	require.Equal(t, includedB.Time, targetTime)
+	require.Equal(t, includedB.Number, targetNum)
+
+	assertHeads(t, actors.ChainA, targetNum, 0, 0, 0)
+	assertHeads(t, actors.ChainB, targetNum, 0, 0, 0)
+
+	var indexes []int
+	for i := range eventCnt {
+		indexes = append(indexes, i)
+	}
+
+	// confirm speculatively built exec message X by rebuilding after txA inclusion
+	_, err = txA.Result.Eval(t.Ctx())
+	require.NoError(t, err)
+	multiTriggerA, err := txintent.ExecuteIndexeds(constants.MultiCall3, constants.CrossL2Inbox, &txA.Result, indexes)(t.Ctx())
+	require.NoError(t, err)
+	for i := range eventCnt {
+		require.Equal(t, multiTriggerA.Calls[i], callsB[i+eventCnt])
+	}
+
+	// confirm speculatively built exec message Y by rebuilding after txB inclusion
+	_, err = txB.Result.Eval(t.Ctx())
+	require.NoError(t, err)
+	multiTriggerB, err := txintent.ExecuteIndexeds(constants.MultiCall3, constants.CrossL2Inbox, &txB.Result, indexes)(t.Ctx())
+	require.NoError(t, err)
+	for i := range eventCnt {
+		require.Equal(t, multiTriggerB.Calls[i], callsA[i+eventCnt])
+	}
+
+	// store unsafe head of chain A, B to compare after consolidation
+	chainAUnsafeHead := actors.ChainA.Sequencer.SyncStatus().UnsafeL2
+	chainBUnsafeHead := actors.ChainB.Sequencer.SyncStatus().UnsafeL2
+
+	checkLogs := func(chain *dsl.Chain, bh common.Hash) {
+		cl := chain.SequencerEngine.EthClient()
+		block, err = cl.BlockByHash(t.Ctx(), bh)
+		require.NoError(t, err)
+
+		var logs int
+		for _, tx := range block.Transactions() {
+			receipt, err := cl.TransactionReceipt(t.Ctx(), tx.Hash())
+			require.NoError(t, err)
+			logs += len(receipt.Logs)
+		}
+		require.Greater(t, logs, len(callsA)-1)
+		t.Logf("Number of logs: %d. number of transactions: %d. gas used: %d", logs, len(block.Transactions()), block.GasUsed())
+	}
+	checkLogs(actors.ChainA, chainAUnsafeHead.Hash)
+	checkLogs(actors.ChainB, chainBUnsafeHead.Hash)
+
+	superRootSource, err := dsl.NewSuperRootSource(
+		t.Ctx(),
+		actors.ChainA.Sequencer.RollupClient(),
+		actors.ChainB.Sequencer.RollupClient())
+	require.NoError(t, err)
+	outputs := dsl.NewOutputs(t, superRootSource)
+
+	endTimestamp := chainAUnsafeHead.Time
+	startTimestamp := endTimestamp - 1
+	preConsolidation := outputs.TransitionState(startTimestamp, consolidateStep,
+		outputs.OptimisticBlockAtTimestamp(actors.ChainA, endTimestamp),
+		outputs.OptimisticBlockAtTimestamp(actors.ChainB, endTimestamp),
+	).Marshal()
+
+	consolidateToSafe(t, actors, 0, 0, targetNum, targetNum)
+
+	// unsafe heads consolidated to safe
+	require.Equal(t, chainAUnsafeHead, actors.ChainA.Sequencer.SyncStatus().SafeL2)
+	require.Equal(t, chainBUnsafeHead, actors.ChainB.Sequencer.SyncStatus().SafeL2)
+
+	crossSafeEnd := outputs.SuperRoot(endTimestamp)
+	proposalTimestamp := actors.ChainA.Sequencer.L2Unsafe().Time
+	tt := &transitionTest{
+		name:              "Consolidate",
+		agreedClaim:       preConsolidation,
+		disputedClaim:     crossSafeEnd.Marshal(),
+		proposalTimestamp: proposalTimestamp,
+		skipChallenger:    true,
+		expectValid:       true,
+	}
+	gt.Run(tt.name, func(gt *testing.T) {
+		runCannon(gt, t.Ctx(), actors, is.DepSet, tt)
+	})
+	t.Logf("Running FPP test")
+	gt.Run(fmt.Sprintf("%s-fpp", tt.name), func(gt *testing.T) {
+		runFppTest(gt, tt, actors, is.DepSet)
+	})
+}
+
 func runFppAndChallengerTests(gt *testing.T, system *dsl.InteropDSL, tests []*transitionTest) {
 	for _, test := range tests {
 		test := test
@@ -1346,6 +1753,94 @@ func runChallengerTest(gt *testing.T, test *transitionTest, actors *dsl.InteropA
 	} else {
 		require.NotEqual(t, test.disputedClaim, disputedClaim, "Claim is incorrect so should not match challenger's opinion")
 	}
+}
+
+func runCannon(t *testing.T, ctx context.Context, actors *dsl.InteropActors, depSet *depset.StaticConfigDependencySet, test *transitionTest) {
+	l1Head := test.l1Head
+	if l1Head == (common.Hash{}) {
+		l1Head = actors.L1Miner.L1Chain().CurrentBlock().Hash()
+	}
+	require.NotEmpty(t, test.agreedClaim, "agreed claim is empty")
+	require.NotZero(t, test.proposalTimestamp, "proposal timestamp is 0")
+	require.NotEmpty(t, test.disputedClaim, "disputed claim is empty")
+
+	logger := testlog.Logger(t, slog.LevelInfo)
+	l1Endpoint := actors.L1Miner.HTTPEndpoint()
+	fakeBeacon := fakebeacon.NewBeacon(
+		logger,
+		actors.L1Miner.BlobStore(),
+		actors.L1Miner.L1Chain().Genesis().Time(),
+		12,
+	)
+	require.NoError(t, fakeBeacon.Start("127.0.0.1:0"))
+	defer fakeBeacon.Close()
+
+	var l2Endpoints []string
+	l2Endpoints = append(l2Endpoints, actors.ChainA.SequencerEngine.HTTPEndpoint())
+	l2Endpoints = append(l2Endpoints, actors.ChainB.SequencerEngine.HTTPEndpoint())
+
+	dir := t.TempDir()
+	proofsDir := filepath.Join(dir, "cannon-proofs")
+	root := challenger.FindMonorepoRoot(t)
+
+	inputs := utils.LocalGameInputs{
+		L1Head:           l1Head,
+		AgreedPreState:   test.agreedClaim,
+		L2Claim:          crypto.Keccak256Hash(test.disputedClaim),
+		L2SequenceNumber: new(big.Int).SetUint64(test.proposalTimestamp),
+	}
+	absolutePrestate := root + "op-program/bin/prestate-interop.bin.gz"
+	vmConfig := vm.Config{
+		VmType:            challengerTypes.TraceTypeSuperCannon,
+		VmBin:             root + "cannon/bin/cannon",
+		SnapshotFreq:      10_000_000,
+		InfoFreq:          config.DefaultCannonInfoFreq,
+		DebugInfo:         true,
+		BinarySnapshots:   true,
+		L1:                l1Endpoint,
+		L1Beacon:          fakeBeacon.BeaconAddr(),
+		L2s:               l2Endpoints,
+		Server:            root + "op-program/bin/op-program",
+		L2Custom:          true,
+		L2GenesisPaths:    []string{createGenesisPath(t, dir, actors.ChainA), createGenesisPath(t, dir, actors.ChainB)},
+		RollupConfigPaths: []string{createRollupPath(t, dir, actors.ChainA), createRollupPath(t, dir, actors.ChainB)},
+		DepsetConfigPath:  createDepsetPath(t, dir, depSet),
+	}
+	_, err := os.Stat(vmConfig.VmBin)
+	require.NoError(t, err, "cannon should be built. Make sure you've run make cannon-prestates")
+	_, err = os.Stat(vmConfig.Server)
+	require.NoError(t, err, "op-program should be built. Make sure you've run make cannon-prestates")
+	_, err = os.Stat(absolutePrestate)
+	require.NoError(t, err, "prestate should be built. Make sure you've run make cannon-prestates")
+
+	executor := vm.NewExecutor(logger, metrics.NoopMetrics.ToTypedVmMetrics("cannon"), vmConfig, vm.NewOpProgramServerExecutor(logger), absolutePrestate, inputs)
+	t.Log("Running cannon")
+	err = executor.DoGenerateProof(ctx, proofsDir, math.MaxUint, math.MaxUint)
+	require.NoError(t, err, "failed to generate proof")
+}
+
+func createGenesisPath(t *testing.T, baseDir string, chain *dsl.Chain) string {
+	gen, err := json.Marshal(chain.L2Genesis)
+	require.NoError(t, err)
+	genFile := filepath.Join(baseDir, fmt.Sprintf("l2-genesis-%v.json", chain.L2Genesis.Config.ChainID))
+	require.NoError(t, os.WriteFile(genFile, gen, 0o644))
+	return genFile
+}
+
+func createRollupPath(t *testing.T, baseDir string, chain *dsl.Chain) string {
+	rollup, err := json.Marshal(chain.RollupCfg)
+	require.NoError(t, err)
+	rollupFile := filepath.Join(baseDir, fmt.Sprintf("rollup-%v.json", chain.RollupCfg.L2ChainID))
+	require.NoError(t, os.WriteFile(rollupFile, rollup, 0o644))
+	return rollupFile
+}
+
+func createDepsetPath(t *testing.T, baseDir string, depSet *depset.StaticConfigDependencySet) string {
+	depSetFile := filepath.Join(baseDir, "depset.json")
+	depSetBytes, err := depSet.MarshalJSON()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(depSetFile, depSetBytes, 0o644))
+	return depSetFile
 }
 
 func WithInteropEnabled(t helpers.StatefulTesting, actors *dsl.InteropActors, depSet *depset.StaticConfigDependencySet, agreedPrestate []byte, disputedClaim common.Hash, claimTimestamp uint64) fpHelpers.FixtureInputParam {

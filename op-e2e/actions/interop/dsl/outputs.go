@@ -15,6 +15,13 @@ type Outputs struct {
 	superRootSource *SuperRootSource
 }
 
+func NewOutputs(t helpers.Testing, superRootSource *SuperRootSource) *Outputs {
+	return &Outputs{
+		t:               t,
+		superRootSource: superRootSource,
+	}
+}
+
 func (d *Outputs) SuperRoot(timestamp uint64) eth.Super {
 	ctx, cancel := context.WithTimeout(d.t.Ctx(), 30*time.Second)
 	defer cancel()
