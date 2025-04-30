@@ -417,6 +417,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		logger.Info("disconnect p2p between L2CLs")
 		DisconnectL2CLP2P(ids.L2ACL, ids.L2A2CL)(orch)
 
+		// For making verifer not sync at all
 		logger.Info("stop verifier")
 		control.L2CLNodeState(ids.L2A2CL, stack.Stop)
 
