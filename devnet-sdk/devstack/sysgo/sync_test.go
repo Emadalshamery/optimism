@@ -229,6 +229,14 @@ func queryBlockFromEL(el stack.ELNode, label eth.BlockLabel) eth.BlockRef {
 	return block
 }
 
+func queryBlockFromELByNumber(el stack.ELNode, num uint64) eth.BlockRef {
+	ctx, cancel := context.WithTimeout(el.T().Ctx(), dsl.DefaultTimeout)
+	defer cancel()
+	block, err := el.EthClient().BlockRefByNumber(ctx, num)
+	el.T().Require().NoError(err)
+	return block
+}
+
 func querySyncStatusFromCL(cl stack.L2CLNode) *eth.SyncStatus {
 	ctx, cancel := context.WithTimeout(cl.T().Ctx(), dsl.DefaultTimeout)
 	defer cancel()
@@ -457,5 +465,9 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			check = check && syncA2.SafeL2.Number >= unsafeA2.Number
 			return check
 		}, 60*time.Second, waitTime)
+
+		// make sure the resulting chain viewed by verifier did not reorged
+		block := queryBlockFromELByNumber(elA2, unsafeA2.Number)
+		require.Equal(t, unsafeA2.Hash, block.Hash)
 	}
 }
