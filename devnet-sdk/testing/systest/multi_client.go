@@ -186,15 +186,50 @@ func (mc *MultiClient) fetchWithConsistencyCheck(
 		return nil, err
 	}
 
+	// Get the state root for the primary
+	primaryHeader, ok := primaryItem.(*types.Header)
+	if !ok {
+		// If we're fetching a block instead of a header
+		if block, ok := primaryItem.(*types.Block); ok {
+			primaryHeader = block.Header()
+		}
+	}
+
 	// Create a hash-only getter for followers
 	getFollowerHash := func(client HeaderProvider, num *big.Int) (common.Hash, error) {
-		_, _, hash, err := queryFn(client, num)
-		return hash, err
+		item, _, hash, err := queryFn(client, num)
+		if err != nil {
+			return common.Hash{}, err
+		}
+
+		// If we have a successful hash match, also check state root if possible
+		if primaryHeader != nil {
+			var followerHeader *types.Header
+			if header, ok := item.(*types.Header); ok {
+				followerHeader = header
+			} else if block, ok := item.(*types.Block); ok {
+				followerHeader = block.Header()
+			}
+
+			// If we have both headers and the block hash matches but state roots differ,
+			// return a specific error for state root divergence
+			if followerHeader != nil && hash == primaryHash && followerHeader.Root != primaryHeader.Root {
+				return hash, fmt.Errorf("state root divergence detected: primary=%s, follower=%s",
+					primaryHeader.Root.Hex(), followerHeader.Root.Hex())
+			}
+		}
+
+		return hash, nil
 	}
 
 	// Verify consistency with retry for followers
 	mismatches, err := mc.verifyFollowersWithRetry(ctx, blockNum, primaryHash, getFollowerHash)
 	if err != nil {
+		// If err is a state root divergence error, format and return it
+		if strings.Contains(err.Error(), "state root divergence detected") {
+			return nil, fmt.Errorf("state root divergence detected at block #%s: %s", blockNum, err.Error())
+		}
+
 		// If err is a chain split error, pass it through
 		if strings.Contains(err.Error(), "chain split detected") {
 			return nil, err
@@ -222,14 +257,14 @@ func (m mismatches) Len() int {
 	return len(m.clientIndices)
 }
 
-// verifyFollowersWithRetry checks the hash consistency with retries in case of temporary sync issues
+// verifyFollowersWithRetry checks the hash and state root consistency with retries in case of temporary sync issues
 func (mc *MultiClient) verifyFollowersWithRetry(
 	ctx context.Context,
 	blockNum *big.Int,
 	primaryHash common.Hash,
 	getHash func(HeaderProvider, *big.Int) (common.Hash, error),
 ) (mismatches, error) {
-	var result mismatches
+	var hashMismatches mismatches
 
 	// Track which clients still need verification
 	pendingClients := make(map[int]bool)
@@ -241,14 +276,14 @@ func (mc *MultiClient) verifyFollowersWithRetry(
 	for attempt := 0; attempt <= mc.maxRetries; attempt++ {
 		// If no pending clients, we're done
 		if len(pendingClients) == 0 {
-			return result, nil
+			return hashMismatches, nil
 		}
 
 		// If not first attempt, wait before retry
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
-				return result, ctx.Err()
+				return hashMismatches, ctx.Err()
 			case <-time.After(mc.retryDelay):
 				// Continue after delay
 			}
@@ -257,7 +292,6 @@ func (mc *MultiClient) verifyFollowersWithRetry(
 		// Check each pending client
 		for clientIdx := range pendingClients {
 			hash, err := getHash(mc.clients[clientIdx], blockNum)
-
 			if err != nil {
 				// Check if error indicates "not found" - these errors should be retried
 				if errors.Is(err, ethereum.NotFound) ||
@@ -265,14 +299,14 @@ func (mc *MultiClient) verifyFollowersWithRetry(
 					strings.Contains(strings.ToLower(err.Error()), "nil") {
 					// If this is our last attempt, return the error
 					if attempt == mc.maxRetries {
-						return result, fmt.Errorf("client %d failed after %d attempts: %w", clientIdx, attempt+1, err)
+						return hashMismatches, fmt.Errorf("client %d failed after %d attempts: %w", clientIdx, attempt+1, err)
 					}
 					// Otherwise, try again in the next iteration
 					continue
 				} else {
 					// For other errors, also retry
 					if attempt == mc.maxRetries {
-						return result, fmt.Errorf("client %d failed after %d attempts: %w", clientIdx, attempt+1, err)
+						return hashMismatches, fmt.Errorf("client %d failed after %d attempts: %w", clientIdx, attempt+1, err)
 					}
 					continue
 				}
@@ -283,15 +317,19 @@ func (mc *MultiClient) verifyFollowersWithRetry(
 				delete(pendingClients, clientIdx)
 			} else {
 				// Detected chain split - return error immediately without further retries
-				result.clientIndices = append(result.clientIndices, clientIdx)
-				result.hashes = append(result.hashes, hash)
+				hashMismatches.clientIndices = append(hashMismatches.clientIndices, clientIdx)
+				hashMismatches.hashes = append(hashMismatches.hashes, hash)
 				// Format and return chain split error
-				return result, formatChainSplitError(blockNum, primaryHash, clientIdx, hash)
+				return hashMismatches, formatChainSplitError(blockNum, primaryHash, clientIdx, hash)
 			}
 		}
 	}
 
-	return result, nil
+	// If we get here, we've exceeded retries
+	if len(pendingClients) == 0 {
+		return hashMismatches, nil
+	}
+	return hashMismatches, fmt.Errorf("exceeded max retries, %d clients still pending verification", len(pendingClients))
 }
 
 // formatChainSplitError creates a descriptive error when a chain split is detected

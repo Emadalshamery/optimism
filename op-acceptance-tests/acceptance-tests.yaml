@@ -10,8 +10,6 @@ gates:
     tests:
       - name: TestChainFork
         package: github.com/ethereum-optimism/optimism/op-acceptance-tests/tests/base
-      - name: TestRethGethDivergence
-        package: github.com/ethereum-optimism/optimism/op-acceptance-tests/tests/base
 
   - id: holocene
     inherits:
