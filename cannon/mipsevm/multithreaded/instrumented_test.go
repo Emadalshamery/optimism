@@ -32,6 +32,44 @@ func TestInstrumentedState_Claim(t *testing.T) {
 	testutil.RunVMTest_Claim(t, CreateInitialState, vmFactory)
 }
 
+func TestInstrumentedState_Random(t *testing.T) {
+	state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath("random", testutil.Go1_24), CreateInitialState)
+
+	var stdOutBuf, stdErrBuf bytes.Buffer
+	us := vmFactory(state, nil, io.MultiWriter(&stdOutBuf, os.Stdout), io.MultiWriter(&stdErrBuf, os.Stderr), testutil.CreateLogger(), meta)
+	err := us.InitDebug()
+	require.NoError(t, err)
+
+	for i := 0; i < 500_000; i++ {
+		if us.GetState().GetExited() {
+			break
+		}
+		_, err := us.Step(false)
+		require.NoError(t, err)
+	}
+	t.Logf("Completed in %d steps", state.Step)
+
+	require.True(t, state.GetExited(), "must complete program")
+	require.Equal(t, uint8(0), state.GetExitCode(), "exit with 0")
+
+	// Check output
+	// Define the regex pattern we expect to match against stdOut
+	pattern := `^Random int: ([-+]?\d+)\s*$`
+	re, err := regexp.Compile(pattern)
+	require.NoError(t, err)
+
+	// Check that stdOut matches the expected regex
+	output := stdOutBuf.String()
+	matches := re.FindStringSubmatch(output)
+	require.Equal(t, 2, len(matches), "regex should return 2 results")
+	require.Contains(t, output, "Random int: ")
+
+	// Check that the generated random number is not zero
+	randNum, err := strconv.ParseInt(matches[1], 10, 64)
+	require.NoError(t, err)
+	require.NotEqual(t, int64(0), randNum, "random number should be non-zero")
+}
+
 func TestInstrumentedState_UtilsCheck(t *testing.T) {
 	// Sanity check that test running utilities will return a non-zero exit code on failure
 	t.Parallel()
