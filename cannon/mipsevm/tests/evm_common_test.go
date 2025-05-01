@@ -897,7 +897,7 @@ func TestEVM_HelloProgram(t *testing.T) {
 			validator := testutil.NewEvmValidator(t, v.StateHashFn, v.Contracts)
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
-			elfFile := testutil.ProgramPath("hello")
+			elfFile := testutil.ProgramPath("hello", testutil.Go1_23)
 			goVm := v.ElfVMFactory(t, elfFile, nil, io.MultiWriter(&stdOutBuf, os.Stdout), io.MultiWriter(&stdErrBuf, os.Stderr), testutil.CreateLogger())
 			state := goVm.GetState()
 
@@ -945,7 +945,7 @@ func TestEVM_ClaimProgram(t *testing.T) {
 			oracle, expectedStdOut, expectedStdErr := testutil.ClaimTestOracle(t)
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
-			elfFile := testutil.ProgramPath("claim")
+			elfFile := testutil.ProgramPath("claim", testutil.Go1_23)
 			goVm := v.ElfVMFactory(t, elfFile, oracle, io.MultiWriter(&stdOutBuf, os.Stdout), io.MultiWriter(&stdErrBuf, os.Stderr), testutil.CreateLogger())
 			state := goVm.GetState()
 
@@ -990,7 +990,7 @@ func TestEVM_EntryProgram(t *testing.T) {
 			validator := testutil.NewEvmValidator(t, v.StateHashFn, v.Contracts)
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
-			elfFile := testutil.ProgramPath("entry")
+			elfFile := testutil.ProgramPath("entry", testutil.Go1_23)
 			goVm := v.ElfVMFactory(t, elfFile, nil, io.MultiWriter(&stdOutBuf, os.Stdout), io.MultiWriter(&stdErrBuf, os.Stderr), testutil.CreateLogger())
 			state := goVm.GetState()
 

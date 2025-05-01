@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -45,7 +47,7 @@ func TestInstrumentedState_UtilsCheck(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(c.name), CreateInitialState)
+			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(c.name, testutil.Go1_23), CreateInitialState)
 			oracle := testutil.StaticOracle(t, []byte{})
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
@@ -178,7 +180,7 @@ func TestInstrumentedState_MultithreadedProgram(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(test.programName), CreateInitialState)
+			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath(test.programName, testutil.Go1_23), CreateInitialState)
 			oracle := testutil.StaticOracle(t, []byte{})
 
 			var stdOutBuf, stdErrBuf bytes.Buffer
@@ -224,7 +226,7 @@ func TestInstrumentedState_Alloc(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath("alloc"), CreateInitialState)
+			state, meta := testutil.LoadELFProgram(t, testutil.ProgramPath("alloc", testutil.Go1_23), CreateInitialState)
 			oracle := testutil.AllocOracle(t, test.numAllocs, test.allocSize)
 
 			us := NewInstrumentedState(state, oracle, os.Stdout, os.Stderr, testutil.CreateLogger(), meta, allFeaturesEnabled())
