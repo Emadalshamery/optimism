@@ -65,6 +65,9 @@ func FeaturesForVersion(version StateVersion) mipsevm.FeatureToggles {
 		features.SupportNoopSysEventFd2 = true
 		features.SupportDclzDclo = true
 	}
+	if version >= VersionMultiThreaded64_v5 {
+		features.SupportWorkingSysGetRandom = true
+	}
 	return features
 }
 
