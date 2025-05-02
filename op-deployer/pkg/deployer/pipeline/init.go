@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/standard"
 	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/state"
 
-	"github.com/ethereum-optimism/optimism/op-chain-ops/addresses"
 	"github.com/ethereum-optimism/optimism/op-chain-ops/script"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -54,8 +53,8 @@ func InitLiveStrategy(ctx context.Context, env *Env, intent *state.Intent, st *s
 		}
 		st.SuperchainDeployment = superDeployment
 		st.SuperchainRoles = superRoles
-		st.ImplementationsDeployment = &addresses.ImplementationsContracts{
-			OpcmImpl: *intent.OPCMAddress,
+		st.ImplementationsDeployment = &state.ImplementationsDeployment{
+			OpcmAddress: *intent.OPCMAddress,
 		}
 	}
 
@@ -134,7 +133,7 @@ func immutableErr(field string, was, is any) error {
 	return fmt.Errorf("%s is immutable: was %v, is %v", field, was, is)
 }
 
-func PopulateSuperchainState(host *script.Host, opcmAddr common.Address) (*addresses.SuperchainContracts, *addresses.SuperchainRoles, error) {
+func PopulateSuperchainState(host *script.Host, opcmAddr common.Address) (*state.SuperchainDeployment, *state.SuperchainRoles, error) {
 	readScript, err := opcm.NewReadSuperchainDeploymentScript(host)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error generating read superchain deployment script: %w", err)
@@ -147,17 +146,17 @@ func PopulateSuperchainState(host *script.Host, opcmAddr common.Address) (*addre
 		return nil, nil, fmt.Errorf("error reading superchain deployment: %w", err)
 	}
 
-	deployment := &addresses.SuperchainContracts{
-		SuperchainProxyAdminImpl: out.SuperchainProxyAdmin,
-		SuperchainConfigProxy:    out.SuperchainConfigProxy,
-		SuperchainConfigImpl:     out.SuperchainConfigImpl,
-		ProtocolVersionsProxy:    out.ProtocolVersionsProxy,
-		ProtocolVersionsImpl:     out.ProtocolVersionsImpl,
+	deployment := &state.SuperchainDeployment{
+		ProxyAdminAddress:            out.SuperchainProxyAdmin,
+		SuperchainConfigProxyAddress: out.SuperchainConfigProxy,
+		SuperchainConfigImplAddress:  out.SuperchainConfigImpl,
+		ProtocolVersionsProxyAddress: out.ProtocolVersionsProxy,
+		ProtocolVersionsImplAddress:  out.ProtocolVersionsImpl,
 	}
-	roles := &addresses.SuperchainRoles{
-		SuperchainProxyAdminOwner: out.SuperchainProxyAdminOwner,
-		SuperchainGuardian:        out.Guardian,
-		ProtocolVersionsOwner:     out.ProtocolVersionsOwner,
+	roles := &state.SuperchainRoles{
+		Guardian:              out.Guardian,
+		ProtocolVersionsOwner: out.ProtocolVersionsOwner,
+		ProxyAdminOwner:       out.SuperchainProxyAdminOwner,
 	}
 	return deployment, roles, nil
 }

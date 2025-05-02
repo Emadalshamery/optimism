@@ -31,7 +31,6 @@ import (
 
 	"github.com/holiman/uint256"
 
-	"github.com/ethereum-optimism/optimism/op-chain-ops/addresses"
 	"github.com/ethereum-optimism/optimism/op-chain-ops/devkeys"
 	"github.com/ethereum-optimism/optimism/op-chain-ops/genesis"
 	"github.com/ethereum-optimism/optimism/op-service/predeploys"
@@ -380,54 +379,54 @@ func TestProofParamOverrides(t *testing.T) {
 		{
 			"faultGameWithdrawalDelay",
 			uint64Caster,
-			st.ImplementationsDeployment.DelayedWethImpl,
+			st.ImplementationsDeployment.DelayedWETHImplAddress,
 		},
 		{
 			"preimageOracleMinProposalSize",
 			uint64Caster,
-			st.ImplementationsDeployment.PreimageOracleImpl,
+			st.ImplementationsDeployment.PreimageOracleSingletonAddress,
 		},
 		{
 			"preimageOracleChallengePeriod",
 			uint64Caster,
-			st.ImplementationsDeployment.PreimageOracleImpl,
+			st.ImplementationsDeployment.PreimageOracleSingletonAddress,
 		},
 		{
 			"proofMaturityDelaySeconds",
 			uint64Caster,
-			st.ImplementationsDeployment.OptimismPortalImpl,
+			st.ImplementationsDeployment.OptimismPortalImplAddress,
 		},
 		{
 			"disputeGameFinalityDelaySeconds",
 			uint64Caster,
-			st.ImplementationsDeployment.AnchorStateRegistryImpl,
+			st.ImplementationsDeployment.AnchorStateRegistryImplAddress,
 		},
 		{
 			"faultGameAbsolutePrestate",
 			func(t *testing.T, val any) common.Hash {
 				return val.(common.Hash)
 			},
-			chainState.PermissionedDisputeGameImpl,
+			chainState.PermissionedDisputeGameAddress,
 		},
 		{
 			"faultGameMaxDepth",
 			uint64Caster,
-			chainState.PermissionedDisputeGameImpl,
+			chainState.PermissionedDisputeGameAddress,
 		},
 		{
 			"faultGameSplitDepth",
 			uint64Caster,
-			chainState.PermissionedDisputeGameImpl,
+			chainState.PermissionedDisputeGameAddress,
 		},
 		{
 			"faultGameClockExtension",
 			uint64Caster,
-			chainState.PermissionedDisputeGameImpl,
+			chainState.PermissionedDisputeGameAddress,
 		},
 		{
 			"faultGameMaxClockDuration",
 			uint64Caster,
-			chainState.PermissionedDisputeGameImpl,
+			chainState.PermissionedDisputeGameAddress,
 		},
 	}
 	for _, tt := range tests {
@@ -457,15 +456,15 @@ func TestAltDADeployment(t *testing.T) {
 	require.NoError(t, deployer.ApplyPipeline(ctx, opts))
 
 	chainState := st.Chains[0]
-	require.NotEmpty(t, chainState.AltDAChallengeProxy)
-	require.NotEmpty(t, chainState.AltDAChallengeImpl)
+	require.NotEmpty(t, chainState.DataAvailabilityChallengeProxyAddress)
+	require.NotEmpty(t, chainState.DataAvailabilityChallengeImplAddress)
 
 	_, rollupCfg, err := pipeline.RenderGenesisAndRollup(st, chainState.ID, nil)
 	require.NoError(t, err)
 	require.EqualValues(t, &rollup.AltDAConfig{
 		CommitmentType:     altda.KeccakCommitmentString,
 		DAChallengeWindow:  altDACfg.DAChallengeWindow,
-		DAChallengeAddress: chainState.AltDAChallengeProxy,
+		DAChallengeAddress: chainState.DataAvailabilityChallengeProxyAddress,
 		DAResolveWindow:    altDACfg.DAResolveWindow,
 	}, rollupCfg.AltDAConfig)
 }
@@ -544,7 +543,7 @@ func TestAdditionalDisputeGames(t *testing.T) {
 	opts, intent, st := setupGenesisChain(t, defaultL1ChainID)
 	deployerAddr := crypto.PubkeyToAddress(opts.DeployerPrivateKey.PublicKey)
 	(&intent.Chains[0].Roles).L1ProxyAdminOwner = deployerAddr
-	intent.SuperchainRoles.SuperchainGuardian = deployerAddr
+	intent.SuperchainRoles.Guardian = deployerAddr
 	intent.GlobalDeployOverrides = map[string]any{
 		"challengePeriodSeconds": 1,
 	}
@@ -576,7 +575,7 @@ func TestAdditionalDisputeGames(t *testing.T) {
 	require.NotEmpty(t, gameInfo.VMAddress)
 	require.NotEmpty(t, gameInfo.GameAddress)
 	require.NotEmpty(t, gameInfo.OracleAddress)
-	require.NotEqual(t, st.ImplementationsDeployment.PreimageOracleImpl, gameInfo.OracleAddress)
+	require.NotEqual(t, st.ImplementationsDeployment.PreimageOracleSingletonAddress, gameInfo.OracleAddress)
 }
 
 func TestIntentConfiguration(t *testing.T) {
@@ -682,10 +681,10 @@ func newIntent(
 	intent := &state.Intent{
 		ConfigType: state.IntentTypeCustom,
 		L1ChainID:  l1ChainID.Uint64(),
-		SuperchainRoles: &addresses.SuperchainRoles{
-			SuperchainProxyAdminOwner: addrFor(t, dk, devkeys.L1ProxyAdminOwnerRole.Key(l1ChainID)),
-			ProtocolVersionsOwner:     addrFor(t, dk, devkeys.SuperchainDeployerKey.Key(l1ChainID)),
-			SuperchainGuardian:        addrFor(t, dk, devkeys.SuperchainConfigGuardianKey.Key(l1ChainID)),
+		SuperchainRoles: &state.SuperchainRoles{
+			ProxyAdminOwner:       addrFor(t, dk, devkeys.L1ProxyAdminOwnerRole.Key(l1ChainID)),
+			ProtocolVersionsOwner: addrFor(t, dk, devkeys.SuperchainDeployerKey.Key(l1ChainID)),
+			Guardian:              addrFor(t, dk, devkeys.SuperchainConfigGuardianKey.Key(l1ChainID)),
 		},
 		FundDevAccounts:    false,
 		L1ContractsLocator: l1Loc,
@@ -745,17 +744,17 @@ func validateSuperchainDeployment(t *testing.T, st *state.State, cg codeGetter, 
 		addr common.Address
 	}
 	addrs := []addrTuple{
-		{"SuperchainProxyAdminImpl", st.SuperchainDeployment.SuperchainProxyAdminImpl},
-		{"SuperchainConfigProxy", st.SuperchainDeployment.SuperchainConfigProxy},
-		{"ProtocolVersionsProxy", st.SuperchainDeployment.ProtocolVersionsProxy},
-		{"OpcmImpl", st.ImplementationsDeployment.OpcmImpl},
-		{"PreimageOracleImpl", st.ImplementationsDeployment.PreimageOracleImpl},
-		{"MipsImpl", st.ImplementationsDeployment.MipsImpl},
+		{"SuperchainProxyAdmin", st.SuperchainDeployment.ProxyAdminAddress},
+		{"SuperchainConfigProxy", st.SuperchainDeployment.SuperchainConfigProxyAddress},
+		{"ProtocolVersionsProxy", st.SuperchainDeployment.ProtocolVersionsProxyAddress},
+		{"Opcm", st.ImplementationsDeployment.OpcmAddress},
+		{"PreimageOracleSingleton", st.ImplementationsDeployment.PreimageOracleSingletonAddress},
+		{"MipsSingleton", st.ImplementationsDeployment.MipsSingletonAddress},
 	}
 
 	if includeSuperchainImpls {
-		addrs = append(addrs, addrTuple{"SuperchainConfigImpl", st.SuperchainDeployment.SuperchainConfigImpl})
-		addrs = append(addrs, addrTuple{"ProtocolVersionsImpl", st.SuperchainDeployment.ProtocolVersionsImpl})
+		addrs = append(addrs, addrTuple{"SuperchainConfigImpl", st.SuperchainDeployment.SuperchainConfigImplAddress})
+		addrs = append(addrs, addrTuple{"ProtocolVersionsImpl", st.SuperchainDeployment.ProtocolVersionsImplAddress})
 	}
 
 	for _, addr := range addrs {
@@ -774,20 +773,20 @@ func validateOPChainDeployment(t *testing.T, cg codeGetter, st *state.State, int
 		addr common.Address
 	}
 	implAddrs := []addrTuple{
-		{"DelayedWethImpl", st.ImplementationsDeployment.DelayedWethImpl},
-		{"OptimismPortalImpl", st.ImplementationsDeployment.OptimismPortalImpl},
-		{"SystemConfigImpl", st.ImplementationsDeployment.SystemConfigImpl},
-		{"L1CrossDomainMessengerImpl", st.ImplementationsDeployment.L1CrossDomainMessengerImpl},
-		{"L1ERC721BridgeImpl", st.ImplementationsDeployment.L1Erc721BridgeImpl},
-		{"L1StandardBridgeImpl", st.ImplementationsDeployment.L1StandardBridgeImpl},
-		{"OptimismMintableERC20FactoryImpl", st.ImplementationsDeployment.OptimismMintableErc20FactoryImpl},
-		{"DisputeGameFactoryImpl", st.ImplementationsDeployment.DisputeGameFactoryImpl},
-		{"MipsImpl", st.ImplementationsDeployment.MipsImpl},
-		{"PreimageOracleImpl", st.ImplementationsDeployment.PreimageOracleImpl},
+		{"DelayedWETHImplAddress", st.ImplementationsDeployment.DelayedWETHImplAddress},
+		{"OptimismPortalImplAddress", st.ImplementationsDeployment.OptimismPortalImplAddress},
+		{"SystemConfigImplAddress", st.ImplementationsDeployment.SystemConfigImplAddress},
+		{"L1CrossDomainMessengerImplAddress", st.ImplementationsDeployment.L1CrossDomainMessengerImplAddress},
+		{"L1ERC721BridgeImplAddress", st.ImplementationsDeployment.L1ERC721BridgeImplAddress},
+		{"L1StandardBridgeImplAddress", st.ImplementationsDeployment.L1StandardBridgeImplAddress},
+		{"OptimismMintableERC20FactoryImplAddress", st.ImplementationsDeployment.OptimismMintableERC20FactoryImplAddress},
+		{"DisputeGameFactoryImplAddress", st.ImplementationsDeployment.DisputeGameFactoryImplAddress},
+		{"MipsSingletonAddress", st.ImplementationsDeployment.MipsSingletonAddress},
+		{"PreimageOracleSingletonAddress", st.ImplementationsDeployment.PreimageOracleSingletonAddress},
 	}
 
 	if !intent.L1ContractsLocator.IsTag() {
-		implAddrs = append(implAddrs, addrTuple{"EthLockboxImpl", st.ImplementationsDeployment.EthLockboxImpl})
+		implAddrs = append(implAddrs, addrTuple{"ETHLockboxImplAddress", st.ImplementationsDeployment.ETHLockboxImplAddress})
 	}
 
 	for _, addr := range implAddrs {
@@ -801,19 +800,19 @@ func validateOPChainDeployment(t *testing.T, cg codeGetter, st *state.State, int
 			name string
 			addr common.Address
 		}{
-			{"ProxyAdminAddress", chainState.OpChainContracts.OpChainProxyAdminImpl},
-			{"AddressManagerAddress", chainState.OpChainContracts.AddressManagerImpl},
-			{"L1ERC721BridgeProxyAddress", chainState.OpChainContracts.L1Erc721BridgeProxy},
-			{"SystemConfigProxyAddress", chainState.OpChainContracts.SystemConfigProxy},
-			{"OptimismMintableERC20FactoryProxyAddress", chainState.OpChainContracts.OptimismMintableErc20FactoryProxy},
-			{"L1StandardBridgeProxyAddress", chainState.OpChainContracts.L1StandardBridgeProxy},
-			{"L1CrossDomainMessengerProxyAddress", chainState.OpChainContracts.L1CrossDomainMessengerProxy},
-			{"OptimismPortalProxyAddress", chainState.OpChainContracts.OptimismPortalProxy},
-			{"DisputeGameFactoryProxyAddress", chainState.DisputeGameFactoryProxy},
-			{"AnchorStateRegistryProxyAddress", chainState.OpChainContracts.AnchorStateRegistryProxy},
-			{"FaultDisputeGameAddress", chainState.OpChainContracts.FaultDisputeGameImpl},
-			{"PermissionedDisputeGameAddress", chainState.OpChainContracts.PermissionedDisputeGameImpl},
-			{"DelayedWETHPermissionedGameProxyAddress", chainState.OpChainContracts.DelayedWethPermissionedGameProxy},
+			{"ProxyAdminAddress", chainState.ProxyAdminAddress},
+			{"AddressManagerAddress", chainState.AddressManagerAddress},
+			{"L1ERC721BridgeProxyAddress", chainState.L1ERC721BridgeProxyAddress},
+			{"SystemConfigProxyAddress", chainState.SystemConfigProxyAddress},
+			{"OptimismMintableERC20FactoryProxyAddress", chainState.OptimismMintableERC20FactoryProxyAddress},
+			{"L1StandardBridgeProxyAddress", chainState.L1StandardBridgeProxyAddress},
+			{"L1CrossDomainMessengerProxyAddress", chainState.L1CrossDomainMessengerProxyAddress},
+			{"OptimismPortalProxyAddress", chainState.OptimismPortalProxyAddress},
+			{"DisputeGameFactoryProxyAddress", chainState.DisputeGameFactoryProxyAddress},
+			{"AnchorStateRegistryProxyAddress", chainState.AnchorStateRegistryProxyAddress},
+			{"FaultDisputeGameAddress", chainState.FaultDisputeGameAddress},
+			{"PermissionedDisputeGameAddress", chainState.PermissionedDisputeGameAddress},
+			{"DelayedWETHPermissionedGameProxyAddress", chainState.DelayedWETHPermissionedGameProxyAddress},
 			// {"DelayedWETHPermissionlessGameProxyAddress", chainState.DelayedWETHPermissionlessGameProxyAddress},
 		}
 		for _, addr := range chainAddrs {

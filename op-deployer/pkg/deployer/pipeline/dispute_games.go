@@ -69,7 +69,7 @@ func deployDisputeGame(
 		lgr.Info("oracle deployed", "oracleAddr", oracleAddr)
 	} else {
 		lgr.Info("using existing preimage oracle")
-		oracleAddr = st.ImplementationsDeployment.PreimageOracleImpl
+		oracleAddr = st.ImplementationsDeployment.PreimageOracleSingletonAddress
 	}
 
 	lgr.Info("deploying VM", "vmType", game.VMType)
@@ -109,8 +109,8 @@ func deployDisputeGame(
 		SplitDepth:               game.DisputeSplitDepth,
 		ClockExtension:           game.DisputeClockExtension,
 		MaxClockDuration:         game.DisputeMaxClockDuration,
-		DelayedWethProxy:         thisState.OpChainContracts.DelayedWethPermissionedGameProxy,
-		AnchorStateRegistryProxy: thisState.OpChainContracts.AnchorStateRegistryProxy,
+		DelayedWethProxy:         thisState.DelayedWETHPermissionedGameProxyAddress,
+		AnchorStateRegistryProxy: thisState.AnchorStateRegistryProxyAddress,
 		L2ChainId:                thisIntent.ID,
 		Proposer:                 thisIntent.Roles.Proposer,
 		Challenger:               thisIntent.Roles.Challenger,
@@ -122,12 +122,12 @@ func deployDisputeGame(
 
 	lgr.Info("setting dispute game impl on factory", "respected", game.MakeRespected)
 	sdgiInput := opcm.SetDisputeGameImplInput{
-		Factory:  thisState.OpChainContracts.DisputeGameFactoryProxy,
+		Factory:  thisState.DisputeGameFactoryProxyAddress,
 		Impl:     out.DisputeGameImpl,
 		GameType: game.DisputeGameType,
 	}
 	if game.MakeRespected {
-		sdgiInput.AnchorStateRegistry = thisState.OpChainContracts.AnchorStateRegistryProxy
+		sdgiInput.AnchorStateRegistry = thisState.AnchorStateRegistryProxyAddress
 	}
 	if err := opcm.SetDisputeGameImpl(
 		env.L1ScriptHost,

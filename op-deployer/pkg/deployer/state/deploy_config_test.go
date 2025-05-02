@@ -3,7 +3,6 @@ package state
 import (
 	"testing"
 
-	"github.com/ethereum-optimism/optimism/op-chain-ops/addresses"
 	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/artifacts"
 	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/standard"
 
@@ -35,7 +34,7 @@ func TestCombineDeployConfig(t *testing.T) {
 		},
 	}
 	state := State{
-		SuperchainDeployment: &addresses.SuperchainContracts{ProtocolVersionsProxy: common.HexToAddress("0x123")},
+		SuperchainDeployment: &SuperchainDeployment{ProtocolVersionsProxyAddress: common.HexToAddress("0x123")},
 	}
 
 	// apply hard fork overrides
