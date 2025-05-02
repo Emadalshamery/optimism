@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"reflect"
 	"regexp"
@@ -51,20 +52,35 @@ func TestInstrumentedState_Random(t *testing.T) {
 
 	// Check output
 	// Define the regex pattern we expect to match against stdOut
-	pattern := `^Random int: ([-+]?\d+)\s*$`
+	pattern := `Random (hex data|int): (\w+)\s*`
 	re, err := regexp.Compile(pattern)
 	require.NoError(t, err)
 
 	// Check that stdOut matches the expected regex
+	expectedMatches := 3
 	output := stdOutBuf.String()
-	matches := re.FindStringSubmatch(output)
-	require.Equal(t, 2, len(matches), "regex should return 2 results")
-	require.Contains(t, output, "Random int: ")
+	matches := re.FindAllStringSubmatch(output, -1)
+	require.Equal(t, expectedMatches, len(matches))
 
-	// Check that the generated random number is not zero
-	randNum, err := strconv.ParseInt(matches[1], 10, 64)
-	require.NoError(t, err)
-	require.NotEqual(t, int64(0), randNum, "random number should be non-zero")
+	// Check each match and validate the random values that are printed to stdOut
+	for i := 0; i < expectedMatches; i++ {
+		match := matches[i]
+		require.Contains(t, match[0], "Random")
+
+		// Check that the generated random number is not zero
+		dataType := match[1]
+		dataValue := match[2]
+		switch dataType {
+		case "hex data":
+			randVal, success := new(big.Int).SetString(dataValue, 16)
+			require.True(t, success, "should successfully set hex value")
+			require.NotEqual(t, 0, randVal.Sign(), "random data should be non-zero")
+		case "int":
+			randVal, err := strconv.ParseUint(dataValue, 16, 64)
+			require.NoError(t, err)
+			require.NotEqual(t, uint64(0), randVal, "random int should be non-zero")
+		}
+	}
 }
 
 func TestInstrumentedState_UtilsCheck(t *testing.T) {
