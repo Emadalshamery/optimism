@@ -1,4 +1,4 @@
-# Custom Superchains
+# Custom Deployments
 
 While OP Deployer was designed primarily for use with the Optimism Superchain, it also supports managing chains that
 were deployed to custom Superchain deployments. This is particularly common for RaaS providers, whose customers often
