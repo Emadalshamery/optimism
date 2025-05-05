@@ -273,6 +273,7 @@ contract StandardValidator {
         _errors = internalRequire(address(_portal.disputeGameFactory()) == address(_dgf), "PORTAL-30", _errors);
         _errors = internalRequire(address(_portal.systemConfig()) == address(_sysCfg), "PORTAL-40", _errors);
         _errors = internalRequire(_portal.l2Sender() == Constants.DEFAULT_L2_SENDER, "PORTAL-80", _errors);
+        _errors = internalRequire(_portal.proofMaturityDelaySeconds() == 604_800, "PORTAL-90", _errors);
         return _errors;
     }
 
@@ -467,6 +468,9 @@ contract StandardValidator {
             string.concat(_errorPrefix, "-20"),
             _errors
         );
+        _errors = internalRequire(
+            _asr.disputeGameFinalityDelaySeconds() == 302_400, string.concat(_errorPrefix, "-70"), _errors
+        );
         return _errors;
     }
 
@@ -484,8 +488,8 @@ contract StandardValidator {
         _errors = internalRequire(
             stringEq(_oracle.version(), preimageOracleVersion), string.concat(_errorPrefix, "-10"), _errors
         );
-        _errors = internalRequire(_oracle.challengePeriod() == 86400, string.concat(_errorPrefix, "-20"), _errors);
-        _errors = internalRequire(_oracle.minProposalSize() == 126000, string.concat(_errorPrefix, "-30"), _errors);
+        _errors = internalRequire(_oracle.challengePeriod() == 86_400, string.concat(_errorPrefix, "-20"), _errors);
+        _errors = internalRequire(_oracle.minProposalSize() == 126_000, string.concat(_errorPrefix, "-30"), _errors);
         return _errors;
     }
 
