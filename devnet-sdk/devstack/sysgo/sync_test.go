@@ -455,10 +455,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		// To check verifier does not have to process blocks since unsafe blocks are already processed
 		require.Greater(unsafeA2.Number, safeA2.Number)
 
-		// delta is the max block number diff tolerated to consider that verifier CL safe head is following supervisor safe view
-		delta := uint64(5)
-
-		logger.Info("make sure verifier safe head synced with supervisor", "delta", delta)
+		logger.Info("make sure verifier unsafe head was consolidated to safe")
 		require.Eventually(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
@@ -467,21 +464,20 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			blockA := queryBlockFromELByNumber(elA, blockA2.Number)
 			require.Equal(blockA.Hash, blockA2.Hash)
 			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number, "verifier EL", blockA2.Number)
-			// verifier follows supervisor safe head
-			check := chainAView.Safe.Number <= delta+syncA2.SafeL2.Number // avoid underflow
 			// verifier consolidated every previously known unsafe head to safe head
-			check = check && syncA2.SafeL2.Number >= unsafeA2.Number
-			return check
+			return syncA2.SafeL2.Number >= unsafeA2.Number
 		}, 60*time.Second, waitTime)
 
-		logger.Info("make sure verifier safe head keeps following supervisor safe head", "delta", delta)
-		require.Never(func() bool {
+		delta := uint64(10)
+		safeA := queryBlockFromEL(elA, eth.Safe)
+		targetBlockNum3 := safeA.Number + delta
+		logger.Info("make sure verifier unsafe head advances due to safe head advances", "target", targetBlockNum3, "delta", delta)
+		require.Eventually(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
-			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number)
-			check := chainAView.Safe.Number <= delta+syncA2.SafeL2.Number // avoid underflow
-			return !check
+			logger.Info("unsafe head sync status", "sequencer CL", syncA.UnsafeL2.Number, "supervisor", chainAView.LocalUnsafe.Number, "verifier CL", syncA2.UnsafeL2.Number)
+			return syncA2.UnsafeL2.Number >= targetBlockNum3
 		}, 40*time.Second, waitTime)
 
 		// make sure the resulting chain viewed by verifier did not reorged
