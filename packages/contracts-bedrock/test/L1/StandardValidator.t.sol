@@ -596,7 +596,8 @@ contract StandardValidatorTest is CommonTest {
         assertEq("PDDG-ANCHORP-20,PLDG-ANCHORP-20", validate(true));
     }
 
-    function _mockValidationCalls() internal virtual {
+    function _mockValidationCalls() internal virtual {}
+    function X_mockValidationCalls() internal virtual {
         // Mock OptimismPortal superchainConfig call
         vm.mockCall(
             address(optimismPortal2), abi.encodeCall(IOptimismPortal2.systemConfig, ()), abi.encode(systemConfig)
