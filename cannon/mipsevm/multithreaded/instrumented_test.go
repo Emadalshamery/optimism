@@ -76,7 +76,7 @@ func TestInstrumentedState_Random(t *testing.T) {
 			require.True(t, success, "should successfully set hex value")
 			require.NotEqual(t, 0, randVal.Sign(), "random data should be non-zero")
 		case "int":
-			randVal, err := strconv.ParseUint(dataValue, 16, 64)
+			randVal, err := strconv.ParseUint(dataValue, 10, 64)
 			require.NoError(t, err)
 			require.NotEqual(t, uint64(0), randVal, "random int should be non-zero")
 		}
