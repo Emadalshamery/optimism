@@ -569,6 +569,9 @@ func (d *UpgradeScheduleDeployConfig) Check(log log.Logger) error {
 		if *a > *b {
 			return fmt.Errorf("fork %s set to %d, but prior fork %s has higher offset %d", bName, *b, aName, *a)
 		}
+		if *a == *b && *a != 0 {
+			return fmt.Errorf("both fork %s and %s are set to %d: Forks in general cannot activate at the same post-Genesis block", aName, bName, *b)
+		}
 		return nil
 	}
 	forks := d.forks()
