@@ -138,8 +138,8 @@ contract DeployConfig is Script {
         faultGameGenesisOutputRoot = stdJson.readBytes32(_json, "$.faultGameGenesisOutputRoot");
         faultGameWithdrawalDelay = 604_800;
 
-        preimageOracleMinProposalSize = stdJson.readUint(_json, "$.preimageOracleMinProposalSize");
         preimageOracleChallengePeriod = stdJson.readUint(_json, "$.preimageOracleChallengePeriod");
+        preimageOracleMinProposalSize = 126_000;
 
         useAltDA = _readOr(_json, "$.useAltDA", false);
         daCommitmentType = _readOr(_json, "$.daCommitmentType", "KeccakCommitment");
