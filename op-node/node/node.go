@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-node/rollup/interop/managed"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/sequencing"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/sync"
+	"github.com/ethereum-optimism/optimism/op-node/tracing"
 	"github.com/ethereum-optimism/optimism/op-service/client"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/httputil"
@@ -162,6 +163,10 @@ func (n *OpNode) init(ctx context.Context, cfg *Config) error {
 	if err := n.initMetricsServer(cfg); err != nil {
 		return fmt.Errorf("failed to init the metrics server: %w", err)
 	}
+	if err := n.initTracing(cfg); err != nil {
+		return fmt.Errorf("failed to init the tracing: %w", err)
+	}
+
 	n.metrics.RecordInfo(n.appVersion)
 	n.metrics.RecordUp()
 	if err := n.initPProf(cfg); err != nil {
@@ -493,6 +498,10 @@ func (n *OpNode) initMetricsServer(cfg *Config) error {
 	return nil
 }
 
+func (n *OpNode) initTracing(cfg *Config) error {
+	return tracing.InitTracing(cfg.Tracing.Enabled, cfg.Tracing.ServiceName, cfg.Tracing.TracerName)
+}
+
 func (n *OpNode) initPProf(cfg *Config) error {
 	n.pprofService = oppprof.New(
 		cfg.Pprof.ListenEnabled,
@@ -644,6 +653,8 @@ func (n *OpNode) OnUnsafeL2Payload(ctx context.Context, from peer.ID, envelope *
 
 	n.tracer.OnUnsafeL2Payload(ctx, from, envelope)
 
+	envelopeWithContext := tracing.StartTraceProcessL2Payload(envelope)
+
 	n.log.Info("Received signed execution payload from p2p", "id", envelope.ExecutionPayload.ID(), "peer", from,
 		"txs", len(envelope.ExecutionPayload.Transactions))
 
@@ -651,7 +662,7 @@ func (n *OpNode) OnUnsafeL2Payload(ctx context.Context, from peer.ID, envelope *
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
-	if err := n.l2Driver.OnUnsafeL2Payload(ctx, envelope); err != nil {
+	if err := n.l2Driver.OnUnsafeL2Payload(ctx, envelopeWithContext); err != nil {
 		n.log.Warn("failed to notify engine driver of new L2 payload", "err", err, "id", envelope.ExecutionPayload.ID())
 	}
 

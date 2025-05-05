@@ -61,7 +61,7 @@ type Driver struct {
 
 	// L2 Signals:
 
-	unsafeL2Payloads chan *eth.ExecutionPayloadEnvelope
+	unsafeL2Payloads chan *eth.ExecutionPayloadEnvelopeWithContext
 
 	sequencer sequencing.SequencerIface
 
@@ -136,7 +136,7 @@ func (s *Driver) OnL1Finalized(ctx context.Context, finalized eth.L1BlockRef) er
 	}
 }
 
-func (s *Driver) OnUnsafeL2Payload(ctx context.Context, envelope *eth.ExecutionPayloadEnvelope) error {
+func (s *Driver) OnUnsafeL2Payload(ctx context.Context, envelope *eth.ExecutionPayloadEnvelopeWithContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -240,7 +240,7 @@ func (s *Driver) eventLoop() {
 			if s.SyncCfg.SyncMode == sync.CLSync || !s.Engine.IsEngineSyncing() {
 				s.log.Info("Optimistically queueing unsafe L2 execution payload", "id", envelope.ExecutionPayload.ID())
 				s.Emitter.Emit(clsync.ReceivedUnsafePayloadEvent{Envelope: envelope})
-				s.metrics.RecordReceivedUnsafePayload(envelope)
+				s.metrics.RecordReceivedUnsafePayload(envelope.ExecutionPayloadEnvelope)
 				reqStep()
 			} else if s.SyncCfg.SyncMode == sync.ELSync {
 				ref, err := derive.PayloadToBlockRef(s.Config, envelope.ExecutionPayload)

@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-node/rollup/engine"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/interop"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/sync"
+	"github.com/ethereum-optimism/optimism/op-node/tracing"
 	opflags "github.com/ethereum-optimism/optimism/op-service/flags"
 	"github.com/ethereum-optimism/optimism/op-service/oppprof"
 	"github.com/ethereum-optimism/optimism/op-service/rpc"
@@ -107,6 +108,11 @@ func NewConfig(ctx *cli.Context, log log.Logger) (*node.Config, error) {
 		SafeDBPath:                  ctx.String(flags.SafeDBPath.Name),
 		Sync:                        *syncConfig,
 		RollupHalt:                  haltOption,
+		Tracing: tracing.TracingConfig{
+			Enabled:     ctx.Bool(flags.TracingEnabledFlag.Name),
+			ServiceName: ctx.String(flags.TracingServiceName.Name),
+			TracerName:  ctx.String(flags.TracingTracerName.Name),
+		},
 
 		ConductorEnabled: ctx.Bool(flags.ConductorEnabledFlag.Name),
 		ConductorRpc: func(context.Context) (string, error) {

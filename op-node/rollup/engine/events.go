@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/event"
+	"github.com/ethereum-optimism/optimism/op-node/tracing"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 )
 
@@ -192,7 +193,7 @@ func (ev PendingSafeRequestEvent) String() string {
 }
 
 type ProcessUnsafePayloadEvent struct {
-	Envelope *eth.ExecutionPayloadEnvelope
+	Envelope *eth.ExecutionPayloadEnvelopeWithContext
 }
 
 func (ev ProcessUnsafePayloadEvent) String() string {
@@ -429,6 +430,7 @@ func (d *EngDeriver) OnEvent(ev event.Event) bool {
 			}
 		} else {
 			d.log.Info("successfully processed payload", "ref", ref, "txs", len(x.Envelope.ExecutionPayload.Transactions))
+			tracing.EndProcessL2Payload(x.Envelope)
 		}
 	case ForkchoiceRequestEvent:
 		d.emitter.Emit(ForkchoiceUpdateEvent{

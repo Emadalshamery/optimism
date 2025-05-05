@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-node/rollup/driver"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/interop"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/sync"
+	"github.com/ethereum-optimism/optimism/op-node/tracing"
 	"github.com/ethereum-optimism/optimism/op-service/oppprof"
 )
 
@@ -82,6 +83,8 @@ type Config struct {
 
 	// Experimental. Enables new opstack RPC namespace. Used by op-test-sequencer.
 	ExperimentalOPStackAPI bool
+	// Tracing configuration
+	Tracing tracing.TracingConfig
 }
 
 // ConductorRPCFunc retrieves the endpoint. The RPC may not immediately be available.

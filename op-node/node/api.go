@@ -34,7 +34,7 @@ type driverClient interface {
 	StartSequencer(ctx context.Context, blockHash common.Hash) error
 	StopSequencer(context.Context) (common.Hash, error)
 	SequencerActive(context.Context) (bool, error)
-	OnUnsafeL2Payload(ctx context.Context, payload *eth.ExecutionPayloadEnvelope) error
+	OnUnsafeL2Payload(ctx context.Context, payload *eth.ExecutionPayloadEnvelopeWithContext) error
 	OverrideLeader(ctx context.Context) error
 	ConductorEnabled(ctx context.Context) (bool, error)
 	SetRecoverMode(ctx context.Context, mode bool) error
@@ -76,7 +76,7 @@ func (n *adminAPI) SequencerActive(ctx context.Context) (bool, error) {
 
 // PostUnsafePayload is a special API that allows posting an unsafe payload to the L2 derivation pipeline.
 // It should only be used by op-conductor for sequencer failover scenarios.
-func (n *adminAPI) PostUnsafePayload(ctx context.Context, envelope *eth.ExecutionPayloadEnvelope) error {
+func (n *adminAPI) PostUnsafePayload(ctx context.Context, envelope *eth.ExecutionPayloadEnvelopeWithContext) error {
 	payload := envelope.ExecutionPayload
 	if actual, ok := envelope.CheckBlockHash(); !ok {
 		log.Error("payload has bad block hash", "bad_hash", payload.BlockHash.String(), "actual", actual.String())
