@@ -455,7 +455,10 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		// To check verifier does not have to process blocks since unsafe blocks are already processed
 		require.Greater(unsafeA2.Number, safeA2.Number)
 
-		logger.Info("make sure verifier safe head synced with supervisor")
+		// delta is the max block number diff tolerated to consider that verifier CL safe head is following supervisor safe view
+		delta := uint64(5)
+
+		logger.Info("make sure verifier safe head synced with supervisor", "delta", delta)
 		require.Eventually(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
@@ -465,19 +468,19 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 			require.Equal(blockA.Hash, blockA2.Hash)
 			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number, "verifier EL", blockA2.Number)
 			// verifier follows supervisor safe head
-			check := chainAView.Safe.Number <= 5+syncA2.SafeL2.Number
+			check := chainAView.Safe.Number <= delta+syncA2.SafeL2.Number
 			// verifier consolidated every previously known unsafe head to safe head
 			check = check && syncA2.SafeL2.Number >= unsafeA2.Number
 			return check
 		}, 60*time.Second, waitTime)
 
-		logger.Info("make sure verifier safe head keeps following supervisor safe head")
+		logger.Info("make sure verifier safe head keeps following supervisor safe head", "delta", delta)
 		require.Never(func() bool {
 			syncA := querySyncStatusFromCL(clA)
 			syncA2 := querySyncStatusFromCL(clA2)
 			chainAView = querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			logger.Info("safe head sync status", "sequencer CL", syncA.SafeL2.Number, "supervisor", chainAView.Safe.Number, "verifier CL", syncA2.SafeL2.Number)
-			check := chainAView.Safe.Number <= 10+syncA2.SafeL2.Number
+			check := chainAView.Safe.Number <= delta+syncA2.SafeL2.Number
 			return !check
 		}, 40*time.Second, waitTime)
 
