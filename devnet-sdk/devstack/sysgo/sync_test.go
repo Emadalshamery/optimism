@@ -538,6 +538,9 @@ func TestSupervisorAheadOfL2CL(gt *testing.T) {
 			logger.Info("chain A2", "sync", syncA2)
 			logger.Info("chain B", "sync", syncB)
 			logger.Info("chain B2", "sync", syncB2)
+			chainAView := querySyncStatusFromSupervisor(supervisorBackup, elA2.ChainID())
+			chainBView := querySyncStatusFromSupervisor(supervisorBackup, elB2.ChainID())
+			logger.Info("backup supervisor view", "chainA", chainAView, "chainB", chainBView)
 
 			check := syncA2.UnsafeL2.Number > targetBlockNum1
 			check = check && syncB2.UnsafeL2.Number > targetBlockNum1
@@ -554,6 +557,10 @@ func TestSupervisorAheadOfL2CL(gt *testing.T) {
 			logger.Info("chain A2", "unsafe", blockA2)
 			logger.Info("chain B", "unsafe", blockB)
 			logger.Info("chain B2", "unsafe", blockB2)
+			chainAView := querySyncStatusFromSupervisor(supervisorBackup, elA2.ChainID())
+			chainBView := querySyncStatusFromSupervisor(supervisorBackup, elB2.ChainID())
+			logger.Info("backup supervisor view", "chainA", chainAView, "chainB", chainBView)
+
 			check := blockA.Number > targetBlockNum2
 			check = check && blockA2.Number > targetBlockNum2
 			check = check && blockB.Number > targetBlockNum2
