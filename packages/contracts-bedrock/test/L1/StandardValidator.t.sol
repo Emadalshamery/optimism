@@ -60,16 +60,6 @@ contract StandardValidatorTest is CommonTest {
         // Value from DeployConfig
         withdrawalDelaySeconds = 604_800;
 
-        // Mock superchainConfig calls needed in setup
-        vm.mockCall(address(superchainConfig), abi.encodeCall(ISuperchainConfig.guardian, ()), abi.encode(guardian));
-        vm.mockCall(
-            address(superchainConfig), abi.encodeCall(ISuperchainConfig.paused, (address(0))), abi.encode(false)
-        );
-
-        // Setup mock contracts for validation
-        vm.prank(address(0));
-        proxyAdmin = IProxyAdmin(IProxy(payable(address(systemConfig))).admin());
-
         absolutePrestate = bytes32(uint256(0xdead));
 
         // Matches hardhat.json
@@ -85,9 +75,6 @@ contract StandardValidatorTest is CommonTest {
         delayedWeth = IDelayedWETH(IFaultDisputeGame(address(faultDisputeGame)).weth());
         mips = address(IFaultDisputeGame(address(permissionedDisputeGame)).vm());
         preimageOracle = address(IBigStepper(mips).oracle());
-
-        // Mock proxyAdmin owner
-        vm.mockCall(address(proxyAdmin), abi.encodeCall(IProxyAdmin.owner, ()), abi.encode(proxyAdminOwner));
 
         // Get the OPContractsManager and its implementations struct
         OPContractsManager opcm = OPContractsManager(artifacts.mustGetAddress("OPContractsManager"));
@@ -110,7 +97,7 @@ contract StandardValidatorTest is CommonTest {
             superchainConfig,
             proxyAdminOwner,
             challenger,
-            604_800
+            withdrawalDelaySeconds
         );
     }
 
