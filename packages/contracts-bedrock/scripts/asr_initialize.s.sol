@@ -29,6 +29,8 @@ contract ASRInitialize is Script {
         bytes memory data = abi.encodeCall(
             AnchorStateRegistry.initialize, (systemConfigProxy, dgfProxy, proposal, GameType.wrap(gameType))
         );
+        console.log("exec calldata");
+        console.logBytes(data);
 
         bytes memory safeCalldata = abi.encodeCall(
             Safe.execTransaction,
