@@ -125,13 +125,14 @@ contract DeployConfig is Script {
         requiredProtocolVersion = stdJson.readUint(_json, "$.requiredProtocolVersion");
         recommendedProtocolVersion = stdJson.readUint(_json, "$.recommendedProtocolVersion");
 
+        // Any values hardcoded below should match the standard config
         proofMaturityDelaySeconds = 604_800;
         disputeGameFinalityDelaySeconds = 302_400;
         respectedGameType = _readOr(_json, "$.respectedGameType", 0);
 
         faultGameAbsolutePrestate = stdJson.readUint(_json, "$.faultGameAbsolutePrestate");
-        faultGameMaxDepth = stdJson.readUint(_json, "$.faultGameMaxDepth");
-        faultGameSplitDepth = stdJson.readUint(_json, "$.faultGameSplitDepth");
+        faultGameMaxDepth = 73;
+        faultGameSplitDepth = 30;
         faultGameClockExtension = 10_800;
         faultGameMaxClockDuration = 302_400;
         faultGameGenesisBlock = stdJson.readUint(_json, "$.faultGameGenesisBlock");
