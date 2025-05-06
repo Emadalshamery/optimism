@@ -131,10 +131,14 @@ func SetMessageExpiryTime(expiryTime uint64) setupOption {
 	}
 }
 
+// Global variable to store the activation offset for testing
+var testInteropActivationOffset uint64
+
 func SetInteropOffsetForAllL2s(offset uint64) setupOption {
 	return func(recipe *interopgen.InteropDevRecipe) {
 		for i, l2 := range recipe.L2s {
 			l2.InteropOffset = offset
+			testInteropActivationOffset = offset
 			recipe.L2s[i] = l2
 		}
 	}
