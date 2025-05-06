@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum-optimism/optimism/devnet-sdk/devstack/stack"
 	"github.com/ethereum-optimism/optimism/devnet-sdk/devstack/stack/match"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
+	"github.com/ethereum-optimism/optimism/op-service/retry"
 )
 
 // L2Network wraps a stack.L2Network interface for DSL operations
@@ -97,7 +98,10 @@ func (n *L2Network) AwaitActivation(t devtest.T, forkTimestamp *uint64) eth.Bloc
 	}
 
 	el := n.Escape().L2ELNode(match.FirstL2EL)
-	activationBlock, err := el.EthClient().BlockRefByNumber(t.Ctx(), activationBlockNum)
+	// After activation time it may take some time for the activation block to show up
+	activationBlock, err := retry.Do(t.Ctx(), 10, retry.Fixed(time.Second), func() (eth.BlockRef, error) {
+		return el.EthClient().BlockRefByNumber(t.Ctx(), activationBlockNum)
+	})
 	require.NoError(err)
 
 	t.Logger().Info("Activation block", "block", activationBlock)
