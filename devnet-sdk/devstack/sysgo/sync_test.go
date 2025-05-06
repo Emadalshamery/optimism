@@ -432,7 +432,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 		logger.Info("stop verifier")
 		control.L2CLNodeState(ids.L2A2CL, stack.Stop)
 
-		targetBlockNum2 := safeA2.Number * 2
+		targetBlockNum2 := safeA2.Number + 10
 		logger.Info("wait until supervisor reaches safe head", "target", targetBlockNum2)
 		var chainAView *eth.SupervisorChainSyncStatus
 		require.Eventually(func() bool {
