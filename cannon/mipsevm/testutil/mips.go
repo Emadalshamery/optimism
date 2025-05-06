@@ -117,7 +117,9 @@ func (m *MIPSEVM) Step(t *testing.T, stepWitness *mipsevm.StepWitness, step uint
 	require.Equal(t, stateHash, postHash, "logged state must be accurate")
 
 	m.env.StateDB.RevertToSnapshot(snap)
-	t.Logf("EVM step %d took %d gas, and returned stateHash %s", step, m.startingGas-leftOverGas, postHash)
+	if step%100_000 == 0 {
+		t.Logf("EVM step %d took %d gas, and returned stateHash %s", step, m.startingGas-leftOverGas, postHash)
+	}
 	return evmPost
 }
 
