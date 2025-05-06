@@ -669,7 +669,7 @@ contract MIPS64 is ISemver {
         }
 
         // Write random data into target memory location
-        uint64 randDataMask = (1 << (byteCount * 8)) - 1;
+        uint64 randDataMask = uint64((1 << (byteCount * 8)) - 1);
         // Shift left to align with index 0, then shift right to target correct index
         randDataMask <<= (arch.WORD_SIZE_BYTES - byteCount) * 8;
         randDataMask >>= targetByteIndex * 8;
