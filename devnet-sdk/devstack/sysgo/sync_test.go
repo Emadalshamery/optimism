@@ -486,7 +486,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 	}
 }
 
-// TestSupervisorAheadOfL2CL tests the below scenario:
+// TestL2CLAheadOfSupervisor tests the below scenario:
 // L2CL ahead of supervisor, aka supervisor needs to reset the L2CL, to reproduce old data. Currently supervisor has only managed mode implemented, so the supervisor will ask the L2CL to reset back.
 // To create this out-of-sync scenario, we follow the steps below:
 // 0. System setup
@@ -517,7 +517,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 // - Backup supervisor asks the verifiers (L2CL) to rewind(reset) back to match backup supervisor safe head view.
 // - After rewinding(reset), verifier will advance safe heads again because backup supervisor gives L1 data to the verifiers.
 // - Wait until verifiers advance safe head enough
-func TestSupervisorAheadOfL2CL(gt *testing.T) {
+func TestL2CLAheadOfSupervisor(gt *testing.T) {
 	var ids MultiSupervisorInteropSystemIDs
 	opt := MultiSupervisorInteropSystem(&ids)
 
