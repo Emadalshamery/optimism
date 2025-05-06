@@ -102,10 +102,7 @@ contract StandardValidatorTest is CommonTest {
     }
 
     /// @notice Tests that validation succeeds with valid inputs and mocked dependencies
-    function test_validate_allowFailureTrue_succeeds() public {
-        // Mock all necessary calls for validation
-        _mockValidationCalls();
-
+    function test_validate_allowFailureTrue_succeeds() public view {
         // Validate with allowFailure = true
         string memory errors = validate(true);
         assertEq(errors, "");
