@@ -609,25 +609,27 @@ func TestSupervisorAheadOfL2CL(gt *testing.T) {
 		// make sure supervisor boots
 		time.Sleep(5 * time.Second)
 
-		targetBlockNum4 := uint64(100)
+		targetBlockNum4 := uint64(40)
 		require.Eventually(func() bool {
-			blockA := queryBlockFromEL(elA, eth.Safe)
-			blockA2 := queryBlockFromEL(elA2, eth.Safe)
-			blockB := queryBlockFromEL(elB, eth.Safe)
-			blockB2 := queryBlockFromEL(elB2, eth.Safe)
-			logger.Info("chain A", "safe", blockA)
-			logger.Info("chain A2", "safe", blockA2)
-			logger.Info("chain B", "safe", blockB)
-			logger.Info("chain B2", "safe", blockB2)
+
+			syncA := querySyncStatusFromCL(clA)
+			syncA2 := querySyncStatusFromCL(clA2)
+			syncB := querySyncStatusFromCL(clB)
+			syncB2 := querySyncStatusFromCL(clB2)
+			logger.Info("chain A", "safe", syncA.SafeL2.Number, "unsafe", syncA.UnsafeL2.Number)
+			logger.Info("chain A2", "safe", syncA2.SafeL2.Number, "unsafe", syncA2.UnsafeL2.Number)
+			logger.Info("chain B", "safe", syncB.SafeL2.Number, "unsafe", syncB.UnsafeL2.Number)
+			logger.Info("chain B2", "safe", syncB2.SafeL2.Number, "unsafe", syncB2.UnsafeL2.Number)
+
 			chainAView := querySyncStatusFromSupervisor(supervisorBackup, elA2.ChainID())
 			chainBView := querySyncStatusFromSupervisor(supervisorBackup, elB2.ChainID())
 			logger.Info("backup supervisor view", "chainA", chainAView, "chainB", chainBView)
 			chainAView2 := querySyncStatusFromSupervisor(supervisor, elA2.ChainID())
 			chainBView2 := querySyncStatusFromSupervisor(supervisor, elB2.ChainID())
 			logger.Info("primary supervisor view", "chainA", chainAView2, "chainB", chainBView2)
-			check := blockA.Number > targetBlockNum4
-			check = check && blockB.Number > targetBlockNum4
+			check := syncA.SafeL2.Number > targetBlockNum4
+			check = check && syncB.SafeL2.Number > targetBlockNum4
 			return check
-		}, 300*time.Second, waitTime)
+		}, 60*time.Second, waitTime)
 	}
 }
