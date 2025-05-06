@@ -603,10 +603,23 @@ func TestSupervisorAheadOfL2CL(gt *testing.T) {
 			// return check
 		}, 60*time.Second, waitTime)
 
+		syncA := querySyncStatusFromCL(clA)
+		syncA2 := querySyncStatusFromCL(clA2)
+		syncB := querySyncStatusFromCL(clB)
+		syncB2 := querySyncStatusFromCL(clB2)
+		logger.Info("chain A", "sync", syncA)
+		logger.Info("chain A2", "sync", syncA2)
+		logger.Info("chain B", "sync", syncB)
+		logger.Info("chain B2", "sync", syncB2)
+
 		logger.Info("restart backup supervisor")
 		control.SupervisorState(ids.SupervisorBackup, stack.Start)
 		// make sure supervisor boots
 		time.Sleep(5 * time.Second)
+
+		// need this since supervisor lost connection with L2CLs after restart
+		WithManagedBySupervisor(ids.L2A2CL, ids.SupervisorBackup)(orch)
+		WithManagedBySupervisor(ids.L2B2CL, ids.SupervisorBackup)(orch)
 
 		targetBlockNum4 := uint64(40)
 		require.Eventually(func() bool {
