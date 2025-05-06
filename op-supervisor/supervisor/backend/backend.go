@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/locks"
 	"github.com/ethereum-optimism/optimism/op-service/sources"
 	"github.com/ethereum-optimism/optimism/op-supervisor/config"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/activation"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/cross"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db/sync"
@@ -46,6 +47,9 @@ type SupervisorBackend struct {
 
 	// depSet is the dependency set that the backend uses to know about the chains it is indexing
 	depSet depset.DependencySet
+
+	// activationCheckFn handles checking if interop if active for a given chain and timestamp
+	activationCheckFn activation.CheckFn
 
 	// chainDBs is the primary interface to the databases, including logs, derived-from information and L1 finalization
 	chainDBs *db.ChainsDB
@@ -148,7 +152,8 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 		sysCancel:             sysCancel,
 		sysContext:            sysCtx,
 
-		rewinder: rewinder.New(logger, chainsDBs, l1Accessor),
+		rewinder:          rewinder.New(logger, chainsDBs, l1Accessor),
+		activationCheckFn: activation.NewCheckFn(depSet, logger),
 
 		rpcVerificationWarnings: cfg.RPCVerificationWarnings,
 	}
@@ -156,7 +161,7 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 	eventSys.Register("rewinder", super.rewinder, event.DefaultRegisterOpts())
 
 	// create node controller
-	super.syncNodesController = syncnode.NewSyncNodesController(logger, depSet, eventSys, super)
+	super.syncNodesController = syncnode.NewSyncNodesController(logger, depSet, eventSys, super, super.activationCheckFn)
 	eventSys.Register("sync-controller", super.syncNodesController, event.DefaultRegisterOpts())
 
 	// create status tracker
@@ -176,23 +181,47 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.LocalUnsafeReceivedEvent:
+		if !su.activationCheckFn(x.ChainID, x.NewLocalUnsafe.Time) {
+			return true
+		}
+		if err := su.detectAndActivateInterop(
+			context.Background(),
+			x.ChainID,
+			x.NewLocalUnsafe); err != nil {
+			return false
+		}
 		su.emitter.Emit(superevents.ChainProcessEvent{
 			ChainID: x.ChainID,
 			Target:  x.NewLocalUnsafe.Number,
 		})
+
 	case superevents.LocalUnsafeUpdateEvent:
+		if !su.activationCheckFn(x.ChainID, x.NewLocalUnsafe.Time) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
 			ChainID: x.ChainID,
 		})
+
 	case superevents.CrossUnsafeUpdateEvent:
+		if !su.activationCheckFn(x.ChainID, x.NewCrossUnsafe.Timestamp) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
 			ChainID: x.ChainID,
 		})
+
 	case superevents.LocalSafeUpdateEvent:
+		if !su.activationCheckFn(x.ChainID, x.NewLocalSafe.Derived.Timestamp) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossSafeRequestEvent{
 			ChainID: x.ChainID,
 		})
 	case superevents.CrossSafeUpdateEvent:
+		if !su.activationCheckFn(x.ChainID, x.NewCrossSafe.Derived.Timestamp) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossSafeRequestEvent{
 			ChainID: x.ChainID,
 		})
@@ -766,4 +795,46 @@ func (su *SupervisorBackend) SetConfDepthL1(depth uint64) {
 // Rewind rolls back the state of the supervisor for the given chain.
 func (su *SupervisorBackend) Rewind(ctx context.Context, chain eth.ChainID, block eth.BlockID) error {
 	return su.chainDBs.Rewind(chain, block)
+}
+
+// detectAndActivateInterop checks if a chain is ready to be initialized for interop
+// and if so, fetches the anchor point and initializes the databases.
+func (su *SupervisorBackend) detectAndActivateInterop(
+	ctx context.Context,
+	chain eth.ChainID,
+	block eth.BlockRef,
+) error {
+	// If the chain is already initialized or interop isn't active, do nothing.
+	if su.chainDBs.IsInitialized(chain) {
+		return nil
+	}
+	if !su.activationCheckFn(chain, block.Time) {
+		return nil
+	}
+
+	// The chain is not initialized, and interop is active, so fetch the anchor point and initialize the chain.
+	anchor, err := getAnchorPoint(ctx, chain, &su.syncSources)
+	if err != nil {
+		return fmt.Errorf("failed to get anchor point at interop activation: %w", err)
+	}
+	su.chainDBs.InitializeWithAnchor(chain, anchor)
+	return nil
+}
+
+// getAnchorPoint gets the anchor point for a chain from the sync sources.
+func getAnchorPoint(ctx context.Context, chainID eth.ChainID, syncSources *locks.RWMap[eth.ChainID, syncnode.SyncSource]) (types.DerivedBlockRefPair, error) {
+	if syncSources == nil {
+		return types.DerivedBlockRefPair{}, fmt.Errorf("sync sources not initialized")
+	}
+
+	syncSrc, ok := syncSources.Get(chainID)
+	if !ok {
+		return types.DerivedBlockRefPair{}, fmt.Errorf("no sync source for chain %s", chainID)
+	}
+
+	if syncSrc == nil {
+		return types.DerivedBlockRefPair{}, fmt.Errorf("sync source is nil for chain %s", chainID)
+	}
+
+	return syncSrc.AnchorPoint(ctx)
 }

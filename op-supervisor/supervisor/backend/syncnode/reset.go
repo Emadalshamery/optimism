@@ -45,6 +45,24 @@ func (t *resetTracker) beginBisectionReset(z eth.BlockID) {
 	}
 	// initialize the reset tracker
 	t.init()
+
+	// if interop isn't active, use RequestReset
+	block, err := t.managed.Node.BlockRefByNumber(context.Background(), z.Number)
+	if err != nil {
+		t.managed.log.Error("failed to get block at end of range. cannot reset node", "err", err)
+		t.endReset()
+		return
+	}
+	if t.managed.activationCheckFn(t.managed.chainID, block.Time) {
+		t.managed.log.Info("interop is active, using RequestReset")
+		if err := t.managed.Node.RequestReset(context.Background()); err != nil {
+			t.managed.log.Error("failed to request reset", "err", err)
+			t.endReset()
+			return
+		}
+		return
+	}
+
 	t.z = z
 	// action tests may prefer to run the managed node totally synchronously
 	if t.synchronous {

@@ -9,17 +9,20 @@ import (
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-service/rpc"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/activation"
+
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/log"
 
+	gethevent "github.com/ethereum/go-ethereum/event"
+
 	"github.com/ethereum-optimism/optimism/op-node/rollup/event"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/superevents"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
-	gethevent "github.com/ethereum/go-ethereum/event"
 )
 
 type backend interface {
@@ -48,9 +51,10 @@ const (
 )
 
 type ManagedNode struct {
-	log     log.Logger
-	Node    SyncControl
-	chainID eth.ChainID
+	log               log.Logger
+	Node              SyncControl
+	chainID           eth.ChainID
+	activationCheckFn activation.CheckFn
 
 	backend backend
 
@@ -75,15 +79,16 @@ type ManagedNode struct {
 var _ event.AttachEmitter = (*ManagedNode)(nil)
 var _ event.Deriver = (*ManagedNode)(nil)
 
-func NewManagedNode(log log.Logger, id eth.ChainID, node SyncControl, backend backend, noSubscribe bool) *ManagedNode {
+func NewManagedNode(log log.Logger, id eth.ChainID, node SyncControl, backend backend, activationCheckFn activation.CheckFn, noSubscribe bool) *ManagedNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &ManagedNode{
-		log:     log.New("chain", id),
-		backend: backend,
-		Node:    node,
-		chainID: id,
-		ctx:     ctx,
-		cancel:  cancel,
+		log:               log.New("chain", id),
+		backend:           backend,
+		Node:              node,
+		chainID:           id,
+		activationCheckFn: activationCheckFn,
+		ctx:               ctx,
+		cancel:            cancel,
 	}
 	m.resetTracker = &resetTracker{
 		managed:     m,
@@ -303,8 +308,11 @@ func (m *ManagedNode) OnResetReady(lUnsafe, xUnsafe, lSafe, xSafe, finalized eth
 		"finalized", finalized)
 	ctx, cancel := context.WithTimeout(m.ctx, nodeTimeout)
 	defer cancel()
+
 	// whether the reset passes or fails, this ongoing reset is done
 	m.resetTracker.endReset()
+
+	// Execute the full reset using the traditional method
 	if err := m.Node.Reset(ctx,
 		lUnsafe, xUnsafe,
 		lSafe, xSafe,

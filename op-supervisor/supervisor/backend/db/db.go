@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/locks"
 	"github.com/ethereum-optimism/optimism/op-supervisor/metrics"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/activation"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db/fromda"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db/logs"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
@@ -111,6 +112,10 @@ type ChainsDB struct {
 	// uninitialized chains won't have values in the map
 	initialized locks.RWMap[eth.ChainID, struct{}]
 
+	// anchorBlocks: stores the anchor blocks used for initializing each chain
+	// chains with anchor blocks are in interop mode, those without are pre-interop
+	anchorBlocks locks.RWMap[eth.ChainID, types.DerivedBlockRefPair]
+
 	// cross-unsafe: how far we have processed the unsafe data.
 	// If present but set to a zeroed value the cross-unsafe will fallback to cross-safe.
 	crossUnsafe locks.RWMap[eth.ChainID, *locks.RWValue[types.BlockSeal]]
@@ -132,6 +137,8 @@ type ChainsDB struct {
 	// what is missing, and to provide it to DB users.
 	depSet depset.DependencySet
 
+	activationCheckFn activation.CheckFn
+
 	logger log.Logger
 
 	// emitter used to signal when the DB changes, for other modules to react to
@@ -148,9 +155,10 @@ func NewChainsDB(l log.Logger, depSet depset.DependencySet, m Metrics) *ChainsDB
 	}
 
 	return &ChainsDB{
-		logger: l,
-		depSet: depSet,
-		m:      m,
+		logger:            l,
+		depSet:            depSet,
+		m:                 m,
+		activationCheckFn: activation.NewCheckFn(depSet, l),
 	}
 }
 
@@ -161,14 +169,21 @@ func (db *ChainsDB) AttachEmitter(em event.Emitter) {
 func (db *ChainsDB) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.AnchorEvent:
-		db.logger.Info("Received chain anchor information",
-			"chain", x.ChainID, "derived", x.Anchor.Derived, "source", x.Anchor.Source)
+		if !db.activationCheckFn(x.ChainID, x.Anchor.Derived.Time) {
+			return true
+		}
 		db.initFromAnchor(x.ChainID, x.Anchor)
 	case superevents.LocalDerivedEvent:
+		if !db.activationCheckFn(x.ChainID, x.Derived.Source.Time) {
+			return true
+		}
 		db.UpdateLocalSafe(x.ChainID, x.Derived.Source, x.Derived.Derived, x.NodeID)
 	case superevents.FinalizedL1RequestEvent:
 		db.onFinalizedL1(x.FinalizedL1)
 	case superevents.ReplaceBlockEvent:
+		if !db.activationCheckFn(x.ChainID, x.Replacement.Replacement.Time) {
+			return true
+		}
 		db.onReplaceBlock(x.ChainID, x.Replacement.Replacement, x.Replacement.Invalidated)
 	default:
 		return false
