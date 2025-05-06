@@ -166,10 +166,13 @@ func (db *ChainsDB) AttachEmitter(em event.Emitter) {
 	db.emitter = em
 }
 
+var hasInitialized = false
+
 func (db *ChainsDB) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.AnchorEvent:
-		if !db.activationCheckFn(x.ChainID, x.Anchor.Derived.Time) {
+		if hasInitialized && !db.activationCheckFn(x.ChainID, x.Anchor.Derived.Time) {
+			hasInitialized = true
 			return true
 		}
 		db.initFromAnchor(x.ChainID, x.Anchor)
