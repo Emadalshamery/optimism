@@ -91,10 +91,10 @@ func TestCanyonTimeOffset(t *testing.T) {
 }
 
 func TestForksCantActivateAtSamePostGenesisBlock(t *testing.T) {
-	postGenesisOffset := hexutil.Uint64(1500)
+	postGenesisOffset := uint64(1500)
 	config := &UpgradeScheduleDeployConfig{}
 	for _, fork := range config.forks() {
-		*config.forkTimeOffsetPtr(rollup.ForkName(fork.Name)) = &postGenesisOffset
+		config.SetForkTimeOffset(rollup.ForkName(fork.Name), &postGenesisOffset)
 	}
 	err := config.Check(testlog.Logger(t, log.LevelDebug))
 	require.Error(t, err)
