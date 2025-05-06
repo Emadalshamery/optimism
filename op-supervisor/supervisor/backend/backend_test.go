@@ -501,3 +501,103 @@ func TestAsyncVerifyAccessWithRPC(t *testing.T) {
 	// No error + match         => 0 failures
 	runScenario("NoErr_match", sealA, nil, idA)
 }
+
+func TestDetectAndActivateInterop(t *testing.T) {
+	logger := testlog.Logger(t, log.LvlInfo)
+	m := metrics.NoopMetrics
+	dataDir := t.TempDir()
+	chain := eth.ChainIDFromUInt64(900)
+
+	// Create a dependency set that allows activation at timestamp 2000
+	depSet, err := depset.NewStaticConfigDependencySet(
+		map[eth.ChainID]*depset.StaticConfigDependency{
+			chain: {
+				ChainIndex:     900,
+				ActivationTime: 2000,
+				HistoryMinTime: 2000,
+			},
+		})
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		Version:               "test",
+		LogConfig:             oplog.CLIConfig{},
+		MetricsConfig:         opmetrics.CLIConfig{},
+		PprofConfig:           oppprof.CLIConfig{},
+		RPC:                   oprpc.CLIConfig{},
+		DependencySetSource:   depSet,
+		SynchronousProcessors: true,
+		MockRun:               false,
+		SyncSources:           &syncnode.CLISyncNodes{},
+		Datadir:               dataDir,
+	}
+
+	ex := event.NewGlobalSynchronous(context.Background())
+	b, err := NewSupervisorBackend(context.Background(), logger, m, cfg, ex)
+	require.NoError(t, err)
+
+	// Set up a mock sync source that returns a valid anchor point
+	anchorPair := types.DerivedBlockRefPair{
+		Source: eth.BlockRef{
+			Hash:   common.HexToHash("0x1234"),
+			Number: 1,
+			Time:   100,
+		},
+		Derived: eth.BlockRef{
+			Hash:   common.HexToHash("0x5678"),
+			Number: 10,
+			Time:   1000,
+		},
+	}
+	mockSrc := &mockSyncSource{
+		anchorPoint: anchorPair,
+	}
+	b.syncSources.Set(chain, mockSrc)
+
+	t.Run("Not initialized and not active", func(t *testing.T) {
+		block := eth.BlockRef{
+			Hash:   common.HexToHash("0xabcd"),
+			Number: 100,
+			Time:   1000, // Before activation time
+		}
+		require.False(t, b.chainDBs.IsInitialized(chain))
+		err := b.detectAndActivateInterop(context.Background(), chain, block)
+		require.NoError(t, err)
+		require.False(t, b.chainDBs.IsInitialized(chain))
+	})
+
+	t.Run("Not initialized and not active (right at time)", func(t *testing.T) {
+		block := eth.BlockRef{
+			Hash:   common.HexToHash("0xabcd"),
+			Number: 100,
+			Time:   2000, // At activation time
+		}
+		require.False(t, b.chainDBs.IsInitialized(chain))
+		err := b.detectAndActivateInterop(context.Background(), chain, block)
+		require.NoError(t, err)
+		require.False(t, b.chainDBs.IsInitialized(chain))
+	})
+
+	t.Run("Not initialized but active", func(t *testing.T) {
+		block := eth.BlockRef{
+			Hash:   common.HexToHash("0xabcd"),
+			Number: 100,
+			Time:   2001, // After activation time
+		}
+		require.False(t, b.chainDBs.IsInitialized(chain))
+		err := b.detectAndActivateInterop(context.Background(), chain, block)
+		require.NoError(t, err)
+		require.True(t, b.chainDBs.IsInitialized(chain))
+	})
+
+	t.Run("Already initialized", func(t *testing.T) {
+		block := eth.BlockRef{
+			Hash:   common.HexToHash("0xabcd"),
+			Number: 100,
+			Time:   2000,
+		}
+		err := b.detectAndActivateInterop(context.Background(), chain, block)
+		require.NoError(t, err)
+		require.True(t, b.chainDBs.IsInitialized(chain))
+	})
+}
