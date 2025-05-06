@@ -263,17 +263,6 @@ func (su *SupervisorBackend) handleActivationForBlock(chainID eth.ChainID, block
 	return nil
 }
 
-func (su *SupervisorBackend) checkTimestampedEvent(chainID eth.ChainID, timestamp uint64, eventType string) bool {
-	if !su.isEventActive(chainID, timestamp) {
-		su.logger.Debug("Filtering pre-interop event",
-			"event_type", eventType,
-			"chain", chainID,
-			"timestamp", timestamp)
-		return false
-	}
-	return true
-}
-
 func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.LocalUnsafeReceivedEvent:

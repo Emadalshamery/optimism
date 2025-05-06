@@ -128,10 +128,10 @@ func TestActivationMessagePassing(gt *testing.T) {
 	depSet := is.DepSet
 	logger := testlog.Logger(t, log.LevelInfo)
 	now := uint64(time.Now().Unix())
-	
+
 	// Log the current time and expected activation time
 	expectedActivationTime := now + activationOffset
-	logger.Info("Current and activation time info", 
+	logger.Info("Current and activation time info",
 		"current_time", now,
 		"activation_offset", activationOffset,
 		"expected_activation", expectedActivationTime)
@@ -142,8 +142,8 @@ func TestActivationMessagePassing(gt *testing.T) {
 	require.NoError(t, err, "Should be able to check activation state")
 	canInitiateB, err := depSet.CanInitiateAt(chainB.ChainID, now)
 	require.NoError(t, err, "Should be able to check activation state")
-	logger.Info("Initial activation state check", 
-		"chain_a_active", canInitiateA, 
+	logger.Info("Initial activation state check",
+		"chain_a_active", canInitiateA,
 		"chain_b_active", canInitiateB,
 		"current_time", now)
 
@@ -189,7 +189,7 @@ func TestActivationMessagePassing(gt *testing.T) {
 	// Check status again - these blocks shouldn't be cross-unsafe yet
 	statusA = chainA.Sequencer.SyncStatus()
 	statusB = chainB.Sequencer.SyncStatus()
-	logger.Info("Pre-activation blocks created", 
+	logger.Info("Pre-activation blocks created",
 		"unsafe_A", statusA.UnsafeL2.Number,
 		"cross_unsafe_A", statusA.CrossUnsafeL2.Number,
 		"unsafe_B", statusB.UnsafeL2.Number,
@@ -208,7 +208,7 @@ func TestActivationMessagePassing(gt *testing.T) {
 
 	// Wait for activation time to pass
 	// We'll wait an extra 2 seconds beyond the expected activation time to be safe
-	waitTime := time.Unix(int64(expectedActivationTime), 0).Add(2 * time.Second).Sub(time.Now())
+	waitTime := time.Until(time.Unix(int64(expectedActivationTime), 0).Add(2 * time.Second))
 	if waitTime > 0 {
 		logger.Info("Waiting for activation time to pass", "wait_seconds", waitTime.Seconds())
 		<-time.After(waitTime)
@@ -244,9 +244,9 @@ func TestActivationMessagePassing(gt *testing.T) {
 	logger.Info("Post-activation blocks created",
 		"unsafe_A", statusA.UnsafeL2.Number,
 		"cross_unsafe_A", statusA.CrossUnsafeL2.Number,
-		"unsafe_B", statusB.UnsafeL2.Number, 
+		"unsafe_B", statusB.UnsafeL2.Number,
 		"cross_unsafe_B", statusB.CrossUnsafeL2.Number)
-	
+
 	// We should have at least some cross-unsafe blocks now
 	require.Greater(t, statusA.CrossUnsafeL2.Number, uint64(0), "Chain A should have cross-unsafe blocks after activation")
 	require.Greater(t, statusB.CrossUnsafeL2.Number, uint64(0), "Chain B should have cross-unsafe blocks after activation")
@@ -259,11 +259,11 @@ func TestActivationMessagePassing(gt *testing.T) {
 	// Mine an L1 block with batch data and signal to nodes
 	actors.L1Miner.ActL1StartBlock(12)(t)
 	actors.L1Miner.ActL1EndBlock(t)
-	
+
 	// Make the new block safe and finalized
 	actors.L1Miner.ActL1SafeNext(t)
 	actors.L1Miner.ActL1FinalizeNext(t)
-	
+
 	// Signal latest and finalized L1 to supervisor
 	actors.Supervisor.SignalLatestL1(t)
 	actors.Supervisor.SignalFinalizedL1(t)
