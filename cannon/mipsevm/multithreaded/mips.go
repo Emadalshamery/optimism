@@ -234,9 +234,9 @@ func (m *InstrumentedState) syscallGetRandom(a0, a1 uint64) (v0, v1 uint64) {
 	}
 
 	// Write random data into target memory location
-	randDataMask := ^Word(0)
-	untouchedBitCount := (arch.WordSizeBytes - byteCount) * 8
-	randDataMask = randDataMask >> untouchedBitCount << untouchedBitCount
+	var randDataMask arch.Word = (1 << (byteCount * 8)) - 1
+	// Shift left to align with index 0, then shift right to target correct index
+	randDataMask <<= (arch.WordSizeBytes - byteCount) * 8
 	randDataMask >>= targetByteIndex * 8
 	newMemVal := (memVal & ^randDataMask) | (randomWord & randDataMask)
 	m.state.Memory.SetWord(effAddr, newMemVal)
