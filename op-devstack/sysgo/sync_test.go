@@ -504,7 +504,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 // 3. Connect verifiers (L2CL) to primary supervisor.
 // - Primary supervisor has safe heads synced with sequencers.
 // - After connection, verifiers will sync with primary supervisor, matching supervisor safe head view.
-// - Stopped backup supervisor and verifiers becomes out-of-sync with safe heads.
+// - Backup supervisor and verifiers becomes out-of-sync with safe heads.
 // - Every L2CLs advance safe head.
 // 4. Stop primary supervisor.
 // - Every L2CL safe heads will stop advancing.
