@@ -560,6 +560,12 @@ contract MIPS64 is ISemver {
             } else if (syscall_no == sys.SYS_GETPID) {
                 v0 = 0;
                 v1 = 0;
+            } else if (syscall_no == sys.SYS_GETRANDOM) {
+                if (st.featuresForVersion(STATE_VERSION).supportWorkingSysGetRandom) {
+                    (v0, v1, state.memRoot) = syscallGetRandom(state, a0, a1);
+                } else {
+                    // ignored
+                }
             } else if (syscall_no == sys.SYS_MUNMAP) {
                 // ignored
             } else if (syscall_no == sys.SYS_GETAFFINITY) {
@@ -598,8 +604,6 @@ contract MIPS64 is ISemver {
                 // ignored
             } else if (syscall_no == sys.SYS_EPOLLPWAIT) {
                 // ignored
-            } else if (syscall_no == sys.SYS_GETRANDOM) {
-                // ignored
             } else if (syscall_no == sys.SYS_UNAME) {
                 // ignored
             } else if (syscall_no == sys.SYS_GETUID) {
@@ -637,6 +641,43 @@ contract MIPS64 is ISemver {
             updateCurrentThreadRoot();
             out_ = outputState();
         }
+    }
+
+    function syscallGetRandom(
+        State memory _state,
+        uint64 _a0,
+        uint64 _a1
+    )
+        internal
+        pure
+        returns (uint64 v0_, uint64 v1_, bytes32 memRoot_)
+    {
+        uint64 effAddr = _a0 & arch.ADDRESS_MASK;
+        uint256 memProofOffset = MIPS64Memory.memoryProofOffset(MEM_PROOF_OFFSET, 1);
+        uint64 memVal = MIPS64Memory.readMem(_state.memRoot, effAddr, memProofOffset);
+
+        // Generate some "random" data by hashing the current step
+        bytes32 randomData = keccak256(abi.encodePacked(_state.step));
+        uint64 randomWord = uint64(bytes8(randomData));
+
+        // Calculate number of bytes to write
+        uint64 targetByteIndex = _a0 - effAddr;
+        uint64 maxBytes = arch.WORD_SIZE_BYTES - targetByteIndex;
+        uint64 byteCount = _a1;
+        if (maxBytes < byteCount) {
+            byteCount = maxBytes;
+        }
+
+        // Write random data into target memory location
+        uint64 randDataMask = ~uint64(0);
+        uint64 untouchedBitCount = (arch.WORD_SIZE_BYTES - byteCount) * 8;
+        randDataMask = randDataMask >> untouchedBitCount << untouchedBitCount;
+        randDataMask >>= targetByteIndex * 8;
+        uint64 newMemVal = (memVal & ~randDataMask) | (randomWord & randDataMask);
+        memRoot_ = MIPS64Memory.writeMem(effAddr, memProofOffset, newMemVal);
+
+        v0_ = byteCount;
+        v1_ = 0;
     }
 
     function syscallYield(State memory _state, ThreadState memory _thread) internal returns (bytes32 out_) {

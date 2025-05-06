@@ -2,10 +2,12 @@ package multithreaded
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm"
@@ -158,6 +160,12 @@ func (m *InstrumentedState) handleSyscall() error {
 	case arch.SysGetpid:
 		v0 = 0
 		v1 = 0
+	case arch.SysGetRandom:
+		if m.features.SupportWorkingSysGetRandom {
+			v0, v1 = m.syscallGetRandom(a0, a1)
+		} else {
+			// noop
+		}
 	case arch.SysMunmap:
 	case arch.SysGetAffinity:
 	case arch.SysMadvise:
@@ -177,7 +185,6 @@ func (m *InstrumentedState) handleSyscall() error {
 	case arch.SysPipe2:
 	case arch.SysEpollCtl:
 	case arch.SysEpollPwait:
-	case arch.SysGetRandom:
 	case arch.SysUname:
 	case arch.SysGetuid:
 	case arch.SysGetgid:
@@ -204,6 +211,40 @@ func (m *InstrumentedState) handleSyscall() error {
 
 	exec.HandleSyscallUpdates(&thread.Cpu, &thread.Registers, v0, v1)
 	return nil
+}
+
+func (m *InstrumentedState) syscallGetRandom(a0, a1 uint64) (v0, v1 uint64) {
+	// Get existing memory value at target address
+	effAddr := a0 & arch.AddressMask
+	m.memoryTracker.TrackMemAccess(effAddr)
+	memVal := m.state.Memory.GetWord(effAddr)
+
+	// Generate some "random" data by hashing the current step
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, m.state.Step)
+	randomData := crypto.Keccak256Hash(data)
+	randomWord := arch.ByteOrderWord.Word(randomData[0:arch.WordSizeBytes])
+
+	// Calculate number of bytes to write
+	targetByteIndex := a0 - effAddr
+	maxBytes := arch.WordSizeBytes - targetByteIndex
+	byteCount := a1
+	if maxBytes < byteCount {
+		byteCount = maxBytes
+	}
+
+	// Write random data into target memory location
+	randDataMask := ^Word(0)
+	untouchedBitCount := (arch.WordSizeBytes - byteCount) * 8
+	randDataMask = randDataMask >> untouchedBitCount << untouchedBitCount
+	randDataMask >>= targetByteIndex * 8
+	newMemVal := (memVal & ^randDataMask) | (randomWord & randDataMask)
+	m.state.Memory.SetWord(effAddr, newMemVal)
+
+	v0 = byteCount
+	v1 = 0
+
+	return v0, v1
 }
 
 func (m *InstrumentedState) handleUnrecognizedSyscall(syscallNum Word) {
