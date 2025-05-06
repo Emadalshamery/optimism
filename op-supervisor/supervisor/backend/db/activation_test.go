@@ -257,12 +257,3 @@ func TestActivationAnchorBlockTracking(t *testing.T) {
 	require.False(t, hasAnchor)
 	require.False(t, chainsDB.IsInInteropMode(preInteropChainID))
 }
-
-type mockDerivationDBWithFirstEntry struct {
-	mockDerivationDB
-	FirstEntry types.DerivedBlockSealPair
-}
-
-func (m *mockDerivationDBWithFirstEntry) First() (pair types.DerivedBlockSealPair, err error) {
-	return m.FirstEntry, nil
-}

@@ -42,10 +42,6 @@ type backend interface {
 	L1BlockRefByNumber(ctx context.Context, number uint64) (eth.L1BlockRef, error)
 }
 
-type activationManager interface {
-	IsActiveForChain(chain eth.ChainID, timestamp uint64) bool
-}
-
 const (
 	internalTimeout            = time.Second * 30
 	nodeTimeout                = time.Second * 10

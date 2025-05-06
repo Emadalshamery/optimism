@@ -90,13 +90,12 @@ func TestActivationMessagePassing(gt *testing.T) {
 
 	// Get the activation time for each chain
 	depSet := is.DepSet
-	now := uint64(time.Now().Unix())
 
 	// Verify the activation time has not passed yet
-	now = uint64(time.Now().Unix())
-	canInitiateA, err := depSet.CanInitiateAt(chainA.ChainID, now)
+	now := uint64(time.Now().Unix())
+	_, err := depSet.CanInitiateAt(chainA.ChainID, now)
 	require.NoError(t, err, "Should be able to check activation state")
-	canInitiateB, err := depSet.CanInitiateAt(chainB.ChainID, now)
+	_, err = depSet.CanInitiateAt(chainB.ChainID, now)
 	require.NoError(t, err, "Should be able to check activation state")
 
 	// First sync the supervisor to establish baseline
@@ -132,8 +131,8 @@ func TestActivationMessagePassing(gt *testing.T) {
 	statusA := chainA.Sequencer.SyncStatus()
 	statusB := chainB.Sequencer.SyncStatus()
 
-	canInitiateA, err = depSet.CanInitiateAt(chainA.ChainID, now)
-	canInitiateB, err = depSet.CanInitiateAt(chainB.ChainID, now)
+	// canInitiateA, err = depSet.CanInitiateAt(chainA.ChainID, now)
+	// canInitiateB, err = depSet.CanInitiateAt(chainB.ChainID, now)
 
 	// Make the activation time to pass
 	chainA.Sequencer.ActL2EmptyBlock(t)
@@ -141,9 +140,9 @@ func TestActivationMessagePassing(gt *testing.T) {
 
 	// Verify the activation time has passed
 	now = uint64(time.Now().Unix())
-	canInitiateA, err = depSet.CanInitiateAt(chainA.ChainID, now)
+	canInitiateA, err := depSet.CanInitiateAt(chainA.ChainID, now)
 	require.NoError(t, err, "Should be able to check activation state")
-	canInitiateB, err = depSet.CanInitiateAt(chainB.ChainID, now)
+	canInitiateB, err := depSet.CanInitiateAt(chainB.ChainID, now)
 	require.NoError(t, err, "Should be able to check activation state")
 	require.True(t, canInitiateA, "Chain A should be active after waiting")
 	require.True(t, canInitiateB, "Chain B should be active after waiting")
