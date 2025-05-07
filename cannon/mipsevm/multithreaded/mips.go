@@ -2,12 +2,10 @@ package multithreaded
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum-optimism/optimism/cannon/mipsevm"
@@ -218,11 +216,8 @@ func (m *InstrumentedState) syscallGetRandom(a0, a1 uint64) (v0, v1 uint64) {
 	m.memoryTracker.TrackMemAccess(effAddr)
 	memVal := m.state.Memory.GetWord(effAddr)
 
-	// Generate some "random" data by hashing the current step
-	stepBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(stepBytes, m.state.Step)
-	randomData := crypto.Keccak256Hash(stepBytes)
-	randomWord := arch.ByteOrderWord.Word(randomData[0:arch.WordSizeBytes])
+	// Generate some pseudorandom data
+	randomWord := m.splitmix64(m.state.Step)
 
 	// Calculate number of bytes to write
 	targetByteIndex := a0 - effAddr
@@ -244,6 +239,15 @@ func (m *InstrumentedState) syscallGetRandom(a0, a1 uint64) (v0, v1 uint64) {
 	v1 = 0
 
 	return v0, v1
+}
+
+// splitmix64 generates a pseudorandom 64-bit value.
+// See canonical implementation: https://prng.di.unimi.it/splitmix64.c
+func (m *InstrumentedState) splitmix64(seed uint64) uint64 {
+	z := seed + 0x9e3779b97f4a7c15
+	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
+	z = (z ^ (z >> 27)) * 0x94d049bb133111eb
+	return z ^ (z >> 31)
 }
 
 func (m *InstrumentedState) handleUnrecognizedSyscall(syscallNum Word) {

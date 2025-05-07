@@ -655,9 +655,8 @@ contract MIPS64 is ISemver {
         uint256 memProofOffset = MIPS64Memory.memoryProofOffset(MEM_PROOF_OFFSET, 1);
         uint64 memVal = MIPS64Memory.readMem(_state.memRoot, effAddr, memProofOffset);
 
-        // Generate some "random" data by hashing the current step
-        bytes32 randomData = keccak256(abi.encodePacked(_state.step));
-        uint64 randomWord = uint64(bytes8(randomData));
+        // Generate some pseudorandom data
+        uint64 randomWord = splitmix64(_state.step);
 
         // Calculate number of bytes to write
         uint64 targetByteIndex = _a0 - effAddr;
@@ -677,6 +676,17 @@ contract MIPS64 is ISemver {
 
         v0_ = byteCount;
         v1_ = 0;
+    }
+
+    // splitmix64 generates a pseudorandom 64-bit value.
+    // See canonical implementation: https://prng.di.unimi.it/splitmix64.c
+    function splitmix64(uint64 seed) internal pure returns (uint64) {
+        unchecked {
+            uint64 z = seed + 0x9e3779b97f4a7c15;
+            z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+            z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+            return z ^ (z >> 31);
+        }
     }
 
     function syscallYield(State memory _state, ThreadState memory _thread) internal returns (bytes32 out_) {

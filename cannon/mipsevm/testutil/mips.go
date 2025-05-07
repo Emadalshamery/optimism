@@ -104,7 +104,7 @@ func (m *MIPSEVM) Step(t *testing.T, stepWitness *mipsevm.StepWitness, step uint
 	input := EncodeStepInput(t, stepWitness, mipsevm.LocalContext{}, m.artifacts.MIPS)
 	m.lastStepInput = input
 	ret, leftOverGas, err := m.env.Call(m.sender, m.addrs.MIPS, input, m.startingGas, common.U2560)
-	require.NoError(t, err, "evm should not fail")
+	require.NoError(t, err, "evm should not fail, but got %v with return value 0x%x", err, ret)
 	require.Len(t, ret, 32, "expecting 32-byte state hash")
 	// remember state hash, to check it against state
 	postHash := common.Hash(*(*[32]byte)(ret))
