@@ -54,10 +54,7 @@ func (t *resetTracker) beginBisectionReset(z eth.BlockID) {
 		return
 	}
 
-	isActive := false
-	if t.managed.activationCheckFn != nil {
-		isActive = t.managed.activationCheckFn(t.managed.chainID, block.Time)
-	}
+	isActive := t.managed.activationCheck.Check(t.managed.chainID, block.Time)
 
 	if isActive {
 		// If interop is active, use RequestReset

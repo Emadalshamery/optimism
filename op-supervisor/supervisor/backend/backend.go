@@ -48,8 +48,8 @@ type SupervisorBackend struct {
 	// depSet is the dependency set that the backend uses to know about the chains it is indexing
 	depSet depset.DependencySet
 
-	// activationCheckFn handles checking if interop if active for a given chain and timestamp
-	activationCheckFn activation.CheckFn
+	// activationCheck handles checking if interop if active for a given chain and timestamp
+	activationCheck *activation.Check
 
 	// chainDBs is the primary interface to the databases, including logs, derived-from information and L1 finalization
 	chainDBs *db.ChainsDB
@@ -152,8 +152,8 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 		sysCancel:             sysCancel,
 		sysContext:            sysCtx,
 
-		rewinder:          rewinder.New(logger, chainsDBs, l1Accessor),
-		activationCheckFn: activation.NewCheckFn(depSet, logger),
+		rewinder:       rewinder.New(logger, chainsDBs, l1Accessor),
+		activationCheck: activation.NewCheck(depSet, logger),
 
 		rpcVerificationWarnings: cfg.RPCVerificationWarnings,
 	}
@@ -161,7 +161,7 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 	eventSys.Register("rewinder", super.rewinder, event.DefaultRegisterOpts())
 
 	// create node controller
-	super.syncNodesController = syncnode.NewSyncNodesController(logger, depSet, eventSys, super, super.activationCheckFn)
+	super.syncNodesController = syncnode.NewSyncNodesController(logger, depSet, eventSys, super, super.activationCheck)
 	eventSys.Register("sync-controller", super.syncNodesController, event.DefaultRegisterOpts())
 
 	// create status tracker
@@ -181,7 +181,7 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.LocalUnsafeReceivedEvent:
-		if !su.activationCheckFn(x.ChainID, x.NewLocalUnsafe.Time) {
+		if !su.activationCheck.Check(x.ChainID, x.NewLocalUnsafe.Time) {
 			return true
 		}
 		if err := su.detectAndActivateInterop(
@@ -196,7 +196,7 @@ func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 		})
 
 	case superevents.LocalUnsafeUpdateEvent:
-		if !su.activationCheckFn(x.ChainID, x.NewLocalUnsafe.Time) {
+		if !su.activationCheck.Check(x.ChainID, x.NewLocalUnsafe.Time) {
 			return true
 		}
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
@@ -204,7 +204,7 @@ func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 		})
 
 	case superevents.CrossUnsafeUpdateEvent:
-		if !su.activationCheckFn(x.ChainID, x.NewCrossUnsafe.Timestamp) {
+		if !su.activationCheck.Check(x.ChainID, x.NewCrossUnsafe.Timestamp) {
 			return true
 		}
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
@@ -212,14 +212,14 @@ func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 		})
 
 	case superevents.LocalSafeUpdateEvent:
-		if !su.activationCheckFn(x.ChainID, x.NewLocalSafe.Derived.Timestamp) {
+		if !su.activationCheck.Check(x.ChainID, x.NewLocalSafe.Derived.Timestamp) {
 			return true
 		}
 		su.emitter.Emit(superevents.UpdateCrossSafeRequestEvent{
 			ChainID: x.ChainID,
 		})
 	case superevents.CrossSafeUpdateEvent:
-		if !su.activationCheckFn(x.ChainID, x.NewCrossSafe.Derived.Timestamp) {
+		if !su.activationCheck.Check(x.ChainID, x.NewCrossSafe.Derived.Timestamp) {
 			return true
 		}
 		su.emitter.Emit(superevents.UpdateCrossSafeRequestEvent{
@@ -819,7 +819,7 @@ func (su *SupervisorBackend) detectAndActivateInterop(
 	if su.chainDBs.IsInitialized(chain) {
 		return nil
 	}
-	if !su.activationCheckFn(chain, block.Time) {
+	if !su.activationCheck.Check(chain, block.Time) {
 		return nil
 	}
 

@@ -57,7 +57,7 @@ type ManagedNode struct {
 	log               log.Logger
 	Node              SyncControl
 	chainID           eth.ChainID
-	activationCheckFn activation.CheckFn
+	activationCheck *activation.Check
 
 	backend backend
 
@@ -82,14 +82,14 @@ type ManagedNode struct {
 var _ event.AttachEmitter = (*ManagedNode)(nil)
 var _ event.Deriver = (*ManagedNode)(nil)
 
-func NewManagedNode(log log.Logger, id eth.ChainID, node SyncControl, backend backend, activationCheckFn activation.CheckFn, noSubscribe bool) *ManagedNode {
+func NewManagedNode(log log.Logger, id eth.ChainID, node SyncControl, backend backend, activationCheck *activation.Check, noSubscribe bool) *ManagedNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &ManagedNode{
 		log:               log.New("chain", id),
 		backend:           backend,
 		Node:              node,
 		chainID:           id,
-		activationCheckFn: activationCheckFn,
+		activationCheck: activationCheck,
 		ctx:               ctx,
 		cancel:            cancel,
 	}
@@ -216,7 +216,7 @@ func (m *ManagedNode) WatchSubscriptionErrors() {
 
 func (m *ManagedNode) Start() {
 	// Initialize database in pre-activation mode if needed
-	if m.activationCheckFn != nil && !m.activationCheckFn(m.chainID, uint64(time.Now().Unix())) {
+	if !m.activationCheck.Check(m.chainID, uint64(time.Now().Unix())) {
 		m.log.Info("Starting in pre-activation mode, initializing database if needed")
 
 		// Get the unsafe head from the node

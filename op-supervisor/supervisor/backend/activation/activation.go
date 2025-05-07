@@ -7,22 +7,32 @@ import (
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
 )
 
-// CheckFn is a function that checks if interop is active for a given chain and timestamp.
-type CheckFn func(chain eth.ChainID, timestamp uint64) bool
+// Check handles activation checks against a given dependency set.
+type Check struct {
+	depSet depset.DependencySet
+	logger log.Logger
+}
 
-func NewCheckFn(depSet depset.DependencySet, logger log.Logger) CheckFn {
-	return func(chain eth.ChainID, timestamp uint64) bool {
-		// If we don't have a dependency set then interop is never active
-		if depSet == nil {
-			return false
-		}
-
-		// Interop is active if the chain can initiate at the given timestamp
-		canInitiate, err := depSet.CanInitiateAt(chain, timestamp)
-		if err != nil {
-			logger.Debug("Error checking interop activation", "chain", chain, "timestamp", timestamp, "err", err)
-			return false
-		}
-		return canInitiate
+// NewCheck creates a new Check object with the provided dependency set.
+func NewCheck(depSet depset.DependencySet, logger log.Logger) *Check {
+	return &Check{
+		depSet: depSet,
+		logger: logger,
 	}
+}
+
+// Check checks if interop is active for a given chain and timestamp.
+func (c *Check) Check(chain eth.ChainID, timestamp uint64) bool {
+	// If we have a nil pointer or no dependency set then interop is never active
+	if c == nil || c.depSet == nil {
+		return false
+	}
+
+	// Interop is active if the chain can initiate at the given timestamp
+	canInitiate, err := c.depSet.CanInitiateAt(chain, timestamp)
+	if err != nil {
+		c.logger.Debug("Error checking interop activation", "chain", chain, "timestamp", timestamp, "err", err)
+		return false
+	}
+	return canInitiate
 }

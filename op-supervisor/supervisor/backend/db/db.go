@@ -137,7 +137,7 @@ type ChainsDB struct {
 	// what is missing, and to provide it to DB users.
 	depSet depset.DependencySet
 
-	activationCheckFn activation.CheckFn
+	activationCheck *activation.Check
 
 	logger log.Logger
 
@@ -158,7 +158,7 @@ func NewChainsDB(l log.Logger, depSet depset.DependencySet, m Metrics) *ChainsDB
 		logger:            l,
 		depSet:            depSet,
 		m:                 m,
-		activationCheckFn: activation.NewCheckFn(depSet, l),
+		activationCheck: activation.NewCheck(depSet, l),
 	}
 }
 
@@ -169,19 +169,19 @@ func (db *ChainsDB) AttachEmitter(em event.Emitter) {
 func (db *ChainsDB) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.AnchorEvent:
-		if !db.activationCheckFn(x.ChainID, x.Anchor.Derived.Time) {
+		if !db.activationCheck.Check(x.ChainID, x.Anchor.Derived.Time) {
 			return true
 		}
 		db.initFromAnchor(x.ChainID, x.Anchor)
 	case superevents.LocalDerivedEvent:
-		if !db.activationCheckFn(x.ChainID, x.Derived.Source.Time) {
+		if !db.activationCheck.Check(x.ChainID, x.Derived.Source.Time) {
 			return true
 		}
 		db.UpdateLocalSafe(x.ChainID, x.Derived.Source, x.Derived.Derived, x.NodeID)
 	case superevents.FinalizedL1RequestEvent:
 		db.onFinalizedL1(x.FinalizedL1)
 	case superevents.ReplaceBlockEvent:
-		if !db.activationCheckFn(x.ChainID, x.Replacement.Replacement.Time) {
+		if !db.activationCheck.Check(x.ChainID, x.Replacement.Replacement.Time) {
 			return true
 		}
 		db.onReplaceBlock(x.ChainID, x.Replacement.Replacement, x.Replacement.Invalidated)

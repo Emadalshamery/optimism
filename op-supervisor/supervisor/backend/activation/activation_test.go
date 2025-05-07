@@ -39,7 +39,7 @@ func TestActivationTimestampChecks(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := testlog.Logger(t, log.LvlInfo)
-	activationCheckFn := NewCheckFn(depSet, logger)
+	activationCheck := NewCheck(depSet, logger)
 
 	testCases := map[uint64]bool{
 		baseTime - 2: false,
@@ -50,7 +50,7 @@ func TestActivationTimestampChecks(t *testing.T) {
 	}
 
 	for ts, expectedVal := range testCases {
-		active := activationCheckFn(chainID, ts)
+		active := activationCheck.Check(chainID, ts)
 		require.Equal(t, expectedVal, active,
 			"IsActiveForChain at timestamp %d (activation+%d)", ts, int(ts)-int(baseTime))
 	}
@@ -66,7 +66,7 @@ func TestActivationTimestampChecksEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := testlog.Logger(t, log.LvlInfo)
-	activationCheckFn := NewCheckFn(depSet, logger)
+	activationCheck := NewCheck(depSet, logger)
 
 	testCases := []struct {
 		name      string
@@ -82,7 +82,7 @@ func TestActivationTimestampChecksEdgeCases(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			active := activationCheckFn(chainID, tc.timestamp)
+			active := activationCheck.Check(chainID, tc.timestamp)
 
 			require.Equal(t, tc.expected, active,
 				"IsActiveForChain at timestamp %d", tc.timestamp)
@@ -90,7 +90,7 @@ func TestActivationTimestampChecksEdgeCases(t *testing.T) {
 	}
 
 	unknownChain := eth.ChainID{99}
-	active := activationCheckFn(unknownChain, activationTime+1)
+	active := activationCheck.Check(unknownChain, activationTime+1)
 	require.False(t, active, "Unknown chain should not be active")
 }
 
@@ -104,7 +104,7 @@ func TestActivationBlockFiltering(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := testlog.Logger(t, log.LvlInfo)
-	activationCheckFn := NewCheckFn(depSet, logger)
+	activationCheck := NewCheck(depSet, logger)
 
 	preActivationBlock := eth.BlockRef{
 		Time: activationTime - 600,
@@ -114,10 +114,10 @@ func TestActivationBlockFiltering(t *testing.T) {
 		Time: activationTime + 600,
 	}
 
-	isActiveForPreActivation := activationCheckFn(chainID, preActivationBlock.Time)
+	isActiveForPreActivation := activationCheck.Check(chainID, preActivationBlock.Time)
 	require.False(t, isActiveForPreActivation, "Chain should not be active at pre-activation time")
 
-	isActiveForPostActivation := activationCheckFn(chainID, postActivationBlock.Time)
+	isActiveForPostActivation := activationCheck.Check(chainID, postActivationBlock.Time)
 	require.True(t, isActiveForPostActivation, "Chain should be active at post-activation time")
 }
 
@@ -133,7 +133,7 @@ func TestActivationBoundary(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := testlog.Logger(t, log.LvlInfo)
-	activationCheckFn := NewCheckFn(depSet, logger)
+	activationCheck := NewCheck(depSet, logger)
 
 	blockAtActivationA := eth.BlockRef{
 		Time: activationTime,
@@ -143,8 +143,8 @@ func TestActivationBoundary(t *testing.T) {
 		Time: activationTime,
 	}
 
-	isActiveA := activationCheckFn(chainA, blockAtActivationA.Time)
-	isActiveB := activationCheckFn(chainB, blockAtActivationB.Time)
+	isActiveA := activationCheck.Check(chainA, blockAtActivationA.Time)
+	isActiveB := activationCheck.Check(chainB, blockAtActivationB.Time)
 
 	require.False(t, isActiveA, "Chain A should not be active at exactly the activation time")
 	require.False(t, isActiveB, "Chain B should not be active at exactly the activation time")
@@ -157,16 +157,16 @@ func TestActivationBoundary(t *testing.T) {
 		Time: activationTime + 1,
 	}
 
-	isActiveJustAfterA := activationCheckFn(chainA, blockJustAfterA.Time)
-	isActiveJustAfterB := activationCheckFn(chainB, blockJustAfterB.Time)
+	isActiveJustAfterA := activationCheck.Check(chainA, blockJustAfterA.Time)
+	isActiveJustAfterB := activationCheck.Check(chainB, blockJustAfterB.Time)
 
 	require.True(t, isActiveJustAfterA, "Chain A should be active just after the activation time")
 	require.True(t, isActiveJustAfterB, "Chain B should be active just after the activation time")
 
-	require.False(t, activationCheckFn(chainA, blockAtActivationA.Time))
-	require.False(t, activationCheckFn(chainB, blockAtActivationB.Time))
-	require.True(t, activationCheckFn(chainA, blockJustAfterA.Time))
-	require.True(t, activationCheckFn(chainB, blockJustAfterB.Time))
+	require.False(t, activationCheck.Check(chainA, blockAtActivationA.Time))
+	require.False(t, activationCheck.Check(chainB, blockAtActivationB.Time))
+	require.True(t, activationCheck.Check(chainA, blockJustAfterA.Time))
+	require.True(t, activationCheck.Check(chainB, blockJustAfterB.Time))
 }
 
 func TestActivationBoundaryMultipleChainsSameActivationTime(t *testing.T) {
@@ -183,23 +183,23 @@ func TestActivationBoundaryMultipleChainsSameActivationTime(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := testlog.Logger(t, log.LvlInfo)
-	activationCheckFn := NewCheckFn(depSet, logger)
+	activationCheck := NewCheck(depSet, logger)
 
 	beforeActivation := eth.BlockRef{Time: activationTime - 5}
 	atActivation := eth.BlockRef{Time: activationTime}
 	afterActivation := eth.BlockRef{Time: activationTime + 5}
 
-	require.False(t, activationCheckFn(chainA, beforeActivation.Time))
-	require.False(t, activationCheckFn(chainB, beforeActivation.Time))
-	require.False(t, activationCheckFn(chainC, beforeActivation.Time))
+	require.False(t, activationCheck.Check(chainA, beforeActivation.Time))
+	require.False(t, activationCheck.Check(chainB, beforeActivation.Time))
+	require.False(t, activationCheck.Check(chainC, beforeActivation.Time))
 
-	require.False(t, activationCheckFn(chainA, atActivation.Time))
-	require.False(t, activationCheckFn(chainB, atActivation.Time))
-	require.False(t, activationCheckFn(chainC, atActivation.Time))
+	require.False(t, activationCheck.Check(chainA, atActivation.Time))
+	require.False(t, activationCheck.Check(chainB, atActivation.Time))
+	require.False(t, activationCheck.Check(chainC, atActivation.Time))
 
-	require.True(t, activationCheckFn(chainA, afterActivation.Time))
-	require.True(t, activationCheckFn(chainB, afterActivation.Time))
-	require.True(t, activationCheckFn(chainC, afterActivation.Time))
+	require.True(t, activationCheck.Check(chainA, afterActivation.Time))
+	require.True(t, activationCheck.Check(chainB, afterActivation.Time))
+	require.True(t, activationCheck.Check(chainC, afterActivation.Time))
 }
 
 func TestActivationBoundaryMultipleChainsDifferentActivationTimes(t *testing.T) {
@@ -216,21 +216,21 @@ func TestActivationBoundaryMultipleChainsDifferentActivationTimes(t *testing.T) 
 	require.NoError(t, err)
 
 	logger := testlog.Logger(t, log.LvlInfo)
-	activationCheckFn := NewCheckFn(depSet, logger)
+	activationCheck := NewCheck(depSet, logger)
 
 	t1 := eth.BlockRef{Time: baseTime + 5}
 	t2 := eth.BlockRef{Time: baseTime + 15}
 	t3 := eth.BlockRef{Time: baseTime + 25}
 
-	require.True(t, activationCheckFn(chainA, t1.Time))
-	require.False(t, activationCheckFn(chainB, t1.Time))
-	require.False(t, activationCheckFn(chainC, t1.Time))
+	require.True(t, activationCheck.Check(chainA, t1.Time))
+	require.False(t, activationCheck.Check(chainB, t1.Time))
+	require.False(t, activationCheck.Check(chainC, t1.Time))
 
-	require.True(t, activationCheckFn(chainA, t2.Time))
-	require.True(t, activationCheckFn(chainB, t2.Time))
-	require.False(t, activationCheckFn(chainC, t2.Time))
+	require.True(t, activationCheck.Check(chainA, t2.Time))
+	require.True(t, activationCheck.Check(chainB, t2.Time))
+	require.False(t, activationCheck.Check(chainC, t2.Time))
 
-	require.True(t, activationCheckFn(chainA, t3.Time))
-	require.True(t, activationCheckFn(chainB, t3.Time))
-	require.True(t, activationCheckFn(chainC, t3.Time))
+	require.True(t, activationCheck.Check(chainA, t3.Time))
+	require.True(t, activationCheck.Check(chainB, t3.Time))
+	require.True(t, activationCheck.Check(chainC, t3.Time))
 }

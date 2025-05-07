@@ -32,19 +32,19 @@ type SyncNodesController struct {
 
 	depSet depset.DependencySet
 
-	activationCheckFn activation.CheckFn
+	activationCheck *activation.Check
 }
 
 var _ event.AttachEmitter = (*SyncNodesController)(nil)
 
 // NewSyncNodesController creates a new SyncNodeController
-func NewSyncNodesController(l log.Logger, depset depset.DependencySet, eventSys event.System, backend backend, activationCheckFn activation.CheckFn) *SyncNodesController {
+func NewSyncNodesController(l log.Logger, depset depset.DependencySet, eventSys event.System, backend backend, activationCheck *activation.Check) *SyncNodesController {
 	return &SyncNodesController{
 		logger:            l,
 		depSet:            depset,
 		eventSys:          eventSys,
 		backend:           backend,
-		activationCheckFn: activationCheckFn,
+		activationCheck: activationCheck,
 	}
 }
 
@@ -86,7 +86,7 @@ func (snc *SyncNodesController) AttachNodeController(chainID eth.ChainID, ctrl S
 	logger.Info("Attaching node", "chain", chainID, "passive", noSubscribe)
 
 	// create the managed node, register and return
-	node := NewManagedNode(logger, chainID, ctrl, snc.backend, snc.activationCheckFn, noSubscribe)
+	node := NewManagedNode(logger, chainID, ctrl, snc.backend, snc.activationCheck, noSubscribe)
 	snc.eventSys.Register(name, node, event.DefaultRegisterOpts())
 	controllersForChain.Set(node, struct{}{})
 	node.Start()
