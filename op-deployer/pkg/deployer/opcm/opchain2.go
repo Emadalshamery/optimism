@@ -25,8 +25,8 @@ type DeployOPChainInput2 struct {
 
 	DisputeGameType              uint32
 	DisputeAbsolutePrestate      common.Hash
-	DisputeMaxGameDepth          uint64
-	DisputeSplitDepth            uint64
+	DisputeMaxGameDepth          *big.Int
+	DisputeSplitDepth            *big.Int
 	DisputeClockExtension        uint64
 	DisputeMaxClockDuration      uint64
 	AllowCustomDisputeParameters bool
@@ -53,7 +53,7 @@ type DeployOPChainOutput2 struct {
 	L1CrossDomainMessengerProxy       common.Address
 	// Fault proof contracts below.
 	OptimismPortalProxy                common.Address
-	ETHLockboxProxy                    common.Address `evm:"ethLockboxProxy"`
+	EthLockboxProxy                    common.Address
 	DisputeGameFactoryProxy            common.Address
 	AnchorStateRegistryProxy           common.Address
 	FaultDisputeGame                   common.Address

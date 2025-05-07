@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import { Script } from "forge-std/Script.sol";
+import { console2 as console } from "forge-std/console2.sol";
 
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -36,7 +37,7 @@ import { IL1StandardBridge } from "interfaces/L1/IL1StandardBridge.sol";
 import { IOptimismMintableERC20Factory } from "interfaces/universal/IOptimismMintableERC20Factory.sol";
 import { IETHLockbox } from "interfaces/L1/IETHLockbox.sol";
 
-contract DeployOPChain is Script {
+contract DeployOPChain2 is Script {
     struct Input {
         address opChainProxyAdminOwner;
         address systemConfigOwner;
@@ -44,7 +45,6 @@ contract DeployOPChain is Script {
         address unsafeBlockSigner;
         address proposer;
         address challenger;
-
         // TODO Add fault proofs inputs in a future PR.
         uint32 basefeeScalar;
         uint32 blobBaseFeeScalar;
@@ -52,7 +52,6 @@ contract DeployOPChain is Script {
         IOPContractsManager opcm;
         string saltMixer;
         uint64 gasLimit;
-
         // Configurable dispute game inputs
         GameType disputeGameType;
         Claim disputeAbsolutePrestate;
@@ -61,7 +60,6 @@ contract DeployOPChain is Script {
         Duration disputeClockExtension;
         Duration disputeMaxClockDuration;
         bool allowCustomDisputeParameters;
-
         uint32 operatorFeeScalar;
         uint64 operatorFeeConstant;
     }
@@ -85,9 +83,11 @@ contract DeployOPChain is Script {
     }
 
     function run(Input memory _input) public returns (Output memory output_) {
+        console.log("DeployOPChain2.run initiated");
         bytes memory startingAnchorRoot = abi.encode(ScriptConstants.DEFAULT_OUTPUT_ROOT());
 
         assertValidInput(_input);
+        console.log("Confirmed valid input");
 
         IOPContractsManager opcm = _input.opcm;
 
@@ -117,6 +117,7 @@ contract DeployOPChain is Script {
 
         vm.broadcast(msg.sender);
         IOPContractsManager.DeployOutput memory deployOutput = opcm.deploy(deployInput);
+        console.log("opcm.deploy complete");
 
         output_ = Output({
             opChainProxyAdmin: deployOutput.opChainProxyAdmin,
@@ -179,7 +180,7 @@ contract DeployOPChain is Script {
         require(_input.operatorFeeConstant != 0, "DeployOPChain: operatorFeeConstant not set");
     }
 
-    function assertValidOutput(Input memory _input, Output memory _output) public {
+    function assertValidOutput(Input memory _input, Output memory _output) private {
         // With 16 addresses, we'd get a stack too deep error if we tried to do this inline as a
         // single call to `Solarray.addresses`. So we split it into two calls.
         address[] memory addrs1 = Solarray.addresses(
@@ -208,8 +209,8 @@ contract DeployOPChain is Script {
     }
 
     // -------- Deployment Assertions --------
-    function assertValidDeploy(Input memory _input, Output memory _output) internal {
-        assertValidAnchorStateRegistryProxy(_input, _output);
+    function assertValidDeploy(Input memory _input, Output memory _output) private {
+        assertValidAnchorStateRegistryProxy(_output);
         assertValidDelayedWETH(_input, _output);
         assertValidDisputeGameFactory(_input, _output);
         assertValidL1CrossDomainMessenger(_output);
@@ -224,7 +225,7 @@ contract DeployOPChain is Script {
         assertValidOPChainProxyAdmin(_input, _output);
     }
 
-    function assertValidPermissionedDisputeGame(Input memory _input, Output memory _output) internal {
+    function assertValidPermissionedDisputeGame(Input memory _input, Output memory _output) private view {
         IPermissionedDisputeGame game = _output.permissionedDisputeGame;
 
         require(GameType.unwrap(game.gameType()) == GameType.unwrap(GameTypes.PERMISSIONED_CANNON), "DPG-10");
@@ -255,7 +256,7 @@ contract DeployOPChain is Script {
         require(game.maxGameDepth() == 73, "DPG-100");
     }
 
-    function assertValidAnchorStateRegistryProxy(Input memory _input, Output memory _output) internal {
+    function assertValidAnchorStateRegistryProxy(Output memory _output) private {
         // First we check the proxy as itself.
         IProxy proxy = IProxy(payable(address(_output.anchorStateRegistryProxy)));
         vm.prank(address(0));
@@ -280,7 +281,7 @@ contract DeployOPChain is Script {
         require(Hash.unwrap(actualRoot) == expectedRoot, "ANCHORP-40");
     }
 
-    function assertValidSystemConfig(Input memory _input, Output memory _output) internal {
+    function assertValidSystemConfig(Input memory _input, Output memory _output) private view {
         ISystemConfig systemConfig = _output.systemConfigProxy;
 
         DeployUtils.assertInitialized({ _contractAddress: address(systemConfig), _isProxy: true, _slot: 0, _offset: 0 });
@@ -315,7 +316,7 @@ contract DeployOPChain is Script {
         );
     }
 
-    function assertValidL1CrossDomainMessenger(Output memory _output) internal {
+    function assertValidL1CrossDomainMessenger(Output memory _output) private view {
         IL1CrossDomainMessenger messenger = _output.l1CrossDomainMessengerProxy;
 
         DeployUtils.assertInitialized({ _contractAddress: address(messenger), _isProxy: true, _slot: 0, _offset: 20 });
@@ -331,7 +332,7 @@ contract DeployOPChain is Script {
         require(address(uint160(uint256(xdmSenderSlot))) == Constants.DEFAULT_L2_SENDER, "L1xDM-60");
     }
 
-    function assertValidL1StandardBridge(Output memory _output) internal {
+    function assertValidL1StandardBridge(Output memory _output) private view {
         IL1StandardBridge bridge = _output.l1StandardBridgeProxy;
         IL1CrossDomainMessenger messenger = _output.l1CrossDomainMessengerProxy;
 
@@ -344,7 +345,7 @@ contract DeployOPChain is Script {
         require(address(bridge.systemConfig()) == address(_output.systemConfigProxy), "L1SB-50");
     }
 
-    function assertValidOptimismMintableERC20Factory(Output memory _output) internal {
+    function assertValidOptimismMintableERC20Factory(Output memory _output) private view {
         IOptimismMintableERC20Factory factory = _output.optimismMintableERC20FactoryProxy;
 
         DeployUtils.assertInitialized({ _contractAddress: address(factory), _isProxy: true, _slot: 0, _offset: 0 });
@@ -353,7 +354,7 @@ contract DeployOPChain is Script {
         require(factory.bridge() == address(_output.l1StandardBridgeProxy), "MERC20F-20");
     }
 
-    function assertValidL1ERC721Bridge(Output memory _output) internal {
+    function assertValidL1ERC721Bridge(Output memory _output) private view {
         IL1ERC721Bridge bridge = _output.l1ERC721BridgeProxy;
 
         DeployUtils.assertInitialized({ _contractAddress: address(bridge), _isProxy: true, _slot: 0, _offset: 0 });
@@ -366,7 +367,7 @@ contract DeployOPChain is Script {
         require(address(bridge.systemConfig()) == address(_output.systemConfigProxy), "L721B-50");
     }
 
-    function assertValidOptimismPortal(Input memory _input, Output memory _output) internal {
+    function assertValidOptimismPortal(Input memory _input, Output memory _output) private view {
         IOptimismPortal portal = _output.optimismPortalProxy;
         ISuperchainConfig superchainConfig = ISuperchainConfig(address(_input.opcm.superchainConfig()));
 
@@ -387,15 +388,15 @@ contract DeployOPChain is Script {
         require(portal.proxyAdminOwner() == _input.opChainProxyAdminOwner, "PORTAL-100");
     }
 
-    function assertValidETHLockbox(Input memory _input, Output memory _output) internal {
-        IETHLockbox lockbox = _output.ethLockboxProxy();
+    function assertValidETHLockbox(Input memory _input, Output memory _output) private view {
+        IETHLockbox lockbox = _output.ethLockboxProxy;
 
         require(address(lockbox.systemConfig()) == address(_output.systemConfigProxy), "ETHLOCKBOX-10");
         require(lockbox.authorizedPortals(_output.optimismPortalProxy), "ETHLOCKBOX-20");
         require(lockbox.proxyAdminOwner() == _input.opChainProxyAdminOwner, "ETHLOCKBOX-30");
     }
 
-    function assertValidDisputeGameFactory(Input memory _input, Output memory _output) internal {
+    function assertValidDisputeGameFactory(Input memory _input, Output memory _output) private view {
         IDisputeGameFactory factory = _output.disputeGameFactoryProxy;
 
         DeployUtils.assertInitialized({ _contractAddress: address(factory), _isProxy: true, _slot: 0, _offset: 0 });
@@ -407,7 +408,7 @@ contract DeployOPChain is Script {
         require(factory.owner() == _input.opChainProxyAdminOwner, "DF-20");
     }
 
-    function assertValidDelayedWETH(Input memory _input, Output memory _output) internal {
+    function assertValidDelayedWETH(Input memory _input, Output memory _output) private {
         IDelayedWETH permissioned = _output.delayedWETHPermissionedGameProxy;
 
         require(permissioned.proxyAdminOwner() == _input.opChainProxyAdminOwner, "DWETH-10");
@@ -418,11 +419,11 @@ contract DeployOPChain is Script {
         require(admin == address(_output.opChainProxyAdmin), "DWETH-20");
     }
 
-    function assertValidAddressManager(Input memory _input, Output memory _output) internal view {
+    function assertValidAddressManager(Input memory _input, Output memory _output) private view {
         require(_output.addressManager.owner() == _input.opChainProxyAdminOwner, "AM-10");
     }
 
-    function assertValidOPChainProxyAdmin(Input memory _input, Output memory _output) internal {
+    function assertValidOPChainProxyAdmin(Input memory _input, Output memory _output) private {
         IProxyAdmin admin = _output.opChainProxyAdmin;
         require(admin.owner() == _input.opChainProxyAdminOwner, "OPCPA-10");
         require(
@@ -432,7 +433,7 @@ contract DeployOPChain is Script {
                 ),
             "OPCPA-20"
         );
-        require(address(admin.addressManager) == address(_output.addressManager), "OPCPA-30");
+        require(address(admin.addressManager()) == address(_output.addressManager), "OPCPA-30");
         require(
             admin.getProxyImplementation(address(_output.l1StandardBridgeProxy))
                 == DeployUtils.assertL1ChugSplashImplementationSet(address(_output.l1StandardBridgeProxy)),
@@ -478,18 +479,5 @@ contract DeployOPChain is Script {
                 == DeployUtils.assertERC1967ImplementationSet(address(_output.ethLockboxProxy)),
             "OPCPA-120"
         );
-    }
-
-    // -------- Utilities --------
-
-    function etchIOContracts() public returns (Input memory input_, Output memory output_) {
-        (input_, output_) = getIOContracts();
-        vm.etch(address(input_), type(Input).runtimeCode);
-        vm.etch(address(output_), type(Output).runtimeCode);
-    }
-
-    function getIOContracts() public view returns (Input memory input_, Output memory output_) {
-        input_ = Input(DeployUtils.toIOAddress(msg.sender, "optimism.DeployOPChainInput"));
-        output_ = Output(DeployUtils.toIOAddress(msg.sender, "optimism.DeployOPChainOutput"));
     }
 }
