@@ -374,7 +374,7 @@ func allFeaturesEnabled() mipsevm.FeatureToggles {
 	return toggles
 }
 
-// Unit test splitmix64 based on java unit tests
+// Unit test splitmix64 based on Apache Commons RNG unit tests
 // See: https://github.com/apache/commons-rng/blob/df772c2f5b0644a71398e925206039a2ae516ab2/commons-rng-core/src/test/java/org/apache/commons/rng/core/source64/SplitMix64Test.java
 func TestSplitmix64(t *testing.T) {
 	vm := NewInstrumentedState(CreateEmptyState(), nil, nil, nil, nil, nil, allFeaturesEnabled())
