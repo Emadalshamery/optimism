@@ -680,9 +680,9 @@ contract MIPS64 is ISemver {
 
     // splitmix64 generates a pseudorandom 64-bit value.
     // See canonical implementation: https://prng.di.unimi.it/splitmix64.c
-    function splitmix64(uint64 seed) internal pure returns (uint64) {
+    function splitmix64(uint64 _seed) internal pure returns (uint64) {
         unchecked {
-            uint64 z = seed + 0x9e3779b97f4a7c15;
+            uint64 z = _seed + 0x9e3779b97f4a7c15;
             z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
             z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
             return z ^ (z >> 31);
