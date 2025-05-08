@@ -202,8 +202,8 @@ func (mc *MultiClient) fetchWithConsistencyCheck(
 			return common.Hash{}, err
 		}
 
-		// If we have a successful hash match, also check state root if possible
-		if primaryHeader != nil {
+		// If hashes don't match, also check state roots
+		if hash != primaryHash && primaryHeader != nil {
 			var followerHeader *types.Header
 			if header, ok := item.(*types.Header); ok {
 				followerHeader = header
@@ -211,23 +211,27 @@ func (mc *MultiClient) fetchWithConsistencyCheck(
 				followerHeader = block.Header()
 			}
 
-			// If we have both headers and the block hash matches but state roots differ,
-			// return a specific error for state root divergence
-			if followerHeader != nil && hash == primaryHash && followerHeader.Root != primaryHeader.Root {
-				return hash, fmt.Errorf("state root divergence detected: primary=%s, follower=%s",
-					primaryHeader.Root.Hex(), followerHeader.Root.Hex())
+			// If we have both headers and the state roots match despite hash mismatch,
+			// include this information in the error message
+			if followerHeader != nil {
+				if followerHeader.Root == primaryHeader.Root {
+					return hash, fmt.Errorf("block hash divergence with matching state roots: primary_hash=%s, follower_hash=%s, state_root=%s",
+						primaryHash.Hex(), hash.Hex(), primaryHeader.Root.Hex())
+				} else {
+					// Both hash and state root differ
+					return hash, nil
+				}
 			}
 		}
-
 		return hash, nil
 	}
 
 	// Verify consistency with retry for followers
 	mismatches, err := mc.verifyFollowersWithRetry(ctx, blockNum, primaryHash, getFollowerHash)
 	if err != nil {
-		// If err is a state root divergence error, format and return it
-		if strings.Contains(err.Error(), "state root divergence detected") {
-			return nil, fmt.Errorf("state root divergence detected at block #%s: %s", blockNum, err.Error())
+		// If err contains information about matching state roots, format and return it
+		if strings.Contains(err.Error(), "block hash divergence with matching state roots") {
+			return nil, fmt.Errorf("at block #%s: %s", blockNum, err.Error())
 		}
 
 		// If err is a chain split error, pass it through
