@@ -175,9 +175,6 @@ contract DeployOPChain2 is Script {
         require(_input.disputeSplitDepth != 0, "DeployOPChain: disputeSplitDepth not set");
         require(Duration.unwrap(_input.disputeClockExtension) != 0, "DeployOPChain: disputeClockExtension not set");
         require(Duration.unwrap(_input.disputeMaxClockDuration) != 0, "DeployOPChain: disputeMaxClockDuration not set");
-
-        require(_input.operatorFeeScalar != 0, "DeployOPChain: operatorFeeScalar not set");
-        require(_input.operatorFeeConstant != 0, "DeployOPChain: operatorFeeConstant not set");
     }
 
     function assertValidOutput(Input memory _input, Output memory _output) private {
@@ -221,7 +218,7 @@ contract DeployOPChain2 is Script {
         assertValidETHLockbox(_input, _output);
         assertValidPermissionedDisputeGame(_input, _output);
         assertValidSystemConfig(_input, _output);
-        assertValidAddressManager(_input, _output);
+        assertValidAddressManager(_output);
         assertValidOPChainProxyAdmin(_input, _output);
     }
 
@@ -419,8 +416,8 @@ contract DeployOPChain2 is Script {
         require(admin == address(_output.opChainProxyAdmin), "DWETH-20");
     }
 
-    function assertValidAddressManager(Input memory _input, Output memory _output) private view {
-        require(_output.addressManager.owner() == _input.opChainProxyAdminOwner, "AM-10");
+    function assertValidAddressManager(Output memory _output) private view {
+        require(_output.addressManager.owner() == address(_output.opChainProxyAdmin), "AM-10");
     }
 
     function assertValidOPChainProxyAdmin(Input memory _input, Output memory _output) private {

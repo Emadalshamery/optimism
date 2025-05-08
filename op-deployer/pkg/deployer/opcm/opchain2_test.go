@@ -1,47 +1,31 @@
 package opcm
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum-optimism/optimism/op-chain-ops/script"
-	"github.com/ethereum-optimism/optimism/op-chain-ops/script/addresses"
 	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/standard"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewDeployOPChainScript(t *testing.T) {
 	deployDependencies := func(host *script.Host) common.Address {
-		proxyAdminArtifact, err := host.Artifacts().ReadArtifact("ProxyAdmin.sol", "ProxyAdmin")
+		deploySuperchain, err := NewDeploySuperchainScript(host)
 		require.NoError(t, err)
 
-		encodedProxyAdmin, err := proxyAdminArtifact.ABI.Pack("", addresses.ScriptDeployer)
+		superchainOutput, err := deploySuperchain.Run(DeploySuperchain2Input{
+			Guardian:                   common.BigToAddress(big.NewInt(1)),
+			ProtocolVersionsOwner:      common.BigToAddress(big.NewInt(2)),
+			SuperchainProxyAdminOwner:  common.BigToAddress(big.NewInt(3)),
+			Paused:                     true,
+			RecommendedProtocolVersion: params.ProtocolVersion{1},
+			RequiredProtocolVersion:    params.ProtocolVersion{2},
+		})
 		require.NoError(t, err)
-
-		proxyAdminAddress, err := host.Create(addresses.ScriptDeployer, append(proxyAdminArtifact.Bytecode.Object, encodedProxyAdmin...))
-		require.NoError(t, err)
-
-		// Then we get a proxy deployed
-		proxyArtifact, err := host.Artifacts().ReadArtifact("Proxy.sol", "Proxy")
-		require.NoError(t, err)
-
-		encodedProxy, err := proxyArtifact.ABI.Pack("", proxyAdminAddress)
-		require.NoError(t, err)
-
-		proxyAddress, err := host.Create(addresses.ScriptDeployer, append(proxyArtifact.Bytecode.Object, encodedProxy...))
-		require.NoError(t, err)
-
-		// Then we get ProtocolVersions deployed
-		protocolVersionsArtifact, err := host.Artifacts().ReadArtifact("ProtocolVersions.sol", "ProtocolVersions")
-		require.NoError(t, err)
-
-		encodedProtocolVersions, err := protocolVersionsArtifact.ABI.Pack("")
-		require.NoError(t, err)
-
-		protocolVersionsAddress, err := host.Create(addresses.ScriptDeployer, append(protocolVersionsArtifact.Bytecode.Object, encodedProtocolVersions...))
-		require.NoError(t, err)
+		require.NotNil(t, superchainOutput)
 
 		deployImplementations, err := NewDeployImplementationsScript(host)
 		require.NoError(t, err)
@@ -55,25 +39,23 @@ func TestNewDeployOPChainScript(t *testing.T) {
 			DisputeGameFinalityDelaySeconds: big.NewInt(5),
 			MipsVersion:                     big.NewInt(mipsVersion),
 			L1ContractsRelease:              "dev-release",
-			SuperchainConfigProxy:           proxyAddress,
-			ProtocolVersionsProxy:           protocolVersionsAddress,
-			SuperchainProxyAdmin:            proxyAdminAddress,
+			SuperchainConfigProxy:           superchainOutput.SuperchainConfigProxy,
+			ProtocolVersionsProxy:           superchainOutput.ProtocolVersionsProxy,
+			SuperchainProxyAdmin:            superchainOutput.SuperchainProxyAdmin,
 			UpgradeController:               common.BigToAddress(big.NewInt(13)),
 		})
-
-		fmt.Printf("implementationsOutput: %+v\n", implementationsOutput)
 		require.NoError(t, err)
+		require.NotNil(t, implementationsOutput)
+
 		return implementationsOutput.Opcm
 	}
 	t.Run("should not fail with current version of DeployOPChain2 contract", func(t *testing.T) {
 		// First we grab a test host
 		host1 := createTestHost(t)
 
-		// We'll need some contracts already deployed for this to work
+		// We need Superchain and Implementations contracts deployed for this to work
 		opcmImpl := deployDependencies(host1)
 
-		// Then we load the script
-		//
 		// This would raise an error if the Go types didn't match the ABI
 		deployOPChain, err := NewDeployOPChainScript(host1)
 		require.NoError(t, err)
@@ -88,22 +70,22 @@ func TestNewDeployOPChainScript(t *testing.T) {
 			Challenger:             common.HexToAddress("0xfed"),
 
 			BasefeeScalar:     100,
-			BlobBaseFeeScalar: 100,
-			L2ChainId:         big.NewInt(1105),
+			BlobBaseFeeScalar: 200,
+			L2ChainId:         big.NewInt(300),
 			Opcm:              opcmImpl,
-			SaltMixer:         "0x456",
-			GasLimit:          30000000,
+			SaltMixer:         "defaultSaltMixer",
+			GasLimit:          60_000_000,
 
 			DisputeGameType:              1,
-			DisputeAbsolutePrestate:      common.HexToHash("0x123"),
-			DisputeMaxGameDepth:          big.NewInt(100),
-			DisputeSplitDepth:            big.NewInt(100),
-			DisputeClockExtension:        100,
-			DisputeMaxClockDuration:      100,
-			AllowCustomDisputeParameters: true,
+			DisputeAbsolutePrestate:      common.HexToHash("0x038512e02c4c3f7bdaec27d00edf55b7155e0905301e1a88083e4e0a6764d54c"),
+			DisputeMaxGameDepth:          big.NewInt(73),
+			DisputeSplitDepth:            big.NewInt(30),
+			DisputeClockExtension:        uint64(3 * 60 * 60),
+			DisputeMaxClockDuration:      uint64(3.5 * 24 * 60 * 60),
+			AllowCustomDisputeParameters: false,
 
-			OperatorFeeScalar:   100,
-			OperatorFeeConstant: 100,
+			OperatorFeeScalar:   0,
+			OperatorFeeConstant: 0,
 		})
 
 		// And do some simple asserts
@@ -127,22 +109,22 @@ func TestNewDeployOPChainScript(t *testing.T) {
 			Challenger:             common.HexToAddress("0xfed"),
 
 			BasefeeScalar:     100,
-			BlobBaseFeeScalar: 100,
-			L2ChainId:         big.NewInt(1105),
+			BlobBaseFeeScalar: 200,
+			L2ChainId:         big.NewInt(300),
 			Opcm:              opcmImpl2,
-			SaltMixer:         "0x456",
-			GasLimit:          30000000,
+			SaltMixer:         "defaultSaltMixer",
+			GasLimit:          60_000_000,
 
 			DisputeGameType:              1,
-			DisputeAbsolutePrestate:      common.HexToHash("0x123"),
-			DisputeMaxGameDepth:          100,
-			DisputeSplitDepth:            100,
-			DisputeClockExtension:        100,
-			DisputeMaxClockDuration:      100,
-			AllowCustomDisputeParameters: true,
+			DisputeAbsolutePrestate:      common.HexToHash("0x038512e02c4c3f7bdaec27d00edf55b7155e0905301e1a88083e4e0a6764d54c"),
+			DisputeMaxGameDepth:          uint64(73),
+			DisputeSplitDepth:            uint64(30),
+			DisputeClockExtension:        uint64(3 * 60 * 60),
+			DisputeMaxClockDuration:      uint64(3.5 * 24 * 60 * 60),
+			AllowCustomDisputeParameters: false,
 
-			OperatorFeeScalar:   100,
-			OperatorFeeConstant: 100,
+			OperatorFeeScalar:   0,
+			OperatorFeeConstant: 0,
 		})
 
 		// Make sure it succeeded
