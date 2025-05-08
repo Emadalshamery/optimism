@@ -72,30 +72,3 @@ type DeployOPChainScript2 script.DeployScriptWithOutput[DeployOPChainInput2, Dep
 func NewDeployOPChainScript(host *script.Host) (DeployOPChainScript2, error) {
 	return script.NewDeployScriptWithOutputFromFile[DeployOPChainInput2, DeployOPChainOutput2](host, "DeployOPChain2.s.sol", "DeployOPChain2")
 }
-
-type ReadImplementationAddressesInput2 struct {
-	DeployOPChainOutput2
-	Opcm    common.Address
-	Release string
-}
-
-type ReadImplementationAddressesOutput2 struct {
-	DelayedWETH                  common.Address
-	OptimismPortal               common.Address
-	ETHLockbox                   common.Address `evm:"ethLockbox"`
-	SystemConfig                 common.Address
-	L1CrossDomainMessenger       common.Address
-	L1ERC721Bridge               common.Address
-	L1StandardBridge             common.Address
-	OptimismMintableERC20Factory common.Address
-	DisputeGameFactory           common.Address
-	MipsSingleton                common.Address
-	PreimageOracleSingleton      common.Address
-}
-
-type ReadImplementationAddressesScript2 script.DeployScriptWithOutput[ReadImplementationAddressesInput2, ReadImplementationAddressesOutput2]
-
-// NewReadImplementationAddressesScript loads and validates the ReadImplementationAddresses2 script contract
-func NewReadImplementationAddressesScript(host *script.Host) (ReadImplementationAddressesScript2, error) {
-	return script.NewDeployScriptWithOutputFromFile[ReadImplementationAddressesInput2, ReadImplementationAddressesOutput2](host, "ReadImplementationAddresses2.s.sol", "ReadImplementationAddresses2")
-}
