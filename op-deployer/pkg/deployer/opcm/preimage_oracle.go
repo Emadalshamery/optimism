@@ -16,14 +16,9 @@ type DeployPreimageOracleOutput struct {
 	PreimageOracle common.Address
 }
 
-func DeployPreimageOracle(
-	host *script.Host,
-	input DeployPreimageOracleInput,
-) (DeployPreimageOracleOutput, error) {
-	return RunScriptSingle[DeployPreimageOracleInput, DeployPreimageOracleOutput](
-		host,
-		input,
-		"DeployPreimageOracle.s.sol",
-		"DeployPreimageOracle",
-	)
+type DeployPreimageOracleScript script.DeployScriptWithOutput[DeployPreimageOracleInput, DeployPreimageOracleOutput]
+
+// NewDeployPreimageOracleScript loads and validates the DeployPreimageOracle script contract
+func NewDeployPreimageOracleScript(host *script.Host) (DeployPreimageOracleScript, error) {
+	return script.NewDeployScriptWithOutputFromFile[DeployPreimageOracleInput, DeployPreimageOracleOutput](host, "DeployPreimageOracle.s.sol", "DeployPreimageOracle")
 }

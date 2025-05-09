@@ -1,38 +1,33 @@
 package opcm
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/broadcaster"
-	"github.com/ethereum-optimism/optimism/op-deployer/pkg/deployer/testutil"
-	"github.com/ethereum-optimism/optimism/op-deployer/pkg/env"
-	"github.com/ethereum-optimism/optimism/op-service/testlog"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeployPreimageOracle(t *testing.T) {
-	t.Parallel()
+func TestNewDeployPreimageOracleScript(t *testing.T) {
+	t.Run("should not fail with current version of DeployPreimageOracle contract", func(t *testing.T) {
+		// First we grab a test host
+		host1 := createTestHost(t)
 
-	_, artifacts := testutil.LocalArtifacts(t)
+		// Then we load the script
+		//
+		// This would raise an error if the Go types didn't match the ABI
+		deployPreimageOracle, err := NewDeployPreimageOracleScript(host1)
+		require.NoError(t, err)
 
-	host, err := env.DefaultScriptHost(
-		broadcaster.NoopBroadcaster(),
-		testlog.Logger(t, log.LevelInfo),
-		common.Address{'D'},
-		artifacts,
-	)
-	require.NoError(t, err)
+		// Then we deploy
+		output, err := deployPreimageOracle.Run(DeployPreimageOracleInput{
+			MinProposalSize: big.NewInt(1),
+			ChallengePeriod: big.NewInt(2),
+		})
 
-	input := DeployPreimageOracleInput{
-		MinProposalSize: big.NewInt(123),
-		ChallengePeriod: big.NewInt(456),
-	}
-
-	output, err := DeployPreimageOracle(host, input)
-	require.NoError(t, err)
-
-	require.NotEmpty(t, output.PreimageOracle)
+		// And do some simple asserts
+		require.NoError(t, err)
+		require.NotNil(t, output)
+		require.NotEqual(t, output.PreimageOracle, common.Address{})
+	})
 }

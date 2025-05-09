@@ -3,103 +3,49 @@ pragma solidity ^0.8.0;
 
 import { Test } from "forge-std/Test.sol";
 
-import {
-    DeployPreimageOracle,
-    DeployPreimageOracleInput,
-    DeployPreimageOracleOutput
-} from "scripts/deploy/DeployPreimageOracle.s.sol";
-
-contract DeployPreimageOracleInput_Test is Test {
-    DeployPreimageOracleInput input;
-
-    function setUp() public {
-        input = new DeployPreimageOracleInput();
-    }
-
-    function test_getters_whenNotSet_reverts() public {
-        vm.expectRevert("DeployPreimageOracleInput: not set");
-        input.minProposalSize();
-
-        vm.expectRevert("DeployPreimageOracleInput: not set");
-        input.challengePeriod();
-    }
-
-    function test_set_succeeds() public {
-        uint256 minProposalSize = 1000;
-        uint256 challengePeriod = 7 days;
-
-        input.set(input.minProposalSize.selector, minProposalSize);
-        input.set(input.challengePeriod.selector, challengePeriod);
-
-        assertEq(input.minProposalSize(), minProposalSize);
-        assertEq(input.challengePeriod(), challengePeriod);
-    }
-
-    function test_set_withInvalidSelector_reverts() public {
-        vm.expectRevert("DeployPreimageOracleInput: unknown selector");
-        input.set(bytes4(0xdeadbeef), 100);
-    }
-}
-
-contract DeployPreimageOracleOutput_Test is Test {
-    DeployPreimageOracleOutput output;
-    address mockOracle;
-
-    function setUp() public {
-        output = new DeployPreimageOracleOutput();
-        mockOracle = makeAddr("oracle");
-        vm.etch(mockOracle, hex"01");
-    }
-
-    function test_getters_whenNotSet_reverts() public {
-        vm.expectRevert("DeployPreimageOracleOutput: not set");
-        output.preimageOracle();
-    }
-
-    function test_set_succeeds() public {
-        output.set(output.preimageOracle.selector, mockOracle);
-        assertEq(address(output.preimageOracle()), mockOracle);
-    }
-
-    function test_set_withZeroAddress_reverts() public {
-        vm.expectRevert("DeployPreimageOracleOutput: cannot set zero address");
-        output.set(output.preimageOracle.selector, address(0));
-    }
-
-    function test_set_withInvalidSelector_reverts() public {
-        vm.expectRevert("DeployPreimageOracleOutput: unknown selector");
-        output.set(bytes4(0xdeadbeef), mockOracle);
-    }
-}
+import { DeployPreimageOracle } from "scripts/deploy/DeployPreimageOracle.s.sol";
 
 contract DeployPreimageOracle_Test is Test {
-    DeployPreimageOracle script;
-    DeployPreimageOracleInput input;
-    DeployPreimageOracleOutput output;
+    DeployPreimageOracle deployPreimageOracle;
 
-    uint256 minProposalSize;
-    uint256 challengePeriod;
+    uint256 defaultMinProposalSize = 1000;
+    uint256 defaultChallengePeriod = 7 days;
 
     function setUp() public {
-        script = new DeployPreimageOracle();
-        input = new DeployPreimageOracleInput();
-        output = new DeployPreimageOracleOutput();
-
-        minProposalSize = 1000;
-        challengePeriod = 7 days;
+        deployPreimageOracle = new DeployPreimageOracle();
     }
 
-    function test_run_succeeds() public {
-        input.set(input.minProposalSize.selector, minProposalSize);
-        input.set(input.challengePeriod.selector, challengePeriod);
+    function testFuzz_run_succeeds(DeployPreimageOracle.Input memory _input, uint64 _challengePeriod) public {
+        vm.assume(_input.minProposalSize != 0);
+        vm.assume(_challengePeriod != 0);
 
-        script.run(input, output);
+        _input.challengePeriod = _challengePeriod;
 
-        assertTrue(address(output.preimageOracle()) != address(0));
+        DeployPreimageOracle.Output memory output = deployPreimageOracle.run(_input);
+
+        assertNotEq(address(output.preimageOracle), address(0));
+        assertEq(output.preimageOracle.minProposalSize(), _input.minProposalSize);
+        assertEq(output.preimageOracle.challengePeriod(), _input.challengePeriod);
     }
 
-    function test_assertValid_whenInvalid_reverts() public {
-        vm.expectRevert("DeployPreimageOracleOutput: not set");
-        script.assertValid(input, output);
+    function test_run_nullInputs_reverts() public {
+        DeployPreimageOracle.Input memory input;
+
+        input = defaultInput();
+        input.minProposalSize = 0;
+        vm.expectRevert("DeployPreimageOracle: minProposalSize not set");
+        deployPreimageOracle.run(input);
+
+        input = defaultInput();
+        input.challengePeriod = 0;
+        vm.expectRevert("DeployPreimageOracle: challengePeriod not set");
+        deployPreimageOracle.run(input);
+    }
+
+    function defaultInput() internal view returns (DeployPreimageOracle.Input memory input_) {
+        input_ = DeployPreimageOracle.Input({
+            minProposalSize: defaultMinProposalSize,
+            challengePeriod: defaultChallengePeriod
+        });
     }
 }

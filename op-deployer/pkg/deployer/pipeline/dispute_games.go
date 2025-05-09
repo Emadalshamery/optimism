@@ -58,7 +58,11 @@ func deployDisputeGame(
 	if game.UseCustomOracle {
 		lgr.Info("deploying custom oracle")
 
-		out, err := opcm.DeployPreimageOracle(env.L1ScriptHost, opcm.DeployPreimageOracleInput{
+		deployPreimageOracleScript, err := opcm.NewDeployPreimageOracleScript(env.L1ScriptHost)
+		if err != nil {
+			return fmt.Errorf("failed to load DeployPreimageOracle script: %w", err)
+		}
+		out, err := deployPreimageOracleScript.Run(opcm.DeployPreimageOracleInput{
 			MinProposalSize: new(big.Int).SetUint64(game.OracleMinProposalSize),
 			ChallengePeriod: new(big.Int).SetUint64(game.OracleChallengePeriodSeconds),
 		})
