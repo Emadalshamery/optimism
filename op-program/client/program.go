@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-program/client/interop"
 	"github.com/ethereum-optimism/optimism/op-program/client/l1"
 	"github.com/ethereum-optimism/optimism/op-program/client/l2"
+	"github.com/ethereum-optimism/optimism/op-program/client/oraclebenchmark"
 	"github.com/ethereum-optimism/optimism/op-program/client/tasks"
 	oplog "github.com/ethereum-optimism/optimism/op-service/log"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -26,11 +27,21 @@ type Config struct {
 	ForceHintChainID bool
 	DB               l2.KeyValueStore
 	StoreBlockData   bool
+
+	BenchmarkCanonicalOracle bool
 }
+
+type ProgramVariant int
+
+const (
+	ProgramVariantPreInterop ProgramVariant = iota
+	ProgramVariantInterop
+	ProgramVariantCanonBenchmark
+)
 
 // Main executes the client program in a detached context and exits the current process.
 // The client runtime environment must be preset before calling this function.
-func Main(useInterop bool) {
+func Main(variant ProgramVariant) {
 	// Default to a machine parsable but relatively human friendly log format.
 	// Don't do anything fancy to detect if color output is supported.
 	logger := oplog.NewLogger(os.Stdout, oplog.CLIConfig{
@@ -40,12 +51,16 @@ func Main(useInterop bool) {
 	})
 	oplog.SetGlobalLogHandler(logger.Handler())
 
-	logger.Info("Starting fault proof program client", "useInterop", useInterop)
+	useInterop := variant == ProgramVariantInterop
+	benchmarkCanonOracle := variant == ProgramVariantCanonBenchmark
+
+	logger.Info("Starting fault proof program client", "useInterop", useInterop, "benchmarkCanonOracle", benchmarkCanonOracle)
 	preimageOracle := preimage.ClientPreimageChannel()
 	preimageHinter := preimage.ClientHinterChannel()
 	config := Config{
-		InteropEnabled: useInterop,
-		DB:             memorydb.New(),
+		InteropEnabled:           useInterop,
+		DB:                       memorydb.New(),
+		BenchmarkCanonicalOracle: benchmarkCanonOracle,
 	}
 	if err := RunProgram(logger, preimageOracle, preimageHinter, config); errors.Is(err, claim.ErrClaimNotValid) {
 		log.Error("Claim is invalid", "err", err)
@@ -65,6 +80,12 @@ func RunProgram(logger log.Logger, preimageOracle io.ReadWriter, preimageHinter 
 	hClient := preimage.NewHintWriter(preimageHinter)
 	l1PreimageOracle := l1.NewCachingOracle(l1.NewPreimageOracle(pClient, hClient))
 	l2PreimageOracle := l2.NewCachingOracle(l2.NewPreimageOracle(pClient, hClient, cfg.InteropEnabled || cfg.ForceHintChainID))
+
+	if cfg.BenchmarkCanonicalOracle {
+		bootInfo := boot.BootstrapCanonOracle(pClient)
+		// the l2preimageOracle can work for either l2 or l1
+		return oraclebenchmark.RunOracleBenchmark(logger, bootInfo, l2PreimageOracle, cfg.DB)
+	}
 
 	if cfg.InteropEnabled {
 		bootInfo := boot.BootstrapInterop(pClient)

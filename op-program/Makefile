@@ -26,8 +26,9 @@ op-program-host:
 op-program-client:
 	env GO111MODULE=on GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client ./client/cmd/main.go
 	env GO111MODULE=on GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client-interop ./client/interopcmd/main.go
+	env GO111MODULE=on GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client-canon-benchmark ./client/canonbenchmarkcmd/main.go
 
-op-program-client-mips: op-program-client-mips64 op-program-client-mips64-interop
+op-program-client-mips: op-program-client-mips64 op-program-client-mips64-interop op-program-client-mips64-canon-benchmark
 
 op-program-client-mips64:
 	env GO111MODULE=on GOOS=linux GOARCH=mips64 GOMIPS64=softfloat go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client64.elf ./client/cmd/main.go
@@ -38,6 +39,12 @@ op-program-client-mips64-interop:
 	env GO111MODULE=on GOOS=linux GOARCH=mips64 GOMIPS64=softfloat go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client-interop.elf ./client/interopcmd/main.go
 	# verify output with: readelf -h bin/op-program-client-interop.elf
 	# result is mips64, big endian, R3000
+
+op-program-client-mips64-canon-benchmark:
+	env GO111MODULE=on GOOS=linux GOARCH=mips64 GOMIPS64=softfloat go build -v -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client-canon-benchmark.elf ./client/canonbenchmarkcmd/main.go
+	# verify output with: readelf -h bin/op-program-client-canon-benchmark.elf
+	# result is mips64, big endian, R3000
+
 
 op-program-client-riscv:
 	env GO111MODULE=on GOOS=linux GOARCH=riscv64 go build -v -gcflags="all=-d=softfloat" -ldflags "$(PC_LDFLAGSSTRING)" -o ./bin/op-program-client-riscv.elf ./client/cmd/main.go

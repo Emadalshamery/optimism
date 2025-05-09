@@ -154,6 +154,12 @@ cannon-prestate-interop: op-program cannon ## Generates interop prestate using c
 	mv op-program/bin/0-interop.json op-program/bin/prestate-proof-interop.json
 .PHONY: cannon-prestate-interop
 
+cannon-prestate-canon-benchmark: op-program cannon
+	./cannon/bin/cannon load-elf --type multithreaded64-4 --path op-program/bin/op-program-client-canon-benchmark.elf --out op-program/bin/prestate-canon-benchmark.bin.gz --meta op-program/bin/meta-canon-benchmark.json
+	./cannon/bin/cannon run --proof-at '=0' --stop-at '=1' --input op-program/bin/prestate-canon-benchmark.bin.gz --meta op-program/bin/meta-canon-benchmark.json --proof-fmt 'op-program/bin/%d-canon-benchmark.json' --output ""
+	mv op-program/bin/0-canon-benchmark.json op-program/bin/prestate-proof-canon-benchmark.json
+.PHONY: cannon-prestate-canon-benchmark
+
 mod-tidy: ## Cleans up unused dependencies in Go modules
 	# Below GOPRIVATE line allows mod-tidy to be run immediately after
 	# releasing new versions. This bypasses the Go modules proxy, which

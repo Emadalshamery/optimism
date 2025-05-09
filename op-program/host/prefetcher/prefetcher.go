@@ -73,6 +73,8 @@ type Prefetcher struct {
 	// Used to run the program for native block execution
 	executor       ProgramExecutor
 	agreedPrestate []byte
+
+	archiveSource hosttypes.ArchiveSource
 }
 
 func NewPrefetcher(
@@ -96,6 +98,20 @@ func NewPrefetcher(
 		executor:       executor,
 		l2Head:         l2Head,
 		agreedPrestate: agreedPrestate,
+	}
+}
+
+func NewCanonOracleBenchmarkPrefetcher(
+	logger log.Logger,
+	defaultChainID eth.ChainID,
+	archiveSource hosttypes.ArchiveSource,
+	kvStore kvstore.KV,
+) *Prefetcher {
+	return &Prefetcher{
+		logger:         logger,
+		defaultChainID: defaultChainID,
+		archiveSource:  archiveSource,
+		kvStore:        kvStore,
 	}
 }
 
@@ -227,17 +243,19 @@ func (p *Prefetcher) prefetchState(ctx context.Context, hint string) error {
 		return err
 	}
 
-	cl, err := p.l2Sources.ForChainID(chainID)
-	if err != nil {
-		return err
-	}
+	if !p.canonBenchmarkPrefetcher() {
+		cl, err := p.l2Sources.ForChainID(chainID)
+		if err != nil {
+			return err
+		}
 
-	// some L2 state data can be fetched in bulk from block execution witnesses instead of direction from the MPT
-	// if we have a bulk hint, we should use it instead of the last hint (will fallback to last hint after bulk hint is cleared and request is retried)
-	if p.lastBulkHint != "" && cl.ExperimentalEnabled() {
-		bulkHint := p.lastBulkHint
-		p.lastBulkHint = ""
-		return p.bulkPrefetch(ctx, bulkHint)
+		// some L2 state data can be fetched in bulk from block execution witnesses instead of direction from the MPT
+		// if we have a bulk hint, we should use it instead of the last hint (will fallback to last hint after bulk hint is cleared and request is retried)
+		if p.lastBulkHint != "" && cl.ExperimentalEnabled() {
+			bulkHint := p.lastBulkHint
+			p.lastBulkHint = ""
+			return p.bulkPrefetch(ctx, bulkHint)
+		}
 	}
 
 	// if we don't have a bulk hint, we should just fetch state normally by MPT hash
@@ -247,7 +265,7 @@ func (p *Prefetcher) prefetchState(ctx context.Context, hint string) error {
 		if err != nil {
 			return err
 		}
-		source, err := p.l2Sources.ForChainID(chainID)
+		source, err := p.getSource(chainID)
 		if err != nil {
 			return err
 		}
@@ -261,7 +279,7 @@ func (p *Prefetcher) prefetchState(ctx context.Context, hint string) error {
 		if err != nil {
 			return err
 		}
-		source, err := p.l2Sources.ForChainID(chainID)
+		source, err := p.getSource(chainID)
 		if err != nil {
 			return err
 		}
@@ -420,7 +438,7 @@ func (p *Prefetcher) prefetch(ctx context.Context, hint string) error {
 		if err != nil {
 			return err
 		}
-		source, err := p.l2Sources.ForChainID(chainID)
+		source, err := p.getSource(chainID)
 		if err != nil {
 			return err
 		}
@@ -442,7 +460,7 @@ func (p *Prefetcher) prefetch(ctx context.Context, hint string) error {
 		if err != nil {
 			return err
 		}
-		source, err := p.l2Sources.ForChainID(chainID)
+		source, err := p.getSource(chainID)
 		if err != nil {
 			return err
 		}
@@ -452,6 +470,9 @@ func (p *Prefetcher) prefetch(ctx context.Context, hint string) error {
 		}
 		return p.storeReceipts(receipts)
 	case l2.HintL2Output:
+		if p.canonBenchmarkPrefetcher() {
+			return fmt.Errorf("this prefetcher does not support L2Output prefetching")
+		}
 		requestedHash, chainID, err := p.parseHashAndChainID("L2 output", hintBytes)
 		if err != nil {
 			return err
@@ -494,6 +515,9 @@ func (p *Prefetcher) prefetch(ctx context.Context, hint string) error {
 			return p.kvStore.Put(preimage.Keccak256Key(eth.OutputRoot(output)).PreimageKey(), output.Marshal())
 		}
 	case l2.HintL2BlockData:
+		if p.canonBenchmarkPrefetcher() {
+			return fmt.Errorf("this prefetcher does not support L2Output prefetching")
+		}
 		if p.executor == nil {
 			return fmt.Errorf("this prefetcher does not support native block execution")
 		}
@@ -512,6 +536,9 @@ func (p *Prefetcher) prefetch(ctx context.Context, hint string) error {
 		}
 		return p.kvStore.Put(BlockDataKey(blockHash).Key(), []byte{1})
 	case l2.HintAgreedPrestate:
+		if p.canonBenchmarkPrefetcher() {
+			return fmt.Errorf("this prefetcher does not support L2Output prefetching")
+		}
 		if len(p.agreedPrestate) == 0 {
 			return ErrAgreedPrestateUnavailable
 		}
@@ -533,6 +560,13 @@ func (p *Prefetcher) parseHashAndChainID(hintType string, hintBytes []byte) (com
 	default:
 		return common.Hash{}, eth.ChainID{}, fmt.Errorf("invalid %s hint: %x", hintType, hintBytes)
 	}
+}
+
+func (p *Prefetcher) getSource(chainID eth.ChainID) (hosttypes.ArchiveSource, error) {
+	if p.canonBenchmarkPrefetcher() {
+		return p.archiveSource, nil
+	}
+	return p.l2Sources.ForChainID(chainID)
 }
 
 type BlockDataKey [32]byte
@@ -570,6 +604,10 @@ func (p *Prefetcher) storeNodes(nodes []hexutil.Bytes) error {
 		}
 	}
 	return nil
+}
+
+func (p *Prefetcher) canonBenchmarkPrefetcher() bool {
+	return p.archiveSource != nil
 }
 
 // parseHint parses a hint string in wire protocol. Returns the hint type, requested hash and error (if any).

@@ -13,6 +13,13 @@ const (
 	L2ChainConfigLocalIndex
 	RollupConfigLocalIndex
 	DependencySetLocalIndex
+
+	// Bootstrap Canonical Oracle keys
+	CanonOracleQueryNumberLocalIndex
+	CanonOracleQueryHashLocalIndex
+	CanonOracleHeadLocalIndex
+	CanonOracleChainIDLocalIndex
+	CanonOracleChainConfigLocalIndex
 )
 
 type oracleClient interface {

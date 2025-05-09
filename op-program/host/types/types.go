@@ -36,3 +36,11 @@ type L2Sources interface {
 	ForChainID(chainID eth.ChainID) (L2Source, error)
 	ForChainIDWithoutRetries(chainID eth.ChainID) (L2Source, error)
 }
+
+type ArchiveSource interface {
+	InfoAndTxsByHash(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Transactions, error)
+	NodeByHash(ctx context.Context, hash common.Hash) ([]byte, error)
+	CodeByHash(ctx context.Context, hash common.Hash) ([]byte, error)
+	FetchReceipts(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Receipts, error)
+	GetProof(ctx context.Context, address common.Address, storage []common.Hash, blockTag string) (*eth.AccountResult, error)
+}

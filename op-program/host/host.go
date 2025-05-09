@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum-optimism/optimism/op-node/chaincfg"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
@@ -56,6 +57,9 @@ func Main(logger log.Logger, cfg *config.Config) error {
 	if cfg.ServerMode {
 		preimageChan := preimage.ClientPreimageChannel()
 		hinterChan := preimage.ClientHinterChannel()
+		if cfg.CanonOracleConfig != nil {
+			return hostcommon.PreimageServer(ctx, logger, cfg, preimageChan, hinterChan, makeCanonOracleBenchmarkPrefetcher)
+		}
 		return hostcommon.PreimageServer(ctx, logger, cfg, preimageChan, hinterChan, makeDefaultPrefetcher)
 	}
 
@@ -69,7 +73,11 @@ func Main(logger log.Logger, cfg *config.Config) error {
 // FaultProofProgramWithDefaultPrefecher is the programmatic entry-point for the fault proof program
 func FaultProofProgramWithDefaultPrefecher(ctx context.Context, logger log.Logger, cfg *config.Config, opts ...hostcommon.ProgramOpt) error {
 	var newopts []hostcommon.ProgramOpt
-	newopts = append(newopts, hostcommon.WithPrefetcher(makeDefaultPrefetcher))
+	if cfg.CanonOracleConfig != nil {
+		newopts = append(newopts, hostcommon.WithPrefetcher(makeCanonOracleBenchmarkPrefetcher))
+	} else {
+		newopts = append(newopts, hostcommon.WithPrefetcher(makeDefaultPrefetcher))
+	}
 	newopts = append(newopts, opts...)
 	return hostcommon.FaultProofProgram(ctx, logger, cfg, newopts...)
 }
@@ -103,6 +111,30 @@ func makeDefaultPrefetcher(ctx context.Context, logger log.Logger, kv kvstore.KV
 
 	executor := MakeProgramExecutor(logger, cfg)
 	return prefetcher.NewPrefetcher(logger, l1Cl, l1BlobFetcher, eth.ChainIDFromBig(cfg.Rollups[0].L2ChainID), sources, kv, executor, cfg.L2Head, cfg.AgreedPrestate), nil
+}
+
+func makeCanonOracleBenchmarkPrefetcher(ctx context.Context, logger log.Logger, kv kvstore.KV, cfg *config.Config) (hostcommon.Prefetcher, error) {
+	if !cfg.FetchingEnabled() {
+		return nil, nil
+	}
+	url := cfg.CanonOracleConfig.URL
+	logger.Info("Connecting to ETH node", "url", url)
+
+	rpc, err := client.NewRPC(ctx, logger, url, client.WithDialAttempts(10), client.WithCallTimeout(5*time.Minute))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to rpc URL %s: %w", url, err)
+	}
+	source, err := hostcommon.NewGenericSourceFromRPC(logger, rpc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create l2 source for chain ID %v: %w", cfg.CanonOracleConfig.ChainID, err)
+	}
+
+	return prefetcher.NewCanonOracleBenchmarkPrefetcher(
+		logger,
+		cfg.CanonOracleConfig.ChainID,
+		source,
+		kv,
+	), nil
 }
 
 type programExecutor struct {

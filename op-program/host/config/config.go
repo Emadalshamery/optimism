@@ -99,9 +99,27 @@ type Config struct {
 	AgreedPrestate []byte
 	// DependencySet is the dependency set for the interop host. Required for interop.
 	DependencySet depset.DependencySet
+
+	// CanonOracleConfig is the config for the canonical oracle benchmark program.
+	// If set, it overrides pre-interop and interop-specific configs.
+	CanonOracleConfig *CanonOracleConfig
+}
+
+type CanonOracleConfig struct {
+	URL         string
+	QueryNumber uint64
+	QueryHash   common.Hash
+	Head        common.Hash
+	ChainID     eth.ChainID
+	ChainConfig *params.ChainConfig
 }
 
 func (c *Config) Check() error {
+	// skip checks for canon oracle config
+	if c.CanonOracleConfig != nil {
+		return nil
+	}
+
 	if !c.InteropEnabled && c.L2ChainID == (eth.ChainID{}) {
 		return ErrMissingL2ChainID
 	}
@@ -176,7 +194,7 @@ func (c *Config) Check() error {
 }
 
 func (c *Config) FetchingEnabled() bool {
-	return c.L1URL != "" && len(c.L2URLs) > 0 && c.L1BeaconURL != ""
+	return (c.L1URL != "" && len(c.L2URLs) > 0 && c.L1BeaconURL != "") || (c.CanonOracleConfig.URL != "")
 }
 
 func NewSingleChainConfig(
@@ -232,6 +250,9 @@ func NewConfig(
 func NewConfigFromCLI(log log.Logger, ctx *cli.Context) (*Config, error) {
 	if err := flags.CheckRequired(ctx); err != nil {
 		return nil, err
+	}
+	if ctx.Bool(flags.CanonOracleBenchmark.Name) {
+		return newCanonOracleBenchmarkConfigFromCLI(ctx)
 	}
 
 	var l2Head common.Hash
@@ -367,6 +388,35 @@ func NewConfigFromCLI(log log.Logger, ctx *cli.Context) (*Config, error) {
 		ExecCmd:            ctx.String(flags.Exec.Name),
 		ServerMode:         ctx.Bool(flags.Server.Name),
 		InteropEnabled:     interopEnabled,
+	}, nil
+}
+
+func newCanonOracleBenchmarkConfigFromCLI(ctx *cli.Context) (*Config, error) {
+	chainConfig := new(params.ChainConfig)
+	data, err := os.ReadFile(ctx.String(flags.CanonOracleBenchmarkChainConfig.Name))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read chain config: %w", err)
+	}
+	if err := json.Unmarshal(data, chainConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal chain config: %w", err)
+	}
+	dbFormat := types.DataFormat(ctx.String(flags.DataFormat.Name))
+	if !slices.Contains(types.SupportedDataFormats, dbFormat) {
+		return nil, fmt.Errorf("invalid %w: %v", ErrInvalidDataFormat, dbFormat)
+	}
+	return &Config{
+		DataDir:    ctx.String(flags.DataDir.Name),
+		DataFormat: dbFormat,
+		ExecCmd:    ctx.String(flags.Exec.Name),
+		ServerMode: ctx.Bool(flags.Server.Name),
+		CanonOracleConfig: &CanonOracleConfig{
+			URL:         ctx.String(flags.CanonOracleBenchmarkURL.Name),
+			QueryNumber: ctx.Uint64(flags.CanonOracleBenchmarkQueryNumber.Name),
+			QueryHash:   common.HexToHash(ctx.String(flags.CanonOracleBenchmarkQueryHash.Name)),
+			Head:        common.HexToHash(ctx.String(flags.CanonOracleBenchmarkHead.Name)),
+			ChainID:     eth.ChainIDFromBig(chainConfig.ChainID),
+			ChainConfig: chainConfig,
+		},
 	}, nil
 }
 

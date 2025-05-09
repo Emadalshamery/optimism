@@ -81,7 +81,8 @@ func (o *FastCanonicalBlockHeaderOracle) GetHeaderByNumber(n uint64) *types.Head
 	if cover != math.MaxUint64 {
 		h, _ = o.cache.Get(cover)
 	}
-	if !o.config.IsIsthmus(h.Time) {
+	if !o.config.IsIsthmus(h.Time) && !o.config.IsPrague(h.Number, h.Time) {
+		fmt.Printf("program: Using fallback at num=%d time=%d\n", h.Number.Uint64(), h.Time)
 		return o.fallback.GetHeaderByNumber(n)
 	}
 

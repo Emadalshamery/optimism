@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	client.Main(true)
+	client.Main(client.ProgramVariantInterop)
 }

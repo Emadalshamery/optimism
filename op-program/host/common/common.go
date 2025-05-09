@@ -147,6 +147,7 @@ func FaultProofProgram(ctx context.Context, logger log.Logger, cfg *config.Confi
 			clientCfg.SkipValidation = true
 		}
 		clientCfg.InteropEnabled = cfg.InteropEnabled
+		clientCfg.BenchmarkCanonicalOracle = cfg.CanonOracleConfig != nil
 		clientCfg.DB = programConfig.db
 		clientCfg.StoreBlockData = programConfig.storeBlockData
 		clientCfg.ForceHintChainID = programConfig.forceHintChainID

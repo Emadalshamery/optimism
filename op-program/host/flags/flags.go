@@ -138,6 +138,42 @@ var (
 		Usage:   "Run in pre-image server mode without executing any client program.",
 		EnvVars: prefixEnvVars("SERVER"),
 	}
+
+	CanonOracleBenchmark = &cli.BoolFlag{
+		Name:    "canon-oracle-benchmark",
+		Usage:   "Run in canonical oracle benchmark mode.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK"),
+	}
+	CanonOracleBenchmarkURL = &cli.StringFlag{
+		Name:    "canon-oracle-benchmark.url",
+		Usage:   "The URL to use for the canonical oracle benchmark.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_URL"),
+	}
+	CanonOracleBenchmarkQueryNumber = &cli.Uint64Flag{
+		Name:    "canon-oracle-benchmark.query-number",
+		Usage:   "The query number to use for the canonical oracle benchmark.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_QUERY_NUMBER"),
+	}
+	CanonOracleBenchmarkQueryHash = &cli.StringFlag{
+		Name:    "canon-oracle-benchmark.query-hash",
+		Usage:   "The query hash to use for the canonical oracle benchmark.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_QUERY_HASH"),
+	}
+	CanonOracleBenchmarkHead = &cli.StringFlag{
+		Name:    "canon-oracle-benchmark.head",
+		Usage:   "The head to use for the canonical oracle benchmark.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_HEAD"),
+	}
+	CanonOracleBenchmarkChainID = &cli.Uint64Flag{
+		Name:    "canon-oracle-benchmark.chain-id",
+		Usage:   "The chain ID to use for the canonical oracle benchmark.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_CHAIN_ID"),
+	}
+	CanonOracleBenchmarkChainConfig = &cli.StringFlag{
+		Name:    "canon-oracle-benchmark.chain-config",
+		Usage:   "The chain config to use for the canonical oracle benchmark.",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_CHAIN_CONFIG"),
+	}
 )
 
 // Flags contains the list of configuration options available to the binary.
@@ -168,6 +204,14 @@ var programFlags = []cli.Flag{
 	DepsetConfig,
 	Exec,
 	Server,
+
+	CanonOracleBenchmark,
+	CanonOracleBenchmarkURL,
+	CanonOracleBenchmarkQueryNumber,
+	CanonOracleBenchmarkQueryHash,
+	CanonOracleBenchmarkHead,
+	CanonOracleBenchmarkChainID,
+	CanonOracleBenchmarkChainConfig,
 }
 
 func init() {
@@ -177,6 +221,28 @@ func init() {
 }
 
 func CheckRequired(ctx *cli.Context) error {
+	if ctx.Bool(CanonOracleBenchmark.Name) {
+		if !ctx.IsSet(CanonOracleBenchmarkQueryNumber.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkQueryNumber.Name, CanonOracleBenchmark.Name)
+		}
+		if !ctx.IsSet(CanonOracleBenchmarkURL.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkURL.Name, CanonOracleBenchmark.Name)
+		}
+		if !ctx.IsSet(CanonOracleBenchmarkQueryHash.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkQueryHash.Name, CanonOracleBenchmark.Name)
+		}
+		if !ctx.IsSet(CanonOracleBenchmarkHead.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkHead.Name, CanonOracleBenchmark.Name)
+		}
+		if !ctx.IsSet(CanonOracleBenchmarkChainID.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkChainID.Name, CanonOracleBenchmark.Name)
+		}
+		if !ctx.IsSet(CanonOracleBenchmarkChainConfig.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkChainConfig.Name, CanonOracleBenchmark.Name)
+		}
+		return nil
+	}
+
 	if ctx.Bool(L2Custom.Name) && ctx.IsSet(Network.Name) {
 		return fmt.Errorf("flag %s cannot be used with named networks", L2Custom.Name)
 	}

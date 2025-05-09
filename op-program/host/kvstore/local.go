@@ -28,6 +28,12 @@ var (
 	l2ChainConfigKey      = boot.L2ChainConfigLocalIndex.PreimageKey()
 	rollupKey             = boot.RollupConfigLocalIndex.PreimageKey()
 	dependencySetKey      = boot.DependencySetLocalIndex.PreimageKey()
+
+	canonOracleQueryNumberKey = boot.CanonOracleQueryNumberLocalIndex.PreimageKey()
+	canonOracleQueryHashKey   = boot.CanonOracleQueryHashLocalIndex.PreimageKey()
+	canonOracleHeadKey        = boot.CanonOracleHeadLocalIndex.PreimageKey()
+	canonOracleChainIDKey     = boot.CanonOracleChainIDLocalIndex.PreimageKey()
+	canonOracleChainConfigKey = boot.CanonOracleChainConfigLocalIndex.PreimageKey()
 )
 
 func (s *LocalPreimageSource) Get(key common.Hash) ([]byte, error) {
@@ -63,6 +69,16 @@ func (s *LocalPreimageSource) Get(key common.Hash) ([]byte, error) {
 			return nil, errors.New("host is not configured to serve dependencySet local keys")
 		}
 		return json.Marshal(s.config.DependencySet)
+	case canonOracleQueryNumberKey:
+		return binary.BigEndian.AppendUint64(nil, s.config.CanonOracleConfig.QueryNumber), nil
+	case canonOracleQueryHashKey:
+		return s.config.CanonOracleConfig.QueryHash.Bytes(), nil
+	case canonOracleHeadKey:
+		return s.config.CanonOracleConfig.Head.Bytes(), nil
+	case canonOracleChainIDKey:
+		return binary.BigEndian.AppendUint64(nil, eth.EvilChainIDToUInt64(s.config.CanonOracleConfig.ChainID)), nil
+	case canonOracleChainConfigKey:
+		return json.Marshal(s.config.CanonOracleConfig.ChainConfig)
 	default:
 		return nil, ErrNotFound
 	}
