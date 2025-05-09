@@ -36,3 +36,10 @@ gates:
     description: "Interop network tests."
     tests:
       - package: github.com/ethereum-optimism/optimism/op-acceptance-tests/tests/interop
+
+  - id: interop-reorgs
+    inherits:
+      - base
+    description: "Interop reorgs network tests."
+    tests:
+      - package: github.com/ethereum-optimism/optimism/op-acceptance-tests/tests/interop/reorgs
