@@ -705,3 +705,88 @@ func TestL2CLAheadOfSupervisor(gt *testing.T) {
 		require.Equal(queryBlockFromELByNumber(elB, targetBlockNum5).Hash, queryBlockFromELByNumber(elB2, targetBlockNum5).Hash)
 	}
 }
+
+func TestTemp(gt *testing.T) {
+	var ids MultiSupervisorInteropSystemIDs
+	opt := MultiSupervisorInteropSystem(&ids)
+
+	logger := testlog.Logger(gt, log.LevelInfo)
+
+	p := devtest.NewP(context.Background(), logger, func() {
+		gt.Helper()
+		gt.FailNow()
+	})
+	gt.Cleanup(p.Close)
+
+	orch := NewOrchestrator(p)
+	stack.ApplyOptionLifecycle(opt, orch)
+
+	t := devtest.SerialT(gt)
+	system := shim.NewSystem(t)
+	orch.Hydrate(system)
+
+	// control := orch.controlPlane
+
+	blockTime := system.L2Network(ids.L2A).RollupConfig().BlockTime
+
+	waitTime := time.Duration(blockTime+1) * time.Second
+	{
+		testlogger := system.T().Logger()
+		logger = testlogger.With("XXX", "XXX")
+
+		require := system.T().Require()
+
+		clA := system.L2Network(ids.L2A).L2CLNode(ids.L2ACL)
+		clA2 := system.L2Network(ids.L2A).L2CLNode(ids.L2A2CL)
+		clB := system.L2Network(ids.L2B).L2CLNode(ids.L2BCL)
+		clB2 := system.L2Network(ids.L2B).L2CLNode(ids.L2B2CL)
+		supervisorBackup := system.Supervisor(ids.SupervisorBackup)
+
+		targetBlockNum1 := max(querySyncStatusFromCL(clA).UnsafeL2.Number, querySyncStatusFromCL(clB).UnsafeL2.Number) + 10
+		logger.Info("make sure verifiers advances unsafe head", "target", targetBlockNum1)
+		require.Eventually(func() bool {
+			syncA := querySyncStatusFromCL(clA)
+			syncA2 := querySyncStatusFromCL(clA2)
+			syncB := querySyncStatusFromCL(clB)
+			syncB2 := querySyncStatusFromCL(clB2)
+			logger.Info("chain A CL view", "unsafe", syncA.UnsafeL2, "safe", syncA.SafeL2)
+			logger.Info("chain A2 CL view", "unsafe", syncA2.UnsafeL2, "safe", syncA2.SafeL2)
+			logger.Info("chain B CL view", "unsafe", syncB.UnsafeL2, "safe", syncB.SafeL2)
+			logger.Info("chain B2 CL view", "unsafe", syncB2.UnsafeL2, "safe", syncB2.SafeL2)
+			chainA2View := querySyncStatusFromSupervisor(supervisorBackup, clA2.ID().ChainID)
+			chainB2View := querySyncStatusFromSupervisor(supervisorBackup, clB2.ID().ChainID)
+			logger.Info("chain A2 supervisor view", "unsafe", chainA2View.LocalUnsafe, "safe", chainA2View.Safe)
+			logger.Info("chain B2 supervisor view", "unsafe", chainB2View.LocalUnsafe, "safe", chainB2View.Safe)
+			check := syncA2.UnsafeL2.Number > targetBlockNum1
+			check = check && syncB2.UnsafeL2.Number > targetBlockNum1
+			return check
+		}, 60*time.Second, waitTime)
+
+		logger.Info("disconnect p2p between L2CLs")
+		DisconnectL2CLP2P(ids.L2ACL, ids.L2A2CL).AfterDeploy(orch)
+		DisconnectL2CLP2P(ids.L2BCL, ids.L2B2CL).AfterDeploy(orch)
+
+		targetBlockNum2 := max(querySyncStatusFromCL(clA).SafeL2.Number, querySyncStatusFromCL(clB).SafeL2.Number) + 20
+		logger.Info("L2CLs advance safe heads", "target", targetBlockNum2)
+		require.Eventually(func() bool {
+			syncA := querySyncStatusFromCL(clA)
+			syncA2 := querySyncStatusFromCL(clA2)
+			syncB := querySyncStatusFromCL(clB)
+			syncB2 := querySyncStatusFromCL(clB2)
+			logger.Info("chain A CL view", "unsafe", syncA.UnsafeL2, "safe", syncA.SafeL2)
+			logger.Info("chain A2 CL view", "unsafe", syncA2.UnsafeL2, "safe", syncA2.SafeL2)
+			logger.Info("chain B CL view", "unsafe", syncB.UnsafeL2, "safe", syncB.SafeL2)
+			logger.Info("chain B2 CL view", "unsafe", syncB2.UnsafeL2, "safe", syncB2.SafeL2)
+			chainA2View := querySyncStatusFromSupervisor(supervisorBackup, clA2.ID().ChainID)
+			chainB2View := querySyncStatusFromSupervisor(supervisorBackup, clB2.ID().ChainID)
+			logger.Info("chain A2 supervisor view", "unsafe", chainA2View.LocalUnsafe, "safe", chainA2View.Safe)
+			logger.Info("chain B2 supervisor view", "unsafe", chainB2View.LocalUnsafe, "safe", chainB2View.Safe)
+
+			check := syncA.SafeL2.Number > targetBlockNum2
+			check = check && syncB.SafeL2.Number > targetBlockNum2
+			check = check && syncA2.SafeL2.Number > targetBlockNum2
+			check = check && syncB2.SafeL2.Number > targetBlockNum2
+			return check
+		}, 120*time.Second, waitTime)
+	}
+}
