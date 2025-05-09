@@ -381,14 +381,14 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 
 	logger := testlog.Logger(gt, log.LevelInfo)
 
-	p := devtest.NewP(logger, func() {
+	p := devtest.NewP(context.Background(), logger, func() {
 		gt.Helper()
 		gt.FailNow()
 	})
 	gt.Cleanup(p.Close)
 
 	orch := NewOrchestrator(p)
-	opt(orch)
+	stack.ApplyOptionLifecycle(opt, orch)
 
 	t := devtest.SerialT(gt)
 	system := shim.NewSystem(t)
@@ -426,7 +426,7 @@ func TestUnsafeChainKnownToL2CL(gt *testing.T) {
 
 		// For making verifier stop advancing unsafe head via P2P
 		logger.Info("disconnect p2p between L2CLs")
-		DisconnectL2CLP2P(ids.L2ACL, ids.L2A2CL)(orch)
+		DisconnectL2CLP2P(ids.L2ACL, ids.L2A2CL).AfterDeploy(orch)
 
 		// For making verifer not sync at all
 		logger.Info("stop verifier")
