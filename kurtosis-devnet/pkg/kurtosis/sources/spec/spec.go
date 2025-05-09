@@ -46,14 +46,14 @@ type ChainConfig struct {
 }
 
 // InteropConfig represents the interop section in the YAML
-type InteropConfig struct {
+type SuperchainConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
 // OptimismPackage represents the optimism_package section in the YAML
 type OptimismPackage struct {
-	Interop InteropConfig `yaml:"interop"`
-	Chains  []ChainConfig `yaml:"chains"`
+	Superchains map[string]SuperchainConfig `yaml:"superchains"`
+	Chains      []ChainConfig               `yaml:"chains"`
 }
 
 // YAMLSpec represents the root of the YAML document
@@ -80,7 +80,12 @@ var featuresMap = map[string]featureExtractor{
 }
 
 func interopExtractor(yamlSpec YAMLSpec, chainName string) bool {
-	return yamlSpec.OptimismPackage.Interop.Enabled
+	for _, superchain := range yamlSpec.OptimismPackage.Superchains {
+		if superchain.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractData parses a YAML document and returns the chain specifications
