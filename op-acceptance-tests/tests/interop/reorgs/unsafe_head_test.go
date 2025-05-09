@@ -1,6 +1,7 @@
 package reorgs
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,14 @@ var SimpleInterop presets.TestSetup[*presets.SimpleInterop]
 
 // TestMain creates the test-setups against the shared backend
 func TestMain(m *testing.M) {
-	// Other setups may be added here, hydrated from the same orchestrator
+	// Check if -list is among the arguments
+	for _, arg := range os.Args {
+		if strings.HasPrefix(arg, "-test.list=") || strings.HasPrefix(arg, "-list=") {
+			// Don't do anything extra — just run and exit
+			os.Exit(m.Run())
+		}
+	}
+
 	presets.DoMain(m, presets.NewSimpleInterop(&SimpleInterop))
 }
 

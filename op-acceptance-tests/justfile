@@ -17,6 +17,9 @@ isthmus:
 interop:
     @just acceptance-test interop interop
 
+interop-reorgs:
+    @just acceptance-test interop interop-reorgs
+
 
 # Run acceptance tests with mise-managed binary
 acceptance-test devnet="simple" gate="holocene":
