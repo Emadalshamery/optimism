@@ -345,6 +345,7 @@ contract DeployOPChain_TestBase is Test {
                 superchainProxyAdminOwner: superchainProxyAdminOwner,
                 protocolVersionsOwner: protocolVersionsOwner,
                 guardian: guardian,
+                paused: paused,
                 requiredProtocolVersion: bytes32(ProtocolVersion.unwrap(requiredProtocolVersion)),
                 recommendedProtocolVersion: bytes32(ProtocolVersion.unwrap(recommendedProtocolVersion))
             })
@@ -366,6 +367,7 @@ contract DeployOPChain_TestBase is Test {
                 challengePeriodSeconds: challengePeriodSeconds,
                 proofMaturityDelaySeconds: proofMaturityDelaySeconds,
                 disputeGameFinalityDelaySeconds: disputeGameFinalityDelaySeconds,
+                mipsVersion: StandardConstants.MIPS_VERSION,
                 l1ContractsRelease: release,
                 superchainConfigProxy: superchainConfigProxy,
                 protocolVersionsProxy: protocolVersionsProxy,
