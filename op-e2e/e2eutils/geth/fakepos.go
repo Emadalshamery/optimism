@@ -42,7 +42,8 @@ type fakePoS struct {
 	engineAPI *catalyst.ConsensusAPI
 	sub       ethereum.Subscription
 
-	beacon Beacon
+	beacon            Beacon
+	sequencingControl chan string // "pause", "resume", "quit"
 }
 
 func (f *fakePoS) FakeBeaconBlockRoot(time uint64) common.Hash {
@@ -56,12 +57,29 @@ func (f *fakePoS) Start() error {
 		advancing.Start()
 	}
 	withdrawalsRNG := rand.New(rand.NewSource(450368975843)) // avoid generating the same address as any test
+	paused := false
 	f.sub = event.NewSubscription(func(quit <-chan struct{}) error {
 		// poll every half a second: enough to catch up with any block time when ticks are missed
 		t := f.clock.NewTicker(time.Second / 2)
 		for {
 			select {
+			case msg := <-f.sequencingControl:
+				switch msg {
+				case "pause":
+					f.log.Warn("fakePoS received pause command")
+					paused = true
+				case "resume":
+					f.log.Warn("fakePoS received resume command")
+					paused = false
+				case "quit":
+					f.log.Warn("fakePoS received quit command, quitting...")
+					return nil
+				}
 			case now := <-t.Ch():
+				if paused {
+					f.log.Warn("fakePoS paused, skipping polling for new blocks")
+					continue
+				}
 				chain := f.eth.BlockChain()
 				head := chain.CurrentBlock()
 				finalized := chain.CurrentFinalBlock()

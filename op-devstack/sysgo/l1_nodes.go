@@ -53,7 +53,7 @@ func (n *L1CLNode) hydrate(system stack.ExtensibleSystem) {
 	l1Net.(stack.ExtensibleL1Network).AddL1CLNode(frontend)
 }
 
-func WithL1Nodes(l1ELID stack.L1ELNodeID, l1CLID stack.L1CLNodeID) stack.Option[*Orchestrator] {
+func WithL1Nodes(l1ELID stack.L1ELNodeID, l1CLID stack.L1CLNodeID, sequencingControl chan string) stack.Option[*Orchestrator] {
 	return stack.AfterDeploy(func(orch *Orchestrator) {
 		require := orch.P().Require()
 
@@ -80,6 +80,7 @@ func WithL1Nodes(l1ELID stack.L1ELNodeID, l1CLID stack.L1CLNodeID) stack.Option[
 
 		l1Geth, err := geth.InitL1(
 			blockTimeL1,
+			sequencingControl,
 			l1FinalizedDistance,
 			l1Net.genesis,
 			l1Clock,

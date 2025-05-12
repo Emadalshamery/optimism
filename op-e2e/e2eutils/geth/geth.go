@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/clock"
 )
 
-func InitL1(blockTime uint64, finalizedDistance uint64, genesis *core.Genesis, c clock.Clock, blobPoolDir string, beaconSrv Beacon, opts ...GethOption) (*GethInstance, error) {
+func InitL1(blockTime uint64, sequencingControl chan string, finalizedDistance uint64, genesis *core.Genesis, c clock.Clock, blobPoolDir string, beaconSrv Beacon, opts ...GethOption) (*GethInstance, error) {
 	ethConfig := &ethconfig.Config{
 		NetworkId: genesis.Config.ChainID.Uint64(),
 		Genesis:   genesis,
@@ -63,12 +63,13 @@ func InitL1(blockTime uint64, finalizedDistance uint64, genesis *core.Genesis, c
 	gethInstance.Node.RegisterLifecycle(&fakePoS{
 		clock:             c,
 		eth:               gethInstance.Backend,
-		log:               log.Root(), // geth logger is global anyway. Would be nice to replace with a local logger though.
+		log:               log.New("module", "fakePoS"), // geth logger is global anyway. Would be nice to replace with a local logger though.
 		blockTime:         blockTime,
 		finalizedDistance: finalizedDistance,
 		safeDistance:      4,
 		engineAPI:         catalyst.NewConsensusAPI(gethInstance.Backend),
 		beacon:            beaconSrv,
+		sequencingControl: sequencingControl,
 	})
 
 	return gethInstance, nil

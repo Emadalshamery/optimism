@@ -735,7 +735,7 @@ func (cfg SystemConfig) Start(t *testing.T, startOpts ...StartOption) (*System, 
 
 	// Initialize nodes
 	l1Geth, err := geth.InitL1(
-		cfg.DeployConfig.L1BlockTime, cfg.L1FinalizedDistance, l1Genesis, c,
+		cfg.DeployConfig.L1BlockTime, nil, cfg.L1FinalizedDistance, l1Genesis, c,
 		path.Join(cfg.BlobsPath, "l1_el"), bcn, cfg.GethOptions[RoleL1]...)
 	if err != nil {
 		return nil, err

@@ -137,6 +137,8 @@ func (s *Sequencer) Prebuilt(ctx context.Context, block work.Block) error {
 }
 
 func (s *Sequencer) Sign(ctx context.Context) error {
+	s.log.Info("Sequencer about to sign block")
+
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
@@ -152,11 +154,14 @@ func (s *Sequencer) Sign(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	s.log.Debug("Sequencer signed block", "blk", s.unsigned.String())
 	s.signed = result
 	return nil
 }
 
 func (s *Sequencer) Commit(ctx context.Context) error {
+	s.log.Info("Sequencer about to commit block")
+
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 	if s.committed {
@@ -174,10 +179,15 @@ func (s *Sequencer) Commit(ctx context.Context) error {
 }
 
 func (s *Sequencer) Publish(ctx context.Context) error {
+	s.log.Info("Sequencer about to publish block")
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 	// re-publishing is allowed
-	return s.publish(ctx)
+	err := s.publish(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 var errAlreadyPublished = errors.New("block already published")

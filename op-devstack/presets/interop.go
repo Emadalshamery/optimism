@@ -60,6 +60,19 @@ func NewSimpleInterop(dest *TestSetup[*SimpleInterop]) stack.CommonOption {
 		}))
 }
 
+func NewInteropWithFakeL1(dest *TestSetup[*SimpleInterop], sequencingControl chan string) stack.CommonOption {
+	return stack.Combine(
+		stack.MakeCommon(func() stack.Option[*sysgo.Orchestrator] {
+			var ids sysgo.DefaultInteropSystemIDs
+			return sysgo.FakeL1InteropSystem(&ids, sequencingControl)
+		}()),
+		stack.Finally(func(orch stack.Orchestrator, hook stack.SystemHook) {
+			*dest = func(t devtest.T) *SimpleInterop {
+				return hydrateSimpleInterop(t, orch, hook)
+			}
+		}))
+}
+
 // startInProcessSimpleInterop starts a new system that meets the simple interop criteria
 func startInProcessSimpleInterop() stack.Option[*sysgo.Orchestrator] {
 	var ids sysgo.DefaultInteropSystemIDs

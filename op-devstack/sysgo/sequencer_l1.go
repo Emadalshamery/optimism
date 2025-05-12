@@ -3,17 +3,13 @@ package sysgo
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum-optimism/optimism/op-chain-ops/devkeys"
-	"github.com/ethereum-optimism/optimism/op-devstack/shim"
 	"github.com/ethereum-optimism/optimism/op-devstack/stack"
-	"github.com/ethereum-optimism/optimism/op-service/client"
 	"github.com/ethereum-optimism/optimism/op-service/endpoint"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	oplog "github.com/ethereum-optimism/optimism/op-service/log"
@@ -24,54 +20,20 @@ import (
 	testmetrics "github.com/ethereum-optimism/optimism/op-test-sequencer/metrics"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work"
+	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/builders/l1builder"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/builders/standardbuilder"
+	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/committers/noopcommitter"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/committers/standardcommitter"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/config"
+	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/publishers/nooppublisher"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/publishers/standardpublisher"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/sequencers/fullseq"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/signers/localkey"
+	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/backend/work/signers/noopsigner"
 	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/seqtypes"
-	gn "github.com/ethereum/go-ethereum/node"
 )
 
-type Sequencer struct {
-	id           stack.SequencerID
-	userRPC      string
-	jwtSecret    [32]byte
-	l2sequencers map[eth.ChainID]seqtypes.SequencerID
-}
-
-func (s *Sequencer) hydrate(sys stack.ExtensibleSystem) {
-	tlog := sys.Logger().New("id", s.id)
-
-	opts := []client.RPCOption{
-		client.WithLazyDial(),
-		client.WithGethRPCOptions(rpc.WithHTTPAuth(gn.NewJWTAuth(s.jwtSecret))),
-		client.WithCallTimeout(60 * time.Second),
-	}
-
-	sqClient, err := client.NewRPC(sys.T().Ctx(), tlog, s.userRPC, opts...)
-	sys.T().Require().NoError(err)
-	sys.T().Cleanup(sqClient.Close)
-
-	l2sequencersRpcs := make(map[eth.ChainID]client.RPC)
-	for chainID, seqID := range s.l2sequencers {
-		seqRpc, err := client.NewRPC(sys.T().Ctx(), tlog, s.userRPC+"/sequencers/"+seqID.String(), opts...)
-		sys.T().Require().NoError(err)
-		sys.T().Cleanup(seqRpc.Close)
-
-		l2sequencersRpcs[chainID] = seqRpc
-	}
-
-	sys.AddSequencer(shim.NewSequencer(shim.SequencerConfig{
-		CommonConfig:       shim.NewCommonConfig(sys.T()),
-		ID:                 s.id,
-		Client:             sqClient,
-		L2SequencerClients: l2sequencersRpcs,
-	}))
-}
-
-func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELID stack.L1ELNodeID, l2ELID stack.L2ELNodeID) stack.Option[*Orchestrator] {
+func WithL1Sequencer(sequencerID stack.SequencerID, l1CLID stack.L1CLNodeID, l2CLID stack.L2CLNodeID, l1ELID stack.L1ELNodeID, l2ELID stack.L2ELNodeID) stack.Option[*Orchestrator] {
 	return stack.AfterDeploy(func(orch *Orchestrator) {
 		require := orch.P().Require()
 
@@ -80,22 +42,32 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 		l1EL, ok := orch.l1ELs.Get(l1ELID)
 		require.True(ok, "l1 EL node required")
 
+		l1CL, ok := orch.l1CLs.Get(l1CLID)
+		require.True(ok, "l1 CL node required")
+
 		l2EL, ok := orch.l2ELs.Get(l2ELID)
 		require.True(ok, "l2 EL node required")
 
 		l2CL, ok := orch.l2CLs.Get(l2CLID)
 		require.True(ok, "l2 CL node required")
 
+		l1BuilderID := seqtypes.BuilderID("test-l1-builder")
+
 		builderID := seqtypes.BuilderID("test-standard-builder")
 		committerID := seqtypes.CommitterID("test-standard-committer")
 		signerID := seqtypes.SignerID("test-local-signer")
 		publisherID := seqtypes.PublisherID("test-standard-publisher")
+
+		noopSignerID := seqtypes.SignerID("test-noop-signer")
+		noopCommitterID := seqtypes.CommitterID("test-noop-committer")
+		noopPublisherID := seqtypes.PublisherID("test-noop-publisher")
 
 		p2pKey, err := orch.keys.Secret(devkeys.SequencerP2PRole.Key(l2CLID.ChainID.ToBig()))
 		require.NoError(err, "need p2p key for sequencer")
 		raw := hexutil.Bytes(crypto.FromECDSA(p2pKey))
 
 		l2SequencerID := seqtypes.SequencerID(fmt.Sprintf("test-seq-%s", l2CLID.ChainID))
+		l1SequencerID := seqtypes.SequencerID(fmt.Sprintf("test-seq-%s", l1ELID.ChainID))
 
 		v := &config.Ensemble{
 			Endpoints: nil,
@@ -113,6 +85,12 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 						},
 					},
 				},
+				"test-l1-builder": {
+					L1: &l1builder.Config{
+						Geth:   l1EL.l1Geth,
+						Beacon: l1CL.beacon,
+					},
+				},
 			},
 			Signers: map[seqtypes.SignerID]*config.SignerEntry{
 				"test-local-signer": {
@@ -120,6 +98,9 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 						RawKey:  &raw,
 						ChainID: l2CLID.ChainID,
 					},
+				},
+				noopSignerID: {
+					Noop: &noopsigner.Config{},
 				},
 			},
 			Committers: map[seqtypes.CommitterID]*config.CommitterEntry{
@@ -130,6 +111,9 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 						},
 					},
 				},
+				noopCommitterID: {
+					Noop: &noopcommitter.Config{},
+				},
 			},
 			Publishers: map[seqtypes.PublisherID]*config.PublisherEntry{
 				"test-standard-publisher": {
@@ -138,6 +122,9 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 							Value: endpoint.HttpURL(l2CL.userRPC),
 						},
 					},
+				},
+				noopPublisherID: {
+					Noop: &nooppublisher.Config{},
 				},
 			},
 			Sequencers: map[seqtypes.SequencerID]*config.SequencerEntry{
@@ -154,6 +141,16 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 						SequencerEnabled:    true,
 						SequencerStopped:    false,
 						SequencerMaxSafeLag: 0,
+					},
+				},
+				l1SequencerID: {
+					Full: &fullseq.Config{
+						ChainID: l1ELID.ChainID,
+
+						Builder:   l1BuilderID,
+						Signer:    noopSignerID,
+						Committer: noopCommitterID,
+						Publisher: noopPublisherID,
 					},
 				},
 			},
@@ -211,6 +208,7 @@ func WithSequencer(sequencerID stack.SequencerID, l2CLID stack.L2CLNodeID, l1ELI
 			jwtSecret: jwtSecret,
 			l2sequencers: map[eth.ChainID]seqtypes.SequencerID{
 				l2CLID.ChainID: l2SequencerID,
+				l1ELID.ChainID: l1SequencerID,
 			},
 		}
 		logger.Info("Sequencer User RPC", "http_endpoint", sequencerNode.userRPC)
