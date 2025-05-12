@@ -152,7 +152,7 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 		sysCancel:             sysCancel,
 		sysContext:            sysCtx,
 
-		rewinder:       rewinder.New(logger, chainsDBs, l1Accessor),
+		rewinder:        rewinder.New(logger, chainsDBs, l1Accessor),
 		activationCheck: activation.NewCheck(depSet, logger),
 
 		rpcVerificationWarnings: cfg.RPCVerificationWarnings,
