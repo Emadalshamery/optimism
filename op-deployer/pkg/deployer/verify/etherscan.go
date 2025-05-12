@@ -46,6 +46,8 @@ func getAPIEndpoint(l1ChainID uint64) (string, error) {
 		return "https://api-optimistic.etherscan.io/api", nil // optimism-mainnet
 	case 8453:
 		return "https://api.basescan.org/api", nil // base-mainnet
+	case 57073:
+		return "https://explorer.inkonchain.com/api", nil // ink-mainnet (blockscout)
 	default:
 		return "", fmt.Errorf("unsupported L1 chain ID: %d", l1ChainID)
 	}
