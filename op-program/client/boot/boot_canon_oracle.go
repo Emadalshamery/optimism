@@ -10,11 +10,12 @@ import (
 )
 
 type BootCanonOracle struct {
-	QueryNumber uint64
-	QueryHash   common.Hash
-	Head        common.Hash
-	ChainID     eth.ChainID
-	ChainConfig *params.ChainConfig
+	QueryNumber  uint64
+	QueryHash    common.Hash
+	Head         common.Hash
+	ChainID      eth.ChainID
+	ChainConfig  *params.ChainConfig
+	QueryPattern CanonOracleQueryPattern
 }
 
 func BootstrapCanonOracle(r oracleClient) *BootCanonOracle {
@@ -28,12 +29,14 @@ func BootstrapCanonOracle(r oracleClient) *BootCanonOracle {
 	if err != nil {
 		panic("failed to bootstrap chain config")
 	}
+	queryPattern := binary.BigEndian.Uint64(r.Get(CanonOracleQueryPatternLocalIndex))
 
 	return &BootCanonOracle{
-		QueryNumber: queryNumber,
-		QueryHash:   queryHash,
-		Head:        head,
-		ChainID:     chainID,
-		ChainConfig: chainConfig,
+		QueryNumber:  queryNumber,
+		QueryHash:    queryHash,
+		Head:         head,
+		ChainID:      chainID,
+		ChainConfig:  chainConfig,
+		QueryPattern: CanonOracleQueryPattern(queryPattern),
 	}
 }

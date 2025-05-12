@@ -174,6 +174,12 @@ var (
 		Usage:   "The chain config to use for the canonical oracle benchmark.",
 		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_CHAIN_CONFIG"),
 	}
+	CanonOracleBenchmarkQueryPattern = &cli.StringFlag{
+		Name:    "canon-oracle-benchmark.query-pattern",
+		Usage:   "The query pattern to use for the canonical oracle benchmark. Options: point, forward, backward, random",
+		EnvVars: prefixEnvVars("CANON_ORACLE_BENCHMARK_QUERY_PATTERN"),
+		Value:   "point",
+	}
 )
 
 // Flags contains the list of configuration options available to the binary.
@@ -212,6 +218,7 @@ var programFlags = []cli.Flag{
 	CanonOracleBenchmarkHead,
 	CanonOracleBenchmarkChainID,
 	CanonOracleBenchmarkChainConfig,
+	CanonOracleBenchmarkQueryPattern,
 }
 
 func init() {
@@ -239,6 +246,9 @@ func CheckRequired(ctx *cli.Context) error {
 		}
 		if !ctx.IsSet(CanonOracleBenchmarkChainConfig.Name) {
 			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkChainConfig.Name, CanonOracleBenchmark.Name)
+		}
+		if !ctx.IsSet(CanonOracleBenchmarkQueryPattern.Name) {
+			return fmt.Errorf("flag %s is required when %s is specified", CanonOracleBenchmarkQueryPattern.Name, CanonOracleBenchmark.Name)
 		}
 		return nil
 	}

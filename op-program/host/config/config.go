@@ -28,24 +28,25 @@ import (
 )
 
 var (
-	ErrNoL2Chains            = errors.New("at least one L2 chain must be specified")
-	ErrMissingL2ChainID      = errors.New("missing l2 chain id")
-	ErrMissingL2Genesis      = errors.New("missing l2 genesis")
-	ErrNoRollupForGenesis    = errors.New("no rollup config matching l2 genesis")
-	ErrNoGenesisForRollup    = errors.New("no l2 genesis for rollup")
-	ErrDuplicateRollup       = errors.New("duplicate rollup")
-	ErrDuplicateGenesis      = errors.New("duplicate l2 genesis")
-	ErrInvalidL1Head         = errors.New("invalid l1 head")
-	ErrInvalidL2Head         = errors.New("invalid l2 head")
-	ErrInvalidL2OutputRoot   = errors.New("invalid l2 output root")
-	ErrInvalidAgreedPrestate = errors.New("invalid l2 agreed prestate")
-	ErrL1AndL2Inconsistent   = errors.New("l1 and l2 options must be specified together or both omitted")
-	ErrInvalidL2Claim        = errors.New("invalid l2 claim")
-	ErrInvalidL2ClaimBlock   = errors.New("invalid l2 claim block number")
-	ErrDataDirRequired       = errors.New("datadir must be specified when in non-fetching mode")
-	ErrNoExecInServerMode    = errors.New("exec command must not be set when in server mode")
-	ErrInvalidDataFormat     = errors.New("invalid data format")
-	ErrMissingAgreedPrestate = errors.New("missing agreed prestate")
+	ErrNoL2Chains                     = errors.New("at least one L2 chain must be specified")
+	ErrMissingL2ChainID               = errors.New("missing l2 chain id")
+	ErrMissingL2Genesis               = errors.New("missing l2 genesis")
+	ErrNoRollupForGenesis             = errors.New("no rollup config matching l2 genesis")
+	ErrNoGenesisForRollup             = errors.New("no l2 genesis for rollup")
+	ErrDuplicateRollup                = errors.New("duplicate rollup")
+	ErrDuplicateGenesis               = errors.New("duplicate l2 genesis")
+	ErrInvalidL1Head                  = errors.New("invalid l1 head")
+	ErrInvalidL2Head                  = errors.New("invalid l2 head")
+	ErrInvalidL2OutputRoot            = errors.New("invalid l2 output root")
+	ErrInvalidAgreedPrestate          = errors.New("invalid l2 agreed prestate")
+	ErrL1AndL2Inconsistent            = errors.New("l1 and l2 options must be specified together or both omitted")
+	ErrInvalidL2Claim                 = errors.New("invalid l2 claim")
+	ErrInvalidL2ClaimBlock            = errors.New("invalid l2 claim block number")
+	ErrDataDirRequired                = errors.New("datadir must be specified when in non-fetching mode")
+	ErrNoExecInServerMode             = errors.New("exec command must not be set when in server mode")
+	ErrInvalidDataFormat              = errors.New("invalid data format")
+	ErrMissingAgreedPrestate          = errors.New("missing agreed prestate")
+	ErrInvalidCanonOracleQueryPattern = errors.New("invalid canonical oracle query pattern")
 )
 
 type Config struct {
@@ -106,12 +107,13 @@ type Config struct {
 }
 
 type CanonOracleConfig struct {
-	URL         string
-	QueryNumber uint64
-	QueryHash   common.Hash
-	Head        common.Hash
-	ChainID     eth.ChainID
-	ChainConfig *params.ChainConfig
+	URL          string
+	QueryNumber  uint64
+	QueryHash    common.Hash
+	Head         common.Hash
+	ChainID      eth.ChainID
+	ChainConfig  *params.ChainConfig
+	QueryPattern boot.CanonOracleQueryPattern
 }
 
 func (c *Config) Check() error {
@@ -404,18 +406,35 @@ func newCanonOracleBenchmarkConfigFromCLI(ctx *cli.Context) (*Config, error) {
 	if !slices.Contains(types.SupportedDataFormats, dbFormat) {
 		return nil, fmt.Errorf("invalid %w: %v", ErrInvalidDataFormat, dbFormat)
 	}
+
+	var queryPattern boot.CanonOracleQueryPattern
+	queryPatternStr := ctx.String(flags.CanonOracleBenchmarkQueryPattern.Name)
+	switch queryPatternStr {
+	case "point":
+		queryPattern = boot.CanonOracleQueryPatternPoint
+	case "forward":
+		queryPattern = boot.CanonOracleQueryPatternForward
+	case "backward":
+		queryPattern = boot.CanonOracleQueryPatternBackward
+	case "random":
+		queryPattern = boot.CanonOracleQueryPatternRandom
+	default:
+		return nil, fmt.Errorf("invalid %w: %v", ErrInvalidCanonOracleQueryPattern, queryPatternStr)
+	}
+
 	return &Config{
 		DataDir:    ctx.String(flags.DataDir.Name),
 		DataFormat: dbFormat,
 		ExecCmd:    ctx.String(flags.Exec.Name),
 		ServerMode: ctx.Bool(flags.Server.Name),
 		CanonOracleConfig: &CanonOracleConfig{
-			URL:         ctx.String(flags.CanonOracleBenchmarkURL.Name),
-			QueryNumber: ctx.Uint64(flags.CanonOracleBenchmarkQueryNumber.Name),
-			QueryHash:   common.HexToHash(ctx.String(flags.CanonOracleBenchmarkQueryHash.Name)),
-			Head:        common.HexToHash(ctx.String(flags.CanonOracleBenchmarkHead.Name)),
-			ChainID:     eth.ChainIDFromBig(chainConfig.ChainID),
-			ChainConfig: chainConfig,
+			URL:          ctx.String(flags.CanonOracleBenchmarkURL.Name),
+			QueryNumber:  ctx.Uint64(flags.CanonOracleBenchmarkQueryNumber.Name),
+			QueryHash:    common.HexToHash(ctx.String(flags.CanonOracleBenchmarkQueryHash.Name)),
+			Head:         common.HexToHash(ctx.String(flags.CanonOracleBenchmarkHead.Name)),
+			ChainID:      eth.ChainIDFromBig(chainConfig.ChainID),
+			ChainConfig:  chainConfig,
+			QueryPattern: queryPattern,
 		},
 	}, nil
 }

@@ -29,11 +29,12 @@ var (
 	rollupKey             = boot.RollupConfigLocalIndex.PreimageKey()
 	dependencySetKey      = boot.DependencySetLocalIndex.PreimageKey()
 
-	canonOracleQueryNumberKey = boot.CanonOracleQueryNumberLocalIndex.PreimageKey()
-	canonOracleQueryHashKey   = boot.CanonOracleQueryHashLocalIndex.PreimageKey()
-	canonOracleHeadKey        = boot.CanonOracleHeadLocalIndex.PreimageKey()
-	canonOracleChainIDKey     = boot.CanonOracleChainIDLocalIndex.PreimageKey()
-	canonOracleChainConfigKey = boot.CanonOracleChainConfigLocalIndex.PreimageKey()
+	canonOracleQueryNumberKey  = boot.CanonOracleQueryNumberLocalIndex.PreimageKey()
+	canonOracleQueryHashKey    = boot.CanonOracleQueryHashLocalIndex.PreimageKey()
+	canonOracleHeadKey         = boot.CanonOracleHeadLocalIndex.PreimageKey()
+	canonOracleChainIDKey      = boot.CanonOracleChainIDLocalIndex.PreimageKey()
+	canonOracleChainConfigKey  = boot.CanonOracleChainConfigLocalIndex.PreimageKey()
+	canonOracleQueryPatternKey = boot.CanonOracleQueryPatternLocalIndex.PreimageKey()
 )
 
 func (s *LocalPreimageSource) Get(key common.Hash) ([]byte, error) {
@@ -79,6 +80,8 @@ func (s *LocalPreimageSource) Get(key common.Hash) ([]byte, error) {
 		return binary.BigEndian.AppendUint64(nil, eth.EvilChainIDToUInt64(s.config.CanonOracleConfig.ChainID)), nil
 	case canonOracleChainConfigKey:
 		return json.Marshal(s.config.CanonOracleConfig.ChainConfig)
+	case canonOracleQueryPatternKey:
+		return binary.BigEndian.AppendUint64(nil, uint64(s.config.CanonOracleConfig.QueryPattern)), nil
 	default:
 		return nil, ErrNotFound
 	}

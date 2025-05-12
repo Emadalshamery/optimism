@@ -20,7 +20,31 @@ const (
 	CanonOracleHeadLocalIndex
 	CanonOracleChainIDLocalIndex
 	CanonOracleChainConfigLocalIndex
+	CanonOracleQueryPatternLocalIndex
 )
+
+type CanonOracleQueryPattern uint64
+
+const (
+	CanonOracleQueryPatternPoint CanonOracleQueryPattern = iota
+	CanonOracleQueryPatternForward
+	CanonOracleQueryPatternBackward
+	CanonOracleQueryPatternRandom
+)
+
+func (p CanonOracleQueryPattern) String() string {
+	switch p {
+	case CanonOracleQueryPatternPoint:
+		return "point"
+	case CanonOracleQueryPatternForward:
+		return "forward"
+	case CanonOracleQueryPatternBackward:
+		return "backward"
+	case CanonOracleQueryPatternRandom:
+		return "random"
+	}
+	return "unknown"
+}
 
 type oracleClient interface {
 	Get(key preimage.Key) []byte
