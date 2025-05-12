@@ -46,7 +46,7 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	}
 
 	// two EOAs for a sample transfer tx used later in a conflicting block
-	alice := sys.FunderA.NewFundedEOA(eth.ThousandEther)
+	alice := sys.FunderA.NewFundedEOA(eth.OneEther)
 	bob := sys.Wallet.NewEOA(sys.L2ELA)
 
 	sys.L1Network.WaitForBlock()
@@ -98,7 +98,7 @@ func TestReorgUnsafeHead(gt *testing.T) {
 
 			// include simple transfer tx in opened block
 			{
-				to := alice.PlanTransfer(bob.Address(), eth.OneEther)
+				to := alice.PlanTransfer(bob.Address(), eth.OneGWei)
 				opt := txplan.Combine(to)
 				ptx := txplan.NewPlannedTx(opt)
 				signed_tx, err := ptx.Signed.Eval(ctx)
