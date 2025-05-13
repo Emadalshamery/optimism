@@ -521,6 +521,13 @@ func (seals DerivedBlockSealPair) String() string {
 	return fmt.Sprintf("sealPair(source: %s, derived: %s)", seals.Source, seals.Derived)
 }
 
+func (seals DerivedBlockSealPair) Refs() DerivedBlockRefPair {
+	return DerivedBlockRefPair{
+		Source:  seals.Source.MustWithParent(seals.Derived.ID()),
+		Derived: seals.Derived.ForceWithParent(seals.Source.ID()),
+	}
+}
+
 // DerivedIDPair is a pair of block IDs, where Derived (L2) is derived from Source (L1).
 type DerivedIDPair struct {
 	Source  eth.BlockID `json:"source"`

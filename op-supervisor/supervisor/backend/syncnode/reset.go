@@ -45,6 +45,25 @@ func (t *resetTracker) beginBisectionReset(z eth.BlockID) {
 	}
 	// initialize the reset tracker
 	t.init()
+
+	// Get the block and check if interop is active
+	block, err := t.managed.Node.BlockRefByNumber(context.Background(), z.Number)
+	if err != nil {
+		t.managed.log.Error("failed to get block at end of range. cannot reset node", "err", err)
+		t.endReset()
+		return
+	}
+
+	isActive := t.managed.activationCheck.Check(t.managed.chainID, block.Time)
+	if !isActive {
+		// For pre-activation, initialize the database if needed
+		t.managed.log.Info("pre-activation reset, initializing database if needed")
+		if err := t.managed.backend.InitializePreActivation(t.managed.chainID, block); err != nil {
+			t.managed.log.Error("failed to initialize database for pre-activation", "err", err)
+			// Continue anyway, the bisection might still work
+		}
+	}
+
 	t.z = z
 	// action tests may prefer to run the managed node totally synchronously
 	if t.synchronous {

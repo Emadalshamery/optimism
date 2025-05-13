@@ -27,7 +27,7 @@ func (db *ChainsDB) AddLog(
 // SealBlock seals the block in the logDB.
 // it wraps an inner function, blocking the call if the database is not initialized.
 func (db *ChainsDB) SealBlock(chain eth.ChainID, block eth.BlockRef) error {
-	if !db.isInitialized(chain) {
+	if !db.IsInitialized(chain) {
 		return fmt.Errorf("cannot SealBlock on uninitialized database: %w", types.ErrUninitialized)
 	}
 	return db.initializedSealBlock(chain, block)
@@ -92,7 +92,7 @@ func (db *ChainsDB) Rewind(chain eth.ChainID, headBlock eth.BlockID) error {
 // It wraps an inner function, blocking the call if the database is not initialized.
 func (db *ChainsDB) UpdateLocalSafe(chain eth.ChainID, source eth.BlockRef, lastDerived eth.BlockRef, nodeId string) {
 	logger := db.logger.New("chain", chain, "source", source, "lastDerived", lastDerived)
-	if !db.isInitialized(chain) {
+	if !db.IsInitialized(chain) {
 		logger.Error("cannot UpdateLocalSafe on uninitialized database", "chain", chain)
 		return
 	}
@@ -139,7 +139,7 @@ func (db *ChainsDB) UpdateCrossUnsafe(chain eth.ChainID, crossUnsafe types.Block
 	if !ok {
 		return fmt.Errorf("cannot UpdateCrossUnsafe: %w: %s", types.ErrUnknownChain, chain)
 	}
-	if !db.isInitialized(chain) {
+	if !db.IsInitialized(chain) {
 		return fmt.Errorf("cannot UpdateCrossUnsafe on uninitialized database: %w", types.ErrUninitialized)
 	}
 	v.Set(crossUnsafe)
@@ -157,7 +157,7 @@ func (db *ChainsDB) UpdateCrossUnsafe(chain eth.ChainID, crossUnsafe types.Block
 }
 
 func (db *ChainsDB) UpdateCrossSafe(chain eth.ChainID, l1View eth.BlockRef, lastCrossDerived eth.BlockRef) error {
-	if !db.isInitialized(chain) {
+	if !db.IsInitialized(chain) {
 		return fmt.Errorf("cannot UpdateCrossSafe on uninitialized database: %w", types.ErrUninitialized)
 	}
 	return db.initializedUpdateCrossSafe(chain, l1View, lastCrossDerived)

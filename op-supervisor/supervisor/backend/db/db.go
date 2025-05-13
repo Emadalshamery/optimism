@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/locks"
 	"github.com/ethereum-optimism/optimism/op-supervisor/metrics"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/activation"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db/fromda"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db/logs"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
@@ -132,6 +133,9 @@ type ChainsDB struct {
 	// what is missing, and to provide it to DB users.
 	depSet depset.DependencySet
 
+	// activationCheck is used to check if a block is in the interop period.
+	activationCheck *activation.Check
+
 	logger log.Logger
 
 	// emitter used to signal when the DB changes, for other modules to react to
@@ -147,10 +151,11 @@ func NewChainsDB(l log.Logger, depSet depset.DependencySet, m Metrics) *ChainsDB
 		m = metrics.NoopMetrics
 	}
 
-	return &ChainsDB{
-		logger: l,
-		depSet: depSet,
-		m:      m,
+	db := &ChainsDB{
+		logger:          l,
+		depSet:          depSet,
+		m:               m,
+		activationCheck: activation.NewCheck(depSet, l),
 	}
 }
 
@@ -161,14 +166,21 @@ func (db *ChainsDB) AttachEmitter(em event.Emitter) {
 func (db *ChainsDB) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.AnchorEvent:
-		db.logger.Info("Received chain anchor information",
-			"chain", x.ChainID, "derived", x.Anchor.Derived, "source", x.Anchor.Source)
+		if !db.activationCheck.Check(x.ChainID, x.Anchor.Derived.Time) {
+			return true
+		}
 		db.initFromAnchor(x.ChainID, x.Anchor)
 	case superevents.LocalDerivedEvent:
+		if !db.activationCheck.Check(x.ChainID, x.Derived.Source.Time) {
+			return true
+		}
 		db.UpdateLocalSafe(x.ChainID, x.Derived.Source, x.Derived.Derived, x.NodeID)
 	case superevents.FinalizedL1RequestEvent:
 		db.onFinalizedL1(x.FinalizedL1)
 	case superevents.ReplaceBlockEvent:
+		if !db.activationCheck.Check(x.ChainID, x.Replacement.Replacement.Time) {
+			return true
+		}
 		db.onReplaceBlock(x.ChainID, x.Replacement.Replacement, x.Replacement.Invalidated)
 	default:
 		return false

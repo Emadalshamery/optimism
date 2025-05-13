@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-service/rpc"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/activation"
+
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 
@@ -31,6 +33,9 @@ type backend interface {
 
 	AnchorPoint(ctx context.Context, chainID eth.ChainID) (types.DerivedBlockSealPair, error)
 
+	// InitializePreActivation initializes the chain database in pre-activation mode
+	InitializePreActivation(chainID eth.ChainID, block eth.BlockRef) error
+
 	FindSealedBlock(ctx context.Context, chainID eth.ChainID, number uint64) (eth.BlockID, error)
 	IsLocalSafe(ctx context.Context, chainID eth.ChainID, block eth.BlockID) error
 	IsCrossSafe(ctx context.Context, chainID eth.ChainID, block eth.BlockID) error
@@ -48,9 +53,10 @@ const (
 )
 
 type ManagedNode struct {
-	log     log.Logger
-	Node    SyncControl
-	chainID eth.ChainID
+	log               log.Logger
+	Node              SyncControl
+	chainID           eth.ChainID
+	activationCheck *activation.Check
 
 	backend backend
 
@@ -75,15 +81,16 @@ type ManagedNode struct {
 var _ event.AttachEmitter = (*ManagedNode)(nil)
 var _ event.Deriver = (*ManagedNode)(nil)
 
-func NewManagedNode(log log.Logger, id eth.ChainID, node SyncControl, backend backend, noSubscribe bool) *ManagedNode {
+func NewManagedNode(log log.Logger, id eth.ChainID, node SyncControl, backend backend, activationCheck *activation.Check, noSubscribe bool) *ManagedNode {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &ManagedNode{
-		log:     log.New("chain", id),
-		backend: backend,
-		Node:    node,
-		chainID: id,
-		ctx:     ctx,
-		cancel:  cancel,
+		log:               log.New("chain", id),
+		backend:           backend,
+		Node:              node,
+		chainID:           id,
+		activationCheck: activationCheck,
+		ctx:               ctx,
+		cancel:            cancel,
 	}
 	m.resetTracker = &resetTracker{
 		managed:     m,
@@ -207,6 +214,24 @@ func (m *ManagedNode) WatchSubscriptionErrors() {
 }
 
 func (m *ManagedNode) Start() {
+	// Initialize database in pre-activation mode if needed
+	if !m.activationCheck.Check(m.chainID, uint64(time.Now().Unix())) {
+		m.log.Info("Starting in pre-activation mode, initializing database if needed")
+
+		// Get the unsafe head from the node
+		ctx, cancel := context.WithTimeout(m.ctx, nodeTimeout)
+		defer cancel()
+		latestBlock, err := m.Node.BlockRefByLabel(ctx, eth.Unsafe)
+		if err == nil {
+			m.log.Info("Using latest block as reference for pre-activation initialization", "block", latestBlock)
+			if err := m.backend.InitializePreActivation(m.chainID, latestBlock); err != nil {
+				m.log.Warn("Failed to initialize database in pre-activation mode", "err", err)
+			}
+		} else {
+			m.log.Warn("Failed to get latest block for pre-activation initialization", "err", err)
+		}
+	}
+
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()

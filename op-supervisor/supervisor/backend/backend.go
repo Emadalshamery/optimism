@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/locks"
 	"github.com/ethereum-optimism/optimism/op-service/sources"
 	"github.com/ethereum-optimism/optimism/op-supervisor/config"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/activation"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/cross"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/db/sync"
@@ -46,6 +47,9 @@ type SupervisorBackend struct {
 
 	// depSet is the dependency set that the backend uses to know about the chains it is indexing
 	depSet depset.DependencySet
+
+	// activationCheck handles checking if interop if active for a given chain and timestamp
+	activationCheck *activation.Check
 
 	// chainDBs is the primary interface to the databases, including logs, derived-from information and L1 finalization
 	chainDBs *db.ChainsDB
@@ -148,7 +152,8 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 		sysCancel:             sysCancel,
 		sysContext:            sysCtx,
 
-		rewinder: rewinder.New(logger, chainsDBs, l1Accessor),
+		rewinder:        rewinder.New(logger, chainsDBs, l1Accessor),
+		activationCheck: activation.NewCheck(depSet, logger),
 
 		rpcVerificationWarnings: cfg.RPCVerificationWarnings,
 	}
@@ -156,7 +161,7 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 	eventSys.Register("rewinder", super.rewinder)
 
 	// create node controller
-	super.syncNodesController = syncnode.NewSyncNodesController(logger, depSet, eventSys, super)
+	super.syncNodesController = syncnode.NewSyncNodesController(logger, depSet, eventSys, super, super.activationCheck)
 	eventSys.Register("sync-controller", super.syncNodesController)
 
 	// create status tracker
@@ -176,23 +181,44 @@ func NewSupervisorBackend(ctx context.Context, logger log.Logger,
 func (su *SupervisorBackend) OnEvent(ev event.Event) bool {
 	switch x := ev.(type) {
 	case superevents.LocalUnsafeReceivedEvent:
+		if !su.activationCheck.Check(x.ChainID, x.NewLocalUnsafe.Time) {
+			return true
+		}
 		su.emitter.Emit(superevents.ChainProcessEvent{
 			ChainID: x.ChainID,
 			Target:  x.NewLocalUnsafe.Number,
 		})
+
 	case superevents.LocalUnsafeUpdateEvent:
+		if !su.activationCheck.Check(x.ChainID, x.NewLocalUnsafe.Time) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
 			ChainID: x.ChainID,
 		})
+
 	case superevents.CrossUnsafeUpdateEvent:
+		if !su.activationCheck.Check(x.ChainID, x.NewCrossUnsafe.Timestamp) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossUnsafeRequestEvent{
 			ChainID: x.ChainID,
 		})
+
 	case superevents.LocalSafeUpdateEvent:
+		if !su.activationCheck.Check(x.ChainID, x.NewLocalSafe.Derived.Timestamp) {
+			return true
+		}
+		if err := su.detectAndActivateInterop(x.ChainID, x.NewLocalSafe); err != nil {
+			return false
+		}
 		su.emitter.Emit(superevents.UpdateCrossSafeRequestEvent{
 			ChainID: x.ChainID,
 		})
 	case superevents.CrossSafeUpdateEvent:
+		if !su.activationCheck.Check(x.ChainID, x.NewCrossSafe.Derived.Timestamp) {
+			return true
+		}
 		su.emitter.Emit(superevents.UpdateCrossSafeRequestEvent{
 			ChainID: x.ChainID,
 		})
@@ -765,4 +791,31 @@ func (su *SupervisorBackend) SetConfDepthL1(depth uint64) {
 // Rewind rolls back the state of the supervisor for the given chain.
 func (su *SupervisorBackend) Rewind(ctx context.Context, chain eth.ChainID, block eth.BlockID) error {
 	return su.chainDBs.Rewind(chain, block)
+}
+
+// InitializePreActivation initializes the chain database in pre-activation mode
+func (su *SupervisorBackend) InitializePreActivation(chainID eth.ChainID, block eth.BlockRef) error {
+	if su.chainDBs == nil {
+		return errors.New("chainDBs is nil")
+	}
+
+	su.logger.Info("Pre-activation init requested", "chain", chainID, "block", block)
+	su.chainDBs.InitializePreActivation(chainID, block)
+	return nil
+}
+
+// detectAndActivateInterop checks if a chain is ready to be initialized for interop
+// and if so, fetches the anchor point and initializes the databases.
+func (su *SupervisorBackend) detectAndActivateInterop(chain eth.ChainID, anchorCandidate types.DerivedBlockSealPair) error {
+	// If the chain is already initialized or interop isn't active, do nothing.
+	if su.chainDBs.IsInitialized(chain) {
+		return nil
+	}
+	// TODO(#13732): We want to ensure this is exactly the anchor block
+	if !su.activationCheck.Check(chain, anchorCandidate.Derived.Timestamp) {
+		return nil
+	}
+
+	su.chainDBs.InitializeWithAnchor(chain, anchorCandidate.Refs())
+	return nil
 }
