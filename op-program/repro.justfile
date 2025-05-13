@@ -58,6 +58,5 @@ build-mt64: (prestate "multithreaded64-4" "64" "-mt64")
 build-mt64Next: (prestate "multithreaded64-5" "64" "-mt64Next")
 build-interop: (prestate "multithreaded64-5" "-interop" "-interop")
 
-build-all: build-current build-next
 build-current: build-mt64
 build-next: build-mt64Next build-interop
