@@ -377,8 +377,6 @@ func allFeaturesEnabled() mipsevm.FeatureToggles {
 // Unit test splitmix64 based on Apache Commons RNG unit tests
 // See: https://github.com/apache/commons-rng/blob/df772c2f5b0644a71398e925206039a2ae516ab2/commons-rng-core/src/test/java/org/apache/commons/rng/core/source64/SplitMix64Test.java
 func TestSplitmix64(t *testing.T) {
-	vm := NewInstrumentedState(CreateEmptyState(), nil, nil, nil, nil, nil, allFeaturesEnabled())
-
 	expectedSequence := []uint64{
 		0x4141302768c9e9d0, 0x64df48c4eab51b1a, 0x4e723b53dbd901b3, 0xead8394409dd6454,
 		0x3ef60e485b412a0a, 0xb2a23aee63aecf38, 0x6cc3b8933c4fa332, 0x9c9e75e031e6fccb,
@@ -395,7 +393,7 @@ func TestSplitmix64(t *testing.T) {
 	var currentSeed uint64 = 0x1a2b3c4d5e6f7531
 	for i := 0; i < len(expectedSequence); i++ {
 		expectedOutput := expectedSequence[i]
-		actual := vm.splitmix64(currentSeed)
+		actual := splitmix64(currentSeed)
 		require.Equal(t, expectedOutput, actual, fmt.Sprintf("Failed at index %d", i))
 		currentSeed += 0x9e3779b97f4a7c15
 	}
