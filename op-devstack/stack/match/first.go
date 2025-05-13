@@ -3,7 +3,9 @@ package match
 import "github.com/ethereum-optimism/optimism/op-devstack/stack"
 
 var FirstL2EL = First[stack.L2ELNodeID, stack.L2ELNode]()
+var SecondL2EL = Second[stack.L2ELNodeID, stack.L2ELNode]()
 var FirstL2CL = First[stack.L2CLNodeID, stack.L2CLNode]()
+var SecondL2CL = Second[stack.L2CLNodeID, stack.L2CLNode]()
 var FirstL2Batcher = First[stack.L2BatcherID, stack.L2Batcher]()
 var FirstL2Proposer = First[stack.L2ProposerID, stack.L2Proposer]()
 var FirstL2Challenger = First[stack.L2ChallengerID, stack.L2Challenger]()

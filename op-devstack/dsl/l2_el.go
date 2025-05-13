@@ -43,6 +43,14 @@ func (el *L2ELNode) BlockRefByLabel(label eth.BlockLabel) eth.BlockRef {
 	return block
 }
 
+func (el *L2ELNode) BlockRefByNumber(num uint64) eth.BlockRef {
+	ctx, cancel := context.WithTimeout(el.ctx, DefaultTimeout)
+	defer cancel()
+	block, err := el.inner.EthClient().BlockRefByNumber(ctx, num)
+	el.require.NoError(err, "block not found using block label")
+	return block
+}
+
 func (el *L2ELNode) Advance(label eth.BlockLabel, block uint64) CheckFunc {
 	return func() error {
 		initial := el.BlockRefByLabel(label)
