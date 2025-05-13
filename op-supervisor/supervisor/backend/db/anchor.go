@@ -128,6 +128,7 @@ func (db *ChainsDB) initFromAnchor(id eth.ChainID, anchor types.DerivedBlockRefP
 
 	// Mark the chain database as initialized
 	db.initialized.Set(id, struct{}{})
+	db.anchorBlocks.Set(id, anchor)
 }
 
 // maybeInitSafeDB initializes the chain database if it is not already initialized

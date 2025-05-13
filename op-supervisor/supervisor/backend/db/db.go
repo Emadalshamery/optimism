@@ -113,6 +113,10 @@ type ChainsDB struct {
 	// uninitialized chains won't have values in the map
 	initialized locks.RWMap[eth.ChainID, struct{}]
 
+	// anchorBlocks: stores the anchor blocks used for initializing each chain.
+	// chains with anchor blocks are in interop mode, those without are pre-interop
+	anchorBlocks locks.RWMap[eth.ChainID, types.DerivedBlockRefPair]
+
 	// cross-unsafe: how far we have processed the unsafe data.
 	// If present but set to a zeroed value the cross-unsafe will fallback to cross-safe.
 	crossUnsafe locks.RWMap[eth.ChainID, *locks.RWValue[types.BlockSeal]]
