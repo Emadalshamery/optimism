@@ -48,21 +48,6 @@ func TestDetectVersion_fromFile(t *testing.T) {
 	}
 }
 
-// Helper to generate new state testdata
-//func TestGenerateTestData(t *testing.T) {
-//	newVersion := GetExperimentalVersion()
-//	state, err := NewFromState(newVersion, multithreaded.CreateEmptyState())
-//	require.NoError(t, err)
-//
-//	path := filepath.Join("testdata", "states", fmt.Sprintf("%d.bin.gz", int(newVersion)))
-//	err = serialize.Write(path, state, 0o644)
-//	require.NoError(t, err)
-//
-//	version, err := DetectVersion(path)
-//	require.NoError(t, err)
-//	require.Equal(t, version, version)
-//}
-
 // Check that the latest supported versions write new states in a way that is detected correctly
 func TestDetectVersion_multiThreadedBinary(t *testing.T) {
 	for _, version := range StateVersionTypes {
