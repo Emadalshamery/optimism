@@ -27,6 +27,7 @@ type L2Source interface {
 	BlockRefByHash(ctx context.Context, hash common.Hash) (eth.BlockRef, error)
 	PayloadByHash(ctx context.Context, hash common.Hash) (*eth.ExecutionPayloadEnvelope, error)
 	BlockRefByNumber(ctx context.Context, num uint64) (eth.BlockRef, error)
+	BlockRefByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockRef, error)
 	FetchReceipts(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Receipts, error)
 	OutputV0AtBlock(ctx context.Context, blockHash common.Hash) (*eth.OutputV0, error)
 }
@@ -356,6 +357,10 @@ func (m *ManagedMode) FetchReceipts(ctx context.Context, blockHash common.Hash) 
 
 func (m *ManagedMode) BlockRefByNumber(ctx context.Context, num uint64) (eth.BlockRef, error) {
 	return m.l2.BlockRefByNumber(ctx, num)
+}
+
+func (m *ManagedMode) BlockRefByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockRef, error) {
+	return m.l2.BlockRefByLabel(ctx, label)
 }
 
 func (m *ManagedMode) ChainID(ctx context.Context) (eth.ChainID, error) {

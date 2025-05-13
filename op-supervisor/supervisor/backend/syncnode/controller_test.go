@@ -27,6 +27,7 @@ type mockSyncControl struct {
 	updateFinalizedFn   func(ctx context.Context, id eth.BlockID) error
 	pullEventFn         func(ctx context.Context) (*types.ManagedEvent, error)
 	blockRefByNumFn     func(ctx context.Context, number uint64) (eth.BlockRef, error)
+	blockRefByLabelFn   func(ctx context.Context, label eth.BlockLabel) (eth.BlockRef, error)
 
 	subscribeEvents gethevent.FeedOf[*types.ManagedEvent]
 }
@@ -91,6 +92,13 @@ func (m *mockSyncControl) UpdateFinalized(ctx context.Context, id eth.BlockID) e
 func (m *mockSyncControl) BlockRefByNumber(ctx context.Context, number uint64) (eth.BlockRef, error) {
 	if m.blockRefByNumFn != nil {
 		return m.blockRefByNumFn(ctx, number)
+	}
+	return eth.BlockRef{}, nil
+}
+
+func (m *mockSyncControl) BlockRefByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockRef, error) {
+	if m.blockRefByLabelFn != nil {
+		return m.blockRefByLabelFn(ctx, label)
 	}
 	return eth.BlockRef{}, nil
 }

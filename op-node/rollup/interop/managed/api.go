@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/ethereum-optimism/optimism/op-node/rollup/engine"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	supervisortypes "github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
 )
@@ -55,6 +56,10 @@ func (ib *InteropAPI) BlockRefByNumber(ctx context.Context, num uint64) (eth.Blo
 	return ib.backend.BlockRefByNumber(ctx, num)
 }
 
+func (ib *InteropAPI) BlockRefByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockRef, error) {
+	return ib.backend.BlockRefByLabel(ctx, label)
+}
+
 func (ib *InteropAPI) ChainID(ctx context.Context) (eth.ChainID, error) {
 	return ib.backend.ChainID(ctx)
 }
@@ -73,4 +78,9 @@ func (ib *InteropAPI) L2BlockRefByTimestamp(ctx context.Context, timestamp uint6
 
 func (ib *InteropAPI) ProvideL1(ctx context.Context, nextL1 eth.BlockRef) error {
 	return ib.backend.ProvideL1(ctx, nextL1)
+}
+
+func (ib *InteropAPI) RequestReset(ctx context.Context, l1BlockNumber uint64) error {
+	ib.backend.emitter.Emit(engine.ResetEngineRequestEvent{})
+	return nil
 }
