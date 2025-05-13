@@ -69,6 +69,21 @@ func (rs *RPCSyncNode) BlockRefByNumber(ctx context.Context, number uint64) (eth
 	return *out, nil
 }
 
+func (rs *RPCSyncNode) BlockRefByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockRef, error) {
+	var out *eth.BlockRef
+	err := rs.cl.CallContext(ctx, &out, "interop_blockRefByLabel", label)
+	if err != nil {
+		var jsonErr gethrpc.Error
+		if errors.As(err, &jsonErr) {
+			if jsonErr.ErrorCode() == 0 { // TODO
+				return eth.BlockRef{}, ethereum.NotFound
+			}
+		}
+		return eth.BlockRef{}, err
+	}
+	return *out, nil
+}
+
 func (rs *RPCSyncNode) FetchReceipts(ctx context.Context, blockHash common.Hash) (gethtypes.Receipts, error) {
 	var out gethtypes.Receipts
 	err := rs.cl.CallContext(ctx, &out, "interop_fetchReceipts", blockHash)
