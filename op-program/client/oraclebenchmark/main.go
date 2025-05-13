@@ -85,13 +85,13 @@ func ForwardsQueryPattern(log log.Logger, oracle *l2.FastCanonicalBlockHeaderOra
 }
 
 func BackwardsQueryPattern(log log.Logger, oracle *l2.FastCanonicalBlockHeaderOracle, head *ethtypes.Block, queryNumber uint64, queryHash common.Hash) error {
-	start := head.Number().Uint64()
-	end := queryNumber
+	start := queryNumber
+	end := head.Number().Uint64()
 	if end-start > maxQueries {
-		end = start - maxQueries
+		end = start + maxQueries
 		log.Info("Backwards query pattern minimized", "start", start, "end", end)
 	}
-	for i := start; i >= end; i-- {
+	for i := end; i >= start; i-- {
 		log.Info("Query fetching head", "number", i)
 		fetchedHead := oracle.GetHeaderByNumber(i)
 		if queryNumber == i {
