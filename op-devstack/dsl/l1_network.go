@@ -36,26 +36,28 @@ func (n *L1Network) Escape() stack.L1Network {
 	return n.inner
 }
 
-func (n *L1Network) WaitForBlock() {
+func (n *L1Network) WaitForBlock() eth.BlockRef {
 	l1_el := n.inner.L1ELNode(match.FirstL1EL)
 
 	initial, err := l1_el.EthClient().InfoByLabel(n.ctx, "latest")
 	n.require.NoError(err, "Expected to get latest block from L1 execution client")
 
+	initialRef := eth.InfoToL1BlockRef(initial)
+	var newRef eth.BlockRef
 	err = wait.For(n.ctx, 500*time.Millisecond, func() (bool, error) {
 		newBlock, err := l1_el.EthClient().InfoByLabel(n.ctx, "latest")
 		if err != nil {
 			return false, err
 		}
-
-		if initial.Hash().Cmp(newBlock.Hash()) == 0 {
-			n.log.Info("Still same L1 block detected as initial", "block", eth.InfoToL1BlockRef(newBlock))
+		newRef = eth.InfoToL1BlockRef(newBlock)
+		if initialRef == newRef {
+			n.log.Info("Still same L1 block detected as initial", "block", initialRef)
 
 			return false, nil
 		}
-
-		n.log.Info("New L1 block detected", "new_block", eth.InfoToL1BlockRef(newBlock), "prev_block", eth.InfoToL1BlockRef(initial))
+		n.log.Info("New L1 block detected", "new_block", newRef, "prev_block", initialRef)
 		return true, nil
 	})
 	n.require.NoError(err, "Expected to get latest block from L1 execution client for comparison")
+	return newRef
 }

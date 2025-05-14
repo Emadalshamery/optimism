@@ -35,6 +35,14 @@ func (el *L2ELNode) Escape() stack.L2ELNode {
 	return el.inner
 }
 
+func (el *L2ELNode) BlockRefByNumber(num uint64) eth.BlockRef {
+	ctx, cancel := context.WithTimeout(el.ctx, DefaultTimeout)
+	defer cancel()
+	block, err := el.inner.EthClient().BlockRefByNumber(ctx, num)
+	el.require.NoError(err, "block not found using block number %d", num)
+	return block
+}
+
 func (el *L2ELNode) BlockRefByLabel(label eth.BlockLabel) eth.BlockRef {
 	ctx, cancel := context.WithTimeout(el.ctx, DefaultTimeout)
 	defer cancel()

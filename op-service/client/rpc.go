@@ -135,7 +135,7 @@ func applyOptions(opts []RPCOption) rpcConfig {
 		cfg.backoffAttempts = 1
 	}
 	if cfg.callTimeout == 0 {
-		cfg.callTimeout = 10 * time.Second
+		cfg.callTimeout = 20 * time.Second
 	}
 	if cfg.batchCallTimeout == 0 {
 		cfg.batchCallTimeout = 20 * time.Second

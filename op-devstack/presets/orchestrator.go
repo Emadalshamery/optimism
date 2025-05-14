@@ -103,9 +103,9 @@ func initOrchestrator(ctx context.Context, p devtest.P, opt stack.CommonOption) 
 	p.Logger().WithContext(ctx).Info("initializing orchestrator", "backend", globalBackend)
 	switch globalBackend {
 	case SysGo:
-		lockedOrchestrator.Value = sysgo.NewOrchestrator(p)
+		lockedOrchestrator.Value = sysgo.NewOrchestrator(p, stack.SystemHook(opt))
 	case SysExt:
-		lockedOrchestrator.Value = sysext.NewOrchestrator(p)
+		lockedOrchestrator.Value = sysext.NewOrchestrator(p, stack.SystemHook(opt))
 	default:
 		panic(fmt.Sprintf("Unknown backend for initializing orchestrator: %s", globalBackend))
 	}
