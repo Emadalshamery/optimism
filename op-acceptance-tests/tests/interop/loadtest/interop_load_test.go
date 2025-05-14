@@ -9,14 +9,11 @@ import (
 	"github.com/ethereum-optimism/optimism/devnet-sdk/contracts/constants"
 	"github.com/ethereum-optimism/optimism/op-acceptance-tests/tests/interop"
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
-	"github.com/ethereum-optimism/optimism/op-devstack/dsl"
 	"github.com/ethereum-optimism/optimism/op-devstack/presets"
-	"github.com/ethereum-optimism/optimism/op-devstack/stack/match"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/retry"
 	"github.com/ethereum-optimism/optimism/op-service/txintent"
 	"github.com/ethereum-optimism/optimism/op-service/txplan"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestMain(m *testing.M) {
@@ -32,23 +29,13 @@ func TestExecFromSameAddressInALoop(gt *testing.T) {
 	sys := presets.NewSimpleInterop(t)
 
 	// Use proxyd if available.
-	l2ELA := sys.L2ELA
-	l2ELB := sys.L2ELB
-	if proxydsA := match.Proxyd.Match(sys.L2ChainA.Escape().L2ELNodes()); len(proxydsA) > 0 {
-		l2ELA = dsl.NewL2ELNode(proxydsA[0])
-	}
-	if proxydsB := match.Proxyd.Match(sys.L2ChainB.Escape().L2ELNodes()); len(proxydsB) > 0 {
-		l2ELB = dsl.NewL2ELNode(proxydsB[0])
-	}
+	l2ELA := sys.L2ChainA.PublicRPC()
+	l2ELB := sys.L2ChainB.PublicRPC()
 
 	// Setup EOAs. We are careful to use the specific ELs configured above to ensure we
-	// hit proxyd (if configured) to simulate real load.
-	skA, err := crypto.GenerateKey()
-	t.Require().NoError(err)
-	skB, err := crypto.GenerateKey()
-	t.Require().NoError(err)
-	eoaA := dsl.NewEOA(dsl.NewKey(t, skA), l2ELA)
-	eoaB := dsl.NewEOA(dsl.NewKey(t, skB), l2ELB)
+	// hit proxyd when it's available.
+	eoaA := sys.Wallet.NewEOA(l2ELA)
+	eoaB := sys.Wallet.NewEOA(l2ELB)
 	sys.FaucetA.Fund(eoaA.Address(), eth.MillionEther)
 	sys.FaucetB.Fund(eoaB.Address(), eth.MillionEther)
 
