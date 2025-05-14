@@ -26,6 +26,20 @@ type Beacon interface {
 	StoreBlobsBundle(slot uint64, bundle *engine.BlobsBundleV1) error
 }
 
+// FakePoS is a testing-only utility to attach to Geth
+// the exported struct is used by the devstack to control the fakePoS module, and adheres to the devstack.Lifecycle interface
+type FakePoS struct {
+	fakePoS *fakePoS
+}
+
+func (f *FakePoS) Start() {
+	_ = f.fakePoS.Start()
+}
+
+func (f *FakePoS) Stop() {
+	_ = f.fakePoS.Stop()
+}
+
 // fakePoS is a testing-only utility to attach to Geth,
 // to build a fake proof-of-stake L1 chain with fixed block time and basic lagging safe/finalized blocks.
 type fakePoS struct {
@@ -212,9 +226,13 @@ func (f *fakePoS) Start() error {
 }
 
 func (f *fakePoS) Stop() error {
-	f.sub.Unsubscribe()
-	if advancing, ok := f.clock.(*clock.AdvancingClock); ok {
-		advancing.Stop()
+	if f.sub != nil {
+		f.sub.Unsubscribe()
+	}
+	if f.clock != nil {
+		if advancing, ok := f.clock.(*clock.AdvancingClock); ok {
+			advancing.Stop()
+		}
 	}
 	return nil
 }
