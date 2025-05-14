@@ -327,6 +327,25 @@ func TestBatchSubmitter_computeSyncActions(t *testing.T) {
 			},
 			expectedLogs: noBlocksLogs,
 		},
+		{name: "CrossUnsafeL2>LocalUnsafeL2",
+			// We do not want to load the local unsafe but not cross unsafe blocks
+			newSyncStatus: eth.SyncStatus{
+				HeadL1:        eth.BlockRef{Number: 5},
+				CurrentL1:     eth.BlockRef{Number: 2},
+				SafeL2:        eth.L2BlockRef{Number: 103, Hash: block103.Hash()},
+				UnsafeL2:      eth.L2BlockRef{Number: 109},
+				CrossUnsafeL2: eth.L2BlockRef{Number: 108},
+			},
+			prevCurrentL1: eth.BlockRef{Number: 1},
+			blocks:        queue.Queue[*types.Block]{block101, block102, block103},
+			channels:      []channelStatuser{channel103},
+			expected: syncActions{
+				blocksToPrune:   3,
+				channelsToPrune: 1,
+				blocksToLoad:    &inclusiveBlockRange{104, 108}, // note that we load up to 108, not 109
+			},
+			expectedLogs: happyCaseLogs,
+		},
 	}
 
 	for _, tc := range testCases {
