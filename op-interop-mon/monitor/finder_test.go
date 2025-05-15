@@ -40,10 +40,13 @@ func mockReceiptsToCases(receipts []*ethTypes.Receipt) []Job {
 	return nil
 }
 
+func mockCallback(job Job) {
+}
+
 func TestRPCFinder_StartStop(t *testing.T) {
 	client := &mockFinderClient{}
 	logger := testlog.Logger(t, slog.LevelDebug)
-	finder := NewFinder(eth.ChainIDFromUInt64(1), client, mockReceiptsToCases, logger)
+	finder := NewFinder(eth.ChainIDFromUInt64(1), client, mockReceiptsToCases, mockCallback, logger)
 
 	require.NoError(t, finder.Start(context.Background()))
 	require.NoError(t, finder.Stop())
@@ -82,7 +85,7 @@ func TestRPCFinder_ProcessBlock(t *testing.T) {
 		return expectedJobs
 	}
 
-	finder := NewFinder(eth.ChainIDFromUInt64(1), client, receiptsToJobs, logger)
+	finder := NewFinder(eth.ChainIDFromUInt64(1), client, receiptsToJobs, mockCallback, logger)
 
 	jobs, err := finder.ProcessBlock(context.Background(), &ethTypes.Header{Number: big.NewInt(1)})
 	require.NoError(t, err)

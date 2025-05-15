@@ -43,7 +43,6 @@ var _ FinderClient = &ethclient.Client{}
 // Finders are responsible for finding new jobs from a chain for the Maintainer to track
 type Finder interface {
 	Start(ctx context.Context) error
-	Jobs() <-chan []Job
 	Stop() error
 }
 
@@ -52,25 +51,24 @@ type RPCFinder struct {
 	client  FinderClient
 	chainID eth.ChainID
 
-	sub    ethereum.Subscription
-	subErr <-chan error
-	inbox  chan *types.Header
-	toJobs JobFilter
-	outbox chan []Job
-	closed chan struct{}
-
-	log log.Logger
+	sub      ethereum.Subscription
+	subErr   <-chan error
+	inbox    chan *types.Header
+	toJobs   JobFilter
+	closed   chan struct{}
+	callback func(Job)
+	log      log.Logger
 }
 
-func NewFinder(chainID eth.ChainID, client FinderClient, toCases JobFilter, log log.Logger) *RPCFinder {
+func NewFinder(chainID eth.ChainID, client FinderClient, toCases JobFilter, callback func(Job), log log.Logger) *RPCFinder {
 	return &RPCFinder{
-		chainID: chainID,
-		client:  client,
-		log:     log,
-		toJobs:  toCases,
-		inbox:   make(chan *types.Header, 1000),
-		outbox:  make(chan []Job, 1000),
-		closed:  make(chan struct{}),
+		chainID:  chainID,
+		client:   client,
+		log:      log,
+		toJobs:   toCases,
+		inbox:    make(chan *types.Header, 1000),
+		closed:   make(chan struct{}),
+		callback: callback,
 	}
 }
 
@@ -116,7 +114,6 @@ func (t *RPCFinder) Run(ctx context.Context) {
 		case <-t.closed:
 			t.log.Info("finder closed")
 			close(t.inbox)
-			close(t.outbox)
 			return
 		// if the subscription errors, close the finder and initiate Stop
 		case err := <-t.subErr:
@@ -129,8 +126,10 @@ func (t *RPCFinder) Run(ctx context.Context) {
 				t.log.Error("error processing block", "error", err)
 				continue
 			}
-			t.outbox <- jobs
-			t.log.Info("sent jobs to outbox", "count", len(jobs))
+			for _, job := range jobs {
+				t.callback(job)
+			}
+			t.log.Info("sent new jobs to callback", "count", len(jobs))
 		}
 	}
 }
@@ -143,10 +142,6 @@ func (t *RPCFinder) ProcessBlock(ctx context.Context, header *types.Header) (cas
 	}
 	ret := t.toJobs(receipts)
 	return ret, nil
-}
-
-func (t *RPCFinder) Jobs() <-chan []Job {
-	return t.outbox
 }
 
 // TODO: add wait group to make Stop return sync

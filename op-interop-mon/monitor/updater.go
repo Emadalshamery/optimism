@@ -41,7 +41,7 @@ type RPCUpdater struct {
 	log log.Logger
 }
 
-func NewUpdater(chainID eth.ChainID, client UpdaterClient, log log.Logger, callback func(Job)) *RPCUpdater {
+func NewUpdater(chainID eth.ChainID, client UpdaterClient, callback func(Job), log log.Logger) *RPCUpdater {
 	return &RPCUpdater{
 		chainID:  chainID,
 		client:   client,
