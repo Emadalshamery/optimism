@@ -63,6 +63,7 @@ func (ms *InteropMonitorService) initFromCLIConfig(ctx context.Context, version 
 
 	ms.maintainer = NewMaintainer(ms.Log, ms.Metrics)
 
+	ms.clients = make(map[eth.ChainID]*ethclient.Client)
 	for _, l2Rpc := range cfg.L2Rpcs {
 		if err := ms.dialAndRegister(ctx, l2Rpc); err != nil {
 			return fmt.Errorf("failed to dial and register: %w", err)
