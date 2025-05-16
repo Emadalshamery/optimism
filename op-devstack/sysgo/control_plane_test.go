@@ -149,7 +149,7 @@ func testL2CLRestart(ids DefaultInteropSystemIDs, system stack.System, control s
 	}
 }
 
-// TestControlPlaneFakePoS tests start/stop functionality provided control plane for the fakePos module
+// TestControlPlaneFakePoS tests the start/stop functionality provided by the control plane for the fakePoS module
 func TestControlPlaneFakePoS(gt *testing.T) {
 	var ids DefaultInteropSystemIDs
 	opt := DefaultInteropSystem(&ids)
