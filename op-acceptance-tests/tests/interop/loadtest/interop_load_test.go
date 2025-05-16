@@ -41,7 +41,7 @@ func TestLoad(gt *testing.T) {
 }
 
 func SpamInteropTxs(t devtest.T, from *presets.InteropL2, to *presets.InteropL2, wallet *dsl.HDWallet, supervisor *dsl.Supervisor) {
-	eventLogger := from.Funder.NewFundedEOA(eth.OneGWei).DeployEventLogger()
+	eventLogger := from.Funder.NewFundedEOA(eth.OneEther).DeployEventLogger()
 
 	fromL2EL := from.L2Chain.PublicRPC()
 	toL2EL := to.L2Chain.PublicRPC()
@@ -159,7 +159,7 @@ type LargeMsgInitiator struct {
 }
 
 func (lin *LargeMsgInitiator) Initiate(t devtest.T) []types.Message {
-	return lin.s.BuildAndSendInitTx(t, []txintent.Call{interop.RandomInitTrigger(rng, lin.eventLogger, 5, 100_000)})
+	return lin.s.BuildAndSendInitTx(t, []txintent.Call{interop.RandomInitTrigger(rng, lin.eventLogger, 4, 100_000)})
 }
 
 type ValidExecutor struct {
@@ -229,6 +229,9 @@ func (de *DelayedExecutor) Execute(t devtest.T, newMsgs []types.Message) {
 	// Add newMsgs to de.msgs if there is space.
 	if remainingSpace := de.maxMsgs - de.numMsgs; remainingSpace > 0 {
 		newMsgsToExecute := newMsgs
+		if remainingSpace > len(newMsgsToExecute) {
+			remainingSpace = len(newMsgsToExecute)
+		}
 		newMsgsToExecute = newMsgsToExecute[:remainingSpace]
 		if len(newMsgsToExecute) > 0 {
 			msgsAtTimestamp := de.msgs[newMsgsToExecute[0].Identifier.Timestamp]
@@ -245,7 +248,9 @@ func (de *DelayedExecutor) Execute(t devtest.T, newMsgs []types.Message) {
 			delete(de.msgs, t)
 		}
 	}
-	de.e.Execute(t, msgsToExecute)
+	if len(msgsToExecute) > 0 {
+		de.e.Execute(t, msgsToExecute)
+	}
 }
 
 type L2Spammer struct {
