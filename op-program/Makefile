@@ -48,15 +48,15 @@ check-custom-chains: op-program-host
 reproducible-prestate: check-custom-chains
 	@docker build --build-arg GO_VERSION=1.24.2-alpine3.21 --build-arg EXPORT_TARGET=next  --output ./bin/ --progress plain -f Dockerfile.repro ../
 	@docker build --build-arg GO_VERSION=1.23.8-alpine3.21 --build-arg EXPORT_TARGET=current --output ./bin/ --progress plain -f Dockerfile.repro ../
-	@echo "-------------------- Production Prestates --------------------\n"
-	@echo "Cannon64 Absolute prestate hash: "
+	@echo "-------------------- Production Prestates --------------------"
+	@echo "\nCannon64 Absolute prestate hash: "
 	@cat ./bin/prestate-proof-mt64.json | jq -r .pre
-	@echo "\n-------------------- Experimental Prestates --------------------\n"
+	@echo "\n-------------------- Experimental Prestates --------------------"
 	@echo "\nCannon64Next Absolute prestate hash: "
 	@cat ./bin/prestate-proof-mt64Next.json | jq -r .pre
-	@echo "CannonInterop Absolute prestate hash: "
+	@echo "\nCannonInterop Absolute prestate hash: "
 	@cat ./bin/prestate-proof-interop.json | jq -r .pre
-	@echo "CannonInteropNext Absolute prestate hash: "
+	@echo "\nCannonInteropNext Absolute prestate hash: "
 	@cat ./bin/prestate-proof-interopNext.json | jq -r .pre
 	@echo
 .PHONY: reproducible-prestate
