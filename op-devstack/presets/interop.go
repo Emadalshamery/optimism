@@ -24,9 +24,9 @@ type SimpleInterop struct {
 	ControlPlane stack.ControlPlane
 
 	L1Network *dsl.L1Network
-
-	L2ChainA *dsl.L2Network
-	L2ChainB *dsl.L2Network
+	L1EL      *dsl.L1ELNode
+	L2ChainA  *dsl.L2Network
+	L2ChainB  *dsl.L2Network
 
 	L2BatcherA *dsl.L2Batcher
 	L2BatcherB *dsl.L2Batcher
@@ -39,11 +39,13 @@ type SimpleInterop struct {
 
 	Wallet *dsl.HDWallet
 
-	FaucetA *dsl.Faucet
-	FaucetB *dsl.Faucet
+	FaucetA  *dsl.Faucet
+	FaucetB  *dsl.Faucet
+	FaucetL1 *dsl.Faucet
 
-	FunderA *dsl.Funder
-	FunderB *dsl.Funder
+	FunderL1 *dsl.Funder
+	FunderA  *dsl.Funder
+	FunderB  *dsl.Funder
 }
 
 func (s *SimpleInterop) L2Networks() []*dsl.L2Network {
@@ -79,6 +81,7 @@ func NewSimpleInterop(t devtest.T) *SimpleInterop {
 		Supervisor:   dsl.NewSupervisor(system.Supervisor(match.Assume(t, match.FirstSupervisor)), orch.ControlPlane()),
 		ControlPlane: orch.ControlPlane(),
 		L1Network:    dsl.NewL1Network(system.L1Network(match.FirstL1Network)),
+		L1EL:         dsl.NewL1ELNode(system.L1Network(match.FirstL1Network).L1ELNode(match.FirstL1EL)),
 		L2ChainA:     dsl.NewL2Network(l2A),
 		L2ChainB:     dsl.NewL2Network(l2B),
 		L2ELA:        dsl.NewL2ELNode(l2A.L2ELNode(match.Assume(t, match.FirstL2EL))),
@@ -91,6 +94,8 @@ func NewSimpleInterop(t devtest.T) *SimpleInterop {
 		L2BatcherA:   dsl.NewL2Batcher(l2A.L2Batcher(match.Assume(t, match.FirstL2Batcher))),
 		L2BatcherB:   dsl.NewL2Batcher(l2B.L2Batcher(match.Assume(t, match.FirstL2Batcher))),
 	}
+	out.FaucetL1 = dsl.NewFaucet(out.L1Network.Escape().Faucet(match.Assume(t, match.FirstFaucet)))
+	out.FunderL1 = dsl.NewFunder(out.Wallet, out.FaucetL1, out.L1EL)
 	out.FunderA = dsl.NewFunder(out.Wallet, out.FaucetA, out.L2ELA)
 	out.FunderB = dsl.NewFunder(out.Wallet, out.FaucetB, out.L2ELB)
 	return out
